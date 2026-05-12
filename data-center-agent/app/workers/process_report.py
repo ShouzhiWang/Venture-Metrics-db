@@ -29,14 +29,14 @@ def process_report(report_id: UUID) -> int:
             raise ValueError(f"Report source has no raw file: {report_id}")
 
         raw_path = storage.resolve(source["raw_file_path"])
-        text, pages = parse_raw_file(raw_path, source.get("source_type", "unknown"), source.get("mime_type"))
+        parsed = parse_raw_file(raw_path, source.get("source_type", "unknown"), source.get("mime_type"))
         raw_text_relative = str(Path("parsed") / str(report_id) / "raw_text.txt")
         parsed_json_relative = str(Path("parsed") / str(report_id) / "parsed.json")
-        storage.write_text(raw_text_relative, text)
-        storage.write_text(parsed_json_relative, parsed_json(text, pages))
+        storage.write_text(raw_text_relative, parsed.text)
+        storage.write_text(parsed_json_relative, parsed_json(parsed))
         report_repo.update_paths(report_id, raw_text_path=raw_text_relative, parsed_json_path=parsed_json_relative)
 
-        chunks = build_chunks(str(report_id), pages)
+        chunks = build_chunks(str(report_id), parsed)
         return chunk_repo.create_many(chunks)
 
 

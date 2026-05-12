@@ -19,3 +19,10 @@ def test_defaults_http_to_html() -> None:
     result = classify_source("https://example.gov/report")
 
     assert result["source_type"] == "html"
+
+
+def test_classifies_excel_url() -> None:
+    result = classify_source("https://example.gov/data/workbook.xlsx")
+
+    assert result["source_type"] == "xlsx"
+    assert result["detected_format"] == "xlsx"
