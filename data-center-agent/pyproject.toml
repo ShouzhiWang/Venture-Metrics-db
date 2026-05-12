@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "data-center-agent"
+version = "0.1.0"
+description = "Internal research data integration pipeline for reports, datasets, and variable codebooks."
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4>=4.12.3",
+  "httpx>=0.27.0",
+  "openpyxl>=3.1.2",
+  "pandas>=2.2.0",
+  "pdfplumber>=0.11.0",
+  "pydantic>=2.6.0",
+  "pydantic-settings>=2.2.0",
+  "pymupdf>=1.24.0",
+  "python-dotenv>=1.0.1",
+  "sqlalchemy>=2.0.25",
+  "psycopg[binary]>=3.1.18",
+  "trafilatura>=1.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-postgresql>=6.0.0",
+]
+browser = [
+  "playwright>=1.42.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
