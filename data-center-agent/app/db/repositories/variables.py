@@ -5,9 +5,35 @@ from uuid import UUID
 from sqlalchemy import text
 
 from app.db.repositories.base import BaseRepository, row_to_dict
+from app.models.variable import ExtractedVariable
 
 
 class VariableRepository(BaseRepository):
+    def insert_report_variable(self, extracted_variable: ExtractedVariable | dict[str, Any]) -> dict[str, Any]:
+        values = (
+            extracted_variable.model_dump(mode="python")
+            if isinstance(extracted_variable, ExtractedVariable)
+            else dict(extracted_variable)
+        )
+        metadata = dict(values.get("metadata") or {})
+        if values.get("evidence_quote"):
+            metadata["evidence_quote"] = values["evidence_quote"]
+        values["metadata"] = metadata
+        return self.create_report_variable(values)
+
+    def insert_many_report_variables(self, extracted_variables: list[ExtractedVariable | dict[str, Any]]) -> list[dict[str, Any]]:
+        return [self.insert_report_variable(variable) for variable in extracted_variables]
+
+    def get_report_variables_by_report(self, report_id: UUID | str) -> list[dict[str, Any]]:
+        return self.list_by_report(report_id)
+
+    def delete_report_variables_by_report(self, report_id: UUID | str) -> int:
+        result = self.connection.execute(
+            text("DELETE FROM report_variables WHERE report_id = :report_id"),
+            {"report_id": str(report_id)},
+        )
+        return result.rowcount or 0
+
     def create_report_variable(self, values: dict[str, Any]) -> dict[str, Any]:
         row = self.connection.execute(
             text(
