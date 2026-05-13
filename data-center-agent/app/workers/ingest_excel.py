@@ -11,7 +11,7 @@ from app.db.repositories.sources import SourceRepository
 from app.utils.logging import configure_logging
 
 
-URL_COLUMNS = ["url", "link", "source_url", "original_url", "href", "网址", "網站", "网站", "链接", "連結"]
+URL_COLUMNS = ["url", "link", "source_url", "original_url", "href", "网址", "报告网址", "报告网址", "網站", "网站", "链接", "連結"]
 
 
 def find_url_column(columns: list[str]) -> str:
