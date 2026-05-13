@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 from uuid import UUID
 
+from app.agents.content_quality import classify_content_quality
 from app.agents.parser import build_chunks, pages_json, parse_raw_file, parsed_json
 from app.agents.report_reader import extract_report_metadata_from_text
 from app.config import get_settings
@@ -42,6 +43,22 @@ def process_report(report_id: UUID) -> int:
 
         chunks = build_chunks(str(report_id), parsed)
         inserted = chunk_repo.create_many(chunks)
+        quality = classify_content_quality(
+            chunks,
+            source_type=source.get("source_type"),
+            crawl_status=source.get("crawl_status"),
+            raw_text=parsed.text,
+        )
+        report_repo.update_content_quality(
+            report_id,
+            {
+                "label": quality.label,
+                "reason": quality.reason,
+                "chunk_count": quality.chunk_count,
+                "total_characters": quality.total_characters,
+                "metadata": quality.metadata,
+            },
+        )
         source_repo.update_status(source["id"], crawl_status="parsed")
         return inserted
 

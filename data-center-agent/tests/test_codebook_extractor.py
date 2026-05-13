@@ -8,8 +8,10 @@ from app.agents.codebook_extractor import (
     LLMCodebookOutput,
     MockLLMCodebookExtractor,
     RuleBasedCodebookExtractor,
+    VariableQualityFilter,
     classify_source_availability,
 )
+from app.agents.content_quality import classify_content_quality
 from app.models.variable import ExtractedVariable
 
 
@@ -51,6 +53,48 @@ def test_candidate_chunk_selector_ranks_methodology_source_chunks_higher() -> No
     assert selected[0].chunk_id == relevant["id"]
     assert any(reason.startswith("keyword:defined as") for reason in selected[0].reasons)
     assert "section:data and methods" in selected[0].reasons
+
+
+def test_candidate_chunk_selector_penalizes_chart_legend_chunks() -> None:
+    report_id = uuid4()
+    chart = {
+        "id": uuid4(),
+        "report_id": report_id,
+        "chunk_text": "Up Flat Down Source: PitchBook Figure legend axis chart",
+        "page_number": 4,
+        "section_title": "Chart",
+        "chunk_type": "table",
+        "metadata": {},
+    }
+    methodology = {
+        "id": uuid4(),
+        "report_id": report_id,
+        "chunk_text": "Methodology: Deal count is defined as the number of completed venture capital deals.",
+        "page_number": 8,
+        "section_title": "Methodology",
+        "chunk_type": "methodology",
+        "metadata": {},
+    }
+
+    selected = CandidateChunkSelector().select([chart, methodology], top_k=2)
+
+    assert selected[0].chunk_id == methodology["id"]
+    assert any(reason.startswith("penalty:chart_legend_like") for reason in selected[1].reasons)
+
+
+def test_html_one_chunk_classified_low_text_or_landing_page_only() -> None:
+    quality = classify_content_quality(
+        [
+            {
+                "chunk_text": "Home About Contact Login Member News Copyright",
+                "chunk_type": "narrative",
+                "metadata": {},
+            }
+        ],
+        source_type="html",
+    )
+
+    assert quality.label in {"low_text", "landing_page_only"}
 
 
 def test_source_availability_classifier_private_public_survey() -> None:
@@ -117,6 +161,22 @@ def test_rule_based_extractor_extracts_vc_investment_private_source() -> None:
     assert variable.availability == "private"
 
 
+def test_pitchbook_data_remains_private_after_quality_filter() -> None:
+    report_id = uuid4()
+    chunk_id = uuid4()
+    text = "Venture capital investment is measured as the total annual amount of VC funding received by startups. Data are sourced from PitchBook."
+    variable = RuleBasedCodebookExtractor().extract(
+        report_id,
+        [{"id": chunk_id, "report_id": report_id, "chunk_text": text, "chunk_type": "methodology", "metadata": {}}],
+    )[0]
+
+    filtered = VariableQualityFilter().filter(variable, {"id": chunk_id, "chunk_text": text, "chunk_type": "methodology", "metadata": {}})
+
+    assert filtered is not None
+    assert filtered.data_source_type == "private_database"
+    assert filtered.availability == "private"
+
+
 def test_rule_based_extractor_extracts_proxy_with_lower_confidence() -> None:
     report_id = uuid4()
     chunks = [
@@ -137,6 +197,56 @@ def test_rule_based_extractor_extracts_proxy_with_lower_confidence() -> None:
     assert "innovation output" in variable.measurement_method
     assert variable.review_status == "pending"
     assert variable.confidence_score < 0.75
+
+
+def test_variable_quality_filter_cleans_chart_label_source_suffix() -> None:
+    variable = ExtractedVariable(
+        report_id=uuid4(),
+        raw_variable_name="B) Deal count Source",
+        definition="number of completed venture capital deals",
+        evidence_chunk_id=uuid4(),
+        evidence_quote="B) Deal count Source: number of completed venture capital deals.",
+        confidence_score=0.62,
+    )
+
+    filtered = VariableQualityFilter().filter(variable, {"chunk_type": "table", "chunk_text": variable.evidence_quote, "metadata": {}})
+
+    assert filtered is not None
+    assert filtered.raw_variable_name == "Deal count"
+    assert filtered.review_status == "needs_review"
+    assert "cleaned_chart_label_name:B) Deal count Source" in filtered.metadata["quality_warnings"]
+
+
+def test_variable_quality_filter_rejects_directional_legend_label() -> None:
+    variable = ExtractedVariable(
+        report_id=uuid4(),
+        raw_variable_name="Up Flat Down Source",
+        evidence_chunk_id=uuid4(),
+        evidence_quote="Up Flat Down Source: PitchBook.",
+        confidence_score=0.4,
+    )
+
+    assert VariableQualityFilter().filter(variable, {"chunk_type": "table", "chunk_text": variable.evidence_quote, "metadata": {}}) is None
+
+
+def test_methodology_definition_survives_quality_filter() -> None:
+    variable = ExtractedVariable(
+        report_id=uuid4(),
+        raw_variable_name="Startup density",
+        definition="startups per 1,000 residents",
+        evidence_chunk_id=uuid4(),
+        evidence_quote="Startup density is defined as startups per 1,000 residents.",
+        confidence_score=0.7,
+    )
+
+    filtered = VariableQualityFilter().filter(
+        variable,
+        {"chunk_type": "methodology", "chunk_text": variable.evidence_quote, "metadata": {}},
+    )
+
+    assert filtered is not None
+    assert filtered.raw_variable_name == "Startup density"
+    assert filtered.review_status == "pending"
 
 
 def test_evidence_verifier_passes_when_quote_appears() -> None:

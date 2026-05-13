@@ -95,3 +95,16 @@ class ReportRepository(BaseRepository):
                 "summary": values.get("summary"),
             },
         )
+
+    def update_content_quality(self, report_id: UUID | str, quality: dict[str, Any]) -> None:
+        self.connection.execute(
+            text(
+                """
+                UPDATE reports
+                SET citation_info = coalesce(citation_info, '{}'::jsonb) || CAST(:quality AS jsonb),
+                    updated_at = now()
+                WHERE id = :id
+                """
+            ),
+            {"id": str(report_id), "quality": json.dumps({"content_quality": quality})},
+        )

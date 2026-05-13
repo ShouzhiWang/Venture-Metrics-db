@@ -2,9 +2,12 @@ import argparse
 import json
 from uuid import UUID
 
+from app.agents.content_quality import ContentQualityResult, classify_content_quality, should_skip_codebook
 from app.agents.codebook_extractor import HybridCodebookExtractor, MockLLMCodebookExtractor
 from app.db.connection import get_engine
 from app.db.repositories.chunks import ChunkRepository
+from app.db.repositories.reports import ReportRepository
+from app.db.repositories.sources import SourceRepository
 from app.db.repositories.variables import VariableRepository
 from app.utils.logging import configure_logging
 
@@ -16,20 +19,49 @@ def generate_codebook(
     use_mock_llm: bool = False,
     dry_run: bool = False,
     overwrite: bool = False,
+    force: bool = False,
 ) -> dict:
     engine = get_engine()
     with engine.begin() as connection:
         chunk_repo = ChunkRepository(connection)
+        report_repo = ReportRepository(connection)
+        source_repo = SourceRepository(connection)
         variable_repo = VariableRepository(connection)
+        report = report_repo.get(report_id)
+        source = source_repo.get(report["source_id"]) if report and report.get("source_id") else None
         chunks = chunk_repo.list_by_report(report_id)
+        quality = _effective_quality(chunks, report, source)
+        skip, reason = should_skip_codebook(quality, force=force)
+        if skip:
+            summary = {
+                "skipped": True,
+                "skip_reason": reason,
+                "content_quality": quality.label,
+                "chunk_count": quality.chunk_count,
+                "total_characters": quality.total_characters,
+                "candidate_chunks": 0,
+                "rule_based_variables": 0,
+                "llm_variables": 0,
+                "final_variables": 0,
+                "inserted": 0,
+            }
+            return {"summary": summary, "variables": []}
+
         extractor = HybridCodebookExtractor(
             llm_extractor=MockLLMCodebookExtractor() if use_mock_llm else None,
             top_k=top_k,
         )
         variables = extractor.extract(report_id, chunks)
+        extraction_summary = {
+            **extractor.last_summary,
+            "skipped": False,
+            "content_quality": quality.label,
+            "chunk_count": quality.chunk_count,
+            "total_characters": quality.total_characters,
+        }
 
         if dry_run:
-            return {"summary": extractor.last_summary, "variables": [variable.model_dump(mode="json") for variable in variables]}
+            return {"summary": extraction_summary, "variables": [variable.model_dump(mode="json") for variable in variables]}
 
         if overwrite:
             variable_repo.delete_report_variables_by_report(report_id)
@@ -54,11 +86,30 @@ def generate_codebook(
         ]
         inserted = variable_repo.insert_many_report_variables(to_insert)
         summary = {
-            **extractor.last_summary,
+            **extraction_summary,
             "existing_duplicates_skipped": len(variables) - len(to_insert),
             "inserted": len(inserted),
         }
         return {"summary": summary, "variables": [variable.model_dump(mode="json") for variable in to_insert]}
+
+
+def _effective_quality(chunks: list[dict], report: dict | None, source: dict | None) -> ContentQualityResult:
+    computed = classify_content_quality(
+        chunks,
+        source_type=source.get("source_type") if source else None,
+        crawl_status=source.get("crawl_status") if source else None,
+    )
+    citation_info = (report or {}).get("citation_info") or {}
+    stored = citation_info.get("content_quality") if isinstance(citation_info, dict) else None
+    if isinstance(stored, dict) and stored.get("label") in {"landing_page_only", "paywalled_or_gated", "js_required", "failed"}:
+        return ContentQualityResult(
+            stored["label"],
+            stored.get("reason") or computed.reason,
+            computed.chunk_count,
+            computed.total_characters,
+            {"stored": stored, "computed": computed.metadata},
+        )
+    return computed
 
 
 def main() -> None:
@@ -68,6 +119,7 @@ def main() -> None:
     parser.add_argument("--use-mock-llm", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     configure_logging()
     result = generate_codebook(
@@ -76,11 +128,21 @@ def main() -> None:
         use_mock_llm=args.use_mock_llm,
         dry_run=args.dry_run,
         overwrite=args.overwrite,
+        force=args.force,
     )
     if args.dry_run:
         print(json.dumps(result, ensure_ascii=True, indent=2, default=str))
         return
     summary = result["summary"]
+    if summary.get("skipped"):
+        print(
+            "Codebook generation skipped: "
+            f"reason={summary.get('skip_reason')} "
+            f"content_quality={summary.get('content_quality')} "
+            f"chunks={summary.get('chunk_count')} "
+            f"characters={summary.get('total_characters')}"
+        )
+        return
     print(
         "Codebook generation complete: "
         f"candidate_chunks={summary.get('candidate_chunks', 0)} "

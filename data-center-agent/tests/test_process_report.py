@@ -25,6 +25,7 @@ class FakeReportRepository:
     source_id = uuid4()
     updated_paths = {}
     updated_metadata = {}
+    updated_quality = {}
 
     def __init__(self, _connection):
         pass
@@ -37,6 +38,9 @@ class FakeReportRepository:
 
     def update_metadata(self, report_id, values):
         type(self).updated_metadata = values
+
+    def update_content_quality(self, report_id, quality):
+        type(self).updated_quality = quality
 
 
 class FakeSourceRepository:
@@ -90,6 +94,7 @@ def test_process_report_with_html_fixture(tmp_path: Path, monkeypatch) -> None:
     fake_chunk_repo = FakeChunkRepository
     fake_report_repo.updated_paths = {}
     fake_report_repo.updated_metadata = {}
+    fake_report_repo.updated_quality = {}
     fake_chunk_repo.inserted_chunks = []
     FakeSourceRepository.updated_status = {}
 
@@ -107,6 +112,7 @@ def test_process_report_with_html_fixture(tmp_path: Path, monkeypatch) -> None:
     assert (tmp_path / "parsed" / str(fake_report_repo.report_id) / "pages.json").exists()
     assert fake_report_repo.updated_paths["parsed_json_path"].endswith("parsed.json")
     assert fake_report_repo.updated_metadata["title"] == "Population Report"
+    assert fake_report_repo.updated_quality["label"] in {"landing_page_only", "low_text"}
     assert FakeSourceRepository.updated_status["crawl_status"] == "parsed"
     assert fake_chunk_repo.inserted_chunks[0]["chunk_type"] == "source_note"
     assert fake_chunk_repo.inserted_chunks[0]["metadata"]["parser"] in {"trafilatura", "beautifulsoup"}

@@ -62,7 +62,7 @@ SECTION_BOOSTS = {
 CHUNK_TYPE_BOOSTS = {
     "methodology": 2.0,
     "source_note": 1.7,
-    "table": 1.2,
+    "table": 0.7,
     "footnote": 0.8,
 }
 
@@ -104,6 +104,9 @@ PUBLIC_SOURCE_PATTERNS = [
 SURVEY_PATTERNS = ["survey", "questionnaire", "respondent", "sample", "interview"]
 ESTIMATE_PATTERNS = ["estimated", "modeled", "modelled", "imputed", "forecast", "projection"]
 VAGUE_NAMES = {"index", "score", "indicator", "metric", "measure", "variable"}
+DIRECTIONAL_LABELS = {"up", "flat", "down", "increase", "decrease", "higher", "lower"}
+CHART_LABEL_TERMS = {"source", "legend", "axis", "chart", "figure", "note", "notes"}
+STRONG_DEFINITION_TERMS = ["defined as", "measured as", "measured by", "calculated as", "proxy for", "definition"]
 
 
 class LLMVariableOutput(BaseModel):
@@ -162,6 +165,11 @@ class CandidateChunkSelector:
             elif chunk_type == "unknown" and score >= 2.5:
                 score += 0.5
                 reasons.append("chunk_type:unknown_keyword_rich")
+
+        if _looks_like_chart_legend_text(text) and not _has_strong_definition_language(text):
+            penalty = min(score * 0.5, 3.0) or 1.0
+            score -= penalty
+            reasons.append(f"penalty:chart_legend_like:-{round(penalty, 3)}")
 
         return CandidateChunk(
             chunk_id=chunk_id,
@@ -443,6 +451,8 @@ class ConfidenceScorer:
         chunk_type = _get(evidence_chunk, "chunk_type") if evidence_chunk else None
         if chunk_type in {"methodology", "source_note", "table"}:
             score += 0.05
+        if chunk_type in {"table", "figure", "chart"}:
+            score -= 0.08
 
         if not verification.metadata.get("evidence_chunk_id"):
             score -= 0.25
@@ -477,6 +487,43 @@ class ConfidenceScorer:
         return variable.model_copy(update={"confidence_score": score, "review_status": status, "metadata": metadata})
 
 
+class VariableQualityFilter:
+    def filter(self, variable: ExtractedVariable, evidence_chunk: Any | None = None) -> ExtractedVariable | None:
+        warnings = list(variable.metadata.get("quality_warnings", []))
+        original_name = variable.raw_variable_name
+        cleaned_name = clean_chart_label_variable_name(original_name)
+        if cleaned_name != original_name:
+            warnings.append(f"cleaned_chart_label_name:{original_name}")
+
+        if _is_rejected_chart_label(cleaned_name):
+            return None
+
+        has_definition = bool(variable.definition)
+        has_measurement = bool(variable.measurement_method)
+        weak_evidence = not variable.evidence_quote or len(variable.evidence_quote.split()) < 5 or variable.confidence_score < 0.45
+        if not has_definition and not has_measurement and weak_evidence:
+            return None
+
+        metadata = {**variable.metadata, "quality_warnings": warnings}
+        status = variable.review_status
+        confidence = variable.confidence_score
+        chunk_type = _get(evidence_chunk, "chunk_type") if evidence_chunk else None
+        text = _get(evidence_chunk, "chunk_text") or ""
+        if chunk_type in {"table", "figure", "chart"} or (_looks_like_chart_legend_text(text) and not _has_strong_definition_language(text)):
+            metadata["quality_warnings"].append("chart_or_table_derived_needs_review")
+            status = "needs_review"
+            confidence = min(confidence, 0.54)
+
+        return variable.model_copy(
+            update={
+                "raw_variable_name": cleaned_name,
+                "confidence_score": confidence,
+                "review_status": status,
+                "metadata": metadata,
+            }
+        )
+
+
 class HybridCodebookExtractor(CodebookExtractor):
     def __init__(
         self,
@@ -485,6 +532,7 @@ class HybridCodebookExtractor(CodebookExtractor):
         llm_extractor: LLMCodebookExtractor | None = None,
         verifier: EvidenceVerifier | None = None,
         scorer: ConfidenceScorer | None = None,
+        quality_filter: VariableQualityFilter | None = None,
         top_k: int = 40,
     ):
         self.selector = selector or CandidateChunkSelector()
@@ -492,6 +540,7 @@ class HybridCodebookExtractor(CodebookExtractor):
         self.llm_extractor = llm_extractor
         self.verifier = verifier or EvidenceVerifier()
         self.scorer = scorer or ConfidenceScorer()
+        self.quality_filter = quality_filter or VariableQualityFilter()
         self.top_k = top_k
         self.last_summary: dict[str, int] = {}
 
@@ -503,9 +552,26 @@ class HybridCodebookExtractor(CodebookExtractor):
         chunk_lookup = {_get(chunk, "chunk_id") or _get(chunk, "id"): chunk for chunk in [*chunks, *candidate_chunks]}
 
         final: list[ExtractedVariable] = []
+        filtered_count = 0
+        downgraded_count = 0
         for variable in merged:
-            verification = self.verifier.verify(variable, [*chunks, *candidate_chunks])
-            scored = self.scorer.score(variable, verification, chunk_lookup.get(variable.evidence_chunk_id))
+            evidence_chunk = chunk_lookup.get(variable.evidence_chunk_id)
+            quality_checked = self.quality_filter.filter(variable, evidence_chunk)
+            if not quality_checked:
+                filtered_count += 1
+                continue
+            if quality_checked.review_status == "needs_review" and variable.review_status != "needs_review":
+                downgraded_count += 1
+            verification = self.verifier.verify(quality_checked, [*chunks, *candidate_chunks])
+            scored = self.scorer.score(quality_checked, verification, evidence_chunk)
+            if quality_checked.review_status == "needs_review":
+                scored = scored.model_copy(
+                    update={
+                        "review_status": "needs_review",
+                        "confidence_score": min(scored.confidence_score, quality_checked.confidence_score),
+                        "metadata": {**scored.metadata, "quality_forced_needs_review": True},
+                    }
+                )
             if scored.evidence_chunk_id:
                 final.append(scored)
 
@@ -514,6 +580,8 @@ class HybridCodebookExtractor(CodebookExtractor):
             "rule_based_variables": len(rule_variables),
             "llm_variables": len(llm_variables),
             "final_variables": len(final),
+            "quality_filtered_variables": filtered_count,
+            "quality_downgraded_variables": downgraded_count,
             "needs_review": sum(1 for variable in final if variable.review_status == "needs_review"),
             "private": sum(1 for variable in final if variable.availability == "private"),
         }
@@ -589,6 +657,13 @@ def _clean_variable_name(name: str) -> str:
     return name[:100]
 
 
+def clean_chart_label_variable_name(name: str) -> str:
+    cleaned = re.sub(r"^[A-Z]\)\s*", "", name.strip())
+    cleaned = re.sub(r"\bSource\b\s*:?.*$", "", cleaned, flags=re.IGNORECASE).strip(" :-")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned
+
+
 def _clean_sentence_fragment(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip(" ;:")
 
@@ -596,6 +671,33 @@ def _clean_sentence_fragment(value: str) -> str:
 def _is_vague_variable_name(name: str) -> bool:
     normalized = _normalize_name(name).replace("_", " ")
     return normalized in VAGUE_NAMES or len(normalized) < 3
+
+
+def _is_rejected_chart_label(name: str) -> bool:
+    normalized = _normalize_name(name).replace("_", " ")
+    tokens = set(normalized.split())
+    if not normalized:
+        return True
+    if tokens and tokens <= (DIRECTIONAL_LABELS | CHART_LABEL_TERMS):
+        return True
+    if normalized in {"up flat down", "up flat down source", "source", "chart source"}:
+        return True
+    if _is_vague_variable_name(name):
+        return True
+    return False
+
+
+def _looks_like_chart_legend_text(text: str) -> bool:
+    lowered = text.lower()
+    short = len(text.split()) <= 80
+    directional_hits = sum(1 for token in DIRECTIONAL_LABELS if re.search(rf"\b{re.escape(token)}\b", lowered))
+    chart_hits = sum(1 for token in ["source", "legend", "axis", "figure", "chart"] if token in lowered)
+    return short and directional_hits >= 2 or (short and chart_hits >= 2)
+
+
+def _has_strong_definition_language(text: str) -> bool:
+    lowered = text.lower()
+    return any(term in lowered for term in STRONG_DEFINITION_TERMS)
 
 
 def _normalize_name(name: str) -> str:
