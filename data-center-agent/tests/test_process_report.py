@@ -92,6 +92,7 @@ def test_process_report_with_html_fixture(tmp_path: Path, monkeypatch) -> None:
     assert count == 1
     assert (tmp_path / "parsed" / str(fake_report_repo.report_id) / "raw_text.txt").exists()
     assert (tmp_path / "parsed" / str(fake_report_repo.report_id) / "parsed.json").exists()
+    assert (tmp_path / "parsed" / str(fake_report_repo.report_id) / "pages.json").exists()
     assert fake_report_repo.updated_paths["parsed_json_path"].endswith("parsed.json")
     assert fake_chunk_repo.inserted_chunks[0]["chunk_type"] == "source_note"
     assert fake_chunk_repo.inserted_chunks[0]["metadata"]["parser"] in {"trafilatura", "beautifulsoup"}

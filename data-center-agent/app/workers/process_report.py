@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 from uuid import UUID
 
-from app.agents.parser import build_chunks, parse_raw_file, parsed_json
+from app.agents.parser import build_chunks, pages_json, parse_raw_file, parsed_json
 from app.config import get_settings
 from app.db.connection import get_engine
 from app.db.repositories.chunks import ChunkRepository
@@ -32,8 +32,10 @@ def process_report(report_id: UUID) -> int:
         parsed = parse_raw_file(raw_path, source.get("source_type", "unknown"), source.get("mime_type"))
         raw_text_relative = str(Path("parsed") / str(report_id) / "raw_text.txt")
         parsed_json_relative = str(Path("parsed") / str(report_id) / "parsed.json")
+        pages_json_relative = str(Path("parsed") / str(report_id) / "pages.json")
         storage.write_text(raw_text_relative, parsed.text)
         storage.write_text(parsed_json_relative, parsed_json(parsed))
+        storage.write_text(pages_json_relative, pages_json(parsed))
         report_repo.update_paths(report_id, raw_text_path=raw_text_relative, parsed_json_path=parsed_json_relative)
 
         chunks = build_chunks(str(report_id), parsed)

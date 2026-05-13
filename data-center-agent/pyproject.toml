@@ -30,6 +30,10 @@ dev = [
 browser = [
   "playwright>=1.42.0",
 ]
+ocr = [
+  "paddleocr>=2.7.0",
+  "paddlepaddle>=2.6.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -1,5 +1,7 @@
 import json
 import re
+import tempfile
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,13 @@ PDF_FALLBACK_MIN_CHARS = 500
 DEFAULT_TARGET_TOKENS = 1000
 DEFAULT_MIN_TOKENS = 800
 DEFAULT_MAX_TOKENS = 1200
+EMPTY_PAGE_MAX_CHARS = 25
+MIN_AVG_CHARS_PER_PAGE = 100
+MAX_EMPTY_PAGE_RATIO = 0.30
+
+
+class OCRDependencyError(RuntimeError):
+    """Raised when OCR is requested but the configured OCR dependency is unavailable."""
 
 
 @dataclass
@@ -24,6 +33,66 @@ class ParsedPage:
     text: str
     extraction_method: str
     tables: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ExtractionQuality:
+    total_characters: int
+    average_characters_per_page: float
+    empty_page_ratio: float
+    ocr_recommended: bool
+    reason: str
+
+
+class OCREngine(ABC):
+    @abstractmethod
+    def extract_pages(self, pdf_path: Path) -> list[ParsedPage]:
+        raise NotImplementedError
+
+
+class PaddleOCREngine(OCREngine):
+    def __init__(self, language: str = "en", dpi: int = 200):
+        try:
+            from paddleocr import PaddleOCR
+        except ImportError as exc:
+            raise OCRDependencyError(
+                "PaddleOCR is not installed. Install OCR support with: pip install -e '.[ocr]'"
+            ) from exc
+
+        self.language = language
+        self.dpi = dpi
+        self._ocr = PaddleOCR(use_angle_cls=True, lang=language, show_log=False)
+
+    def extract_pages(self, pdf_path: Path) -> list[ParsedPage]:
+        pages: list[ParsedPage] = []
+        zoom = self.dpi / 72
+        matrix = fitz.Matrix(zoom, zoom)
+
+        with fitz.open(pdf_path) as document, tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            for index, page in enumerate(document, start=1):
+                image_path = temp_root / f"page-{index}.png"
+                pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+                pixmap.save(image_path)
+                ocr_result = self._ocr.ocr(str(image_path), cls=True)
+                text, confidence = _parse_paddleocr_result(ocr_result)
+                pages.append(
+                    ParsedPage(
+                        page_number=index,
+                        text=normalize_whitespace(text),
+                        extraction_method="ocr",
+                        tables=detect_table_placeholders(text),
+                        metadata={
+                            "ocr_engine": "paddleocr",
+                            "confidence": confidence,
+                            "is_scanned_pdf": True,
+                            "dpi": self.dpi,
+                            "language": self.language,
+                        },
+                    )
+                )
+        return pages
 
 
 @dataclass
@@ -44,6 +113,7 @@ class ParsedDocument:
                         "text_length": len(page.text),
                         "extraction_method": page.extraction_method,
                         "tables": page.tables,
+                        "metadata": page.metadata,
                     }
                     for page in self.pages
                 ],
@@ -62,24 +132,56 @@ def extract_title_from_html(content: bytes) -> str | None:
     return h1.get_text(strip=True) if h1 else None
 
 
-def extract_text_from_pdf(path: Path) -> ParsedDocument:
+def extract_text_from_pdf(path: Path, ocr_engine: OCREngine | None = None) -> ParsedDocument:
     pymupdf_pages = _extract_pdf_with_pymupdf(path)
     pymupdf_text = _join_page_text(pymupdf_pages)
-    used_fallback = len(pymupdf_text) < PDF_FALLBACK_MIN_CHARS
+    pymupdf_quality = assess_pdf_text_quality(pymupdf_pages)
 
-    if used_fallback:
+    if pymupdf_quality.ocr_recommended:
         pdfplumber_pages = _extract_pdf_with_pdfplumber(path)
         pdfplumber_text = _join_page_text(pdfplumber_pages)
-        if len(pdfplumber_text) > len(pymupdf_text):
+        pdfplumber_quality = assess_pdf_text_quality(pdfplumber_pages)
+        if not pdfplumber_quality.ocr_recommended or len(pdfplumber_text) > len(pymupdf_text):
+            if not pdfplumber_quality.ocr_recommended:
+                return ParsedDocument(
+                    text=pdfplumber_text,
+                    pages=pdfplumber_pages,
+                    metadata={
+                        "parser": "pdfplumber",
+                        "fallback_from": "pymupdf",
+                        "fallback_reason": pymupdf_quality.reason,
+                        "pymupdf_quality": _quality_metadata(pymupdf_quality),
+                        "pdfplumber_quality": _quality_metadata(pdfplumber_quality),
+                    },
+                )
+            best_text_pages = pdfplumber_pages
+            best_text = pdfplumber_text
+            best_text_parser = "pdfplumber"
+            best_quality = pdfplumber_quality
+        else:
+            best_text_pages = pymupdf_pages
+            best_text = pymupdf_text
+            best_text_parser = "pymupdf"
+            best_quality = pymupdf_quality
+
+        if best_quality.ocr_recommended:
+            engine = ocr_engine or PaddleOCREngine()
+            ocr_pages = engine.extract_pages(path)
+            ocr_text = _join_page_text(ocr_pages)
+            ocr_quality = assess_pdf_text_quality(ocr_pages)
             return ParsedDocument(
-                text=pdfplumber_text,
-                pages=pdfplumber_pages,
+                text=ocr_text,
+                pages=ocr_pages,
                 metadata={
-                    "parser": "pdfplumber",
-                    "fallback_from": "pymupdf",
-                    "fallback_reason": "pymupdf_output_too_short",
-                    "pymupdf_text_length": len(pymupdf_text),
-                    "pdfplumber_text_length": len(pdfplumber_text),
+                    "parser": "ocr",
+                    "ocr_engine": "custom" if ocr_engine else "paddleocr",
+                    "fallback_from": best_text_parser,
+                    "fallback_reason": best_quality.reason,
+                    "is_scanned_pdf": True,
+                    "pymupdf_quality": _quality_metadata(pymupdf_quality),
+                    "pdfplumber_quality": _quality_metadata(pdfplumber_quality),
+                    "ocr_quality": _quality_metadata(ocr_quality),
+                    "pre_ocr_text_length": len(best_text),
                 },
             )
 
@@ -88,9 +190,35 @@ def extract_text_from_pdf(path: Path) -> ParsedDocument:
         pages=pymupdf_pages,
         metadata={
             "parser": "pymupdf",
-            "fallback_considered": used_fallback,
-            "pymupdf_text_length": len(pymupdf_text),
+            "fallback_considered": pymupdf_quality.ocr_recommended,
+            "pymupdf_quality": _quality_metadata(pymupdf_quality),
         },
+    )
+
+
+def assess_pdf_text_quality(pages: list[ParsedPage]) -> ExtractionQuality:
+    page_count = len(pages)
+    total_characters = sum(len(page.text.strip()) for page in pages)
+    average_characters = total_characters / page_count if page_count else 0
+    empty_pages = sum(1 for page in pages if len(page.text.strip()) <= EMPTY_PAGE_MAX_CHARS)
+    empty_ratio = empty_pages / page_count if page_count else 1.0
+
+    reasons: list[str] = []
+    if total_characters < PDF_FALLBACK_MIN_CHARS:
+        reasons.append("total_text_too_short")
+    if average_characters < MIN_AVG_CHARS_PER_PAGE:
+        reasons.append("average_text_per_page_too_short")
+    if empty_ratio > MAX_EMPTY_PAGE_RATIO:
+        reasons.append("too_many_empty_pages")
+    if not pages:
+        reasons.append("no_pages_extracted")
+
+    return ExtractionQuality(
+        total_characters=total_characters,
+        average_characters_per_page=average_characters,
+        empty_page_ratio=empty_ratio,
+        ocr_recommended=bool(reasons),
+        reason=", ".join(reasons) if reasons else "text_extraction_quality_acceptable",
     )
 
 
@@ -100,8 +228,7 @@ def _extract_pdf_with_pymupdf(path: Path) -> list[ParsedPage]:
         for index, page in enumerate(document, start=1):
             text = normalize_whitespace(page.get_text("text"))
             tables = detect_table_placeholders(text)
-            if text or tables:
-                pages.append(ParsedPage(index, text, "pymupdf", tables))
+            pages.append(ParsedPage(index, text, "pymupdf", tables))
     return pages
 
 
@@ -125,8 +252,7 @@ def _extract_pdf_with_pdfplumber(path: Path) -> list[ParsedPage]:
                         "extraction_method": "pdfplumber",
                     }
                 )
-            if text or tables:
-                pages.append(ParsedPage(index, text, "pdfplumber", tables))
+            pages.append(ParsedPage(index, text, "pdfplumber", tables))
     return pages
 
 
@@ -160,10 +286,15 @@ def extract_text_from_plain_file(path: Path) -> ParsedDocument:
     return ParsedDocument(text=text, pages=pages, metadata={"parser": "plain_text"})
 
 
-def parse_raw_file(path: Path, source_type: str, mime_type: str | None = None) -> ParsedDocument:
+def parse_raw_file(
+    path: Path,
+    source_type: str,
+    mime_type: str | None = None,
+    ocr_engine: OCREngine | None = None,
+) -> ParsedDocument:
     suffix = path.suffix.lower()
     if source_type == "pdf" or suffix == ".pdf" or mime_type == "application/pdf":
-        return extract_text_from_pdf(path)
+        return extract_text_from_pdf(path, ocr_engine=ocr_engine)
     if source_type == "html" or suffix in {".html", ".htm"} or (mime_type or "").startswith("text/html"):
         return extract_text_from_html(path)
     if suffix in {".txt", ".csv"} or (mime_type or "").startswith("text/"):
@@ -198,6 +329,7 @@ def build_chunks(
                         "chunk_index_on_page": chunk_index,
                         "target_tokens": target_tokens,
                         "table_placeholders": page.tables,
+                        **page.metadata,
                     },
                 }
             )
@@ -239,6 +371,24 @@ def parsed_json(parsed: ParsedDocument | str, pages: list[dict[str, Any]] | None
         return parsed.to_json()
     legacy_pages = pages or []
     return json.dumps({"text_length": len(parsed), "pages": legacy_pages}, ensure_ascii=True, indent=2)
+
+
+def pages_json(parsed: ParsedDocument) -> str:
+    return json.dumps(
+        [
+            {
+                "page_number": page.page_number,
+                "text": page.text,
+                "text_length": len(page.text),
+                "extraction_method": page.extraction_method,
+                "tables": page.tables,
+                "metadata": page.metadata,
+            }
+            for page in parsed.pages
+        ],
+        ensure_ascii=True,
+        indent=2,
+    )
 
 
 def infer_chunk_type(text: str, tables: list[dict[str, Any]] | None = None) -> str:
@@ -294,6 +444,45 @@ def _coerce_pages(parsed: ParsedDocument | list[dict[str, Any]]) -> list[ParsedP
             text=page.get("text", ""),
             extraction_method=page.get("extraction_method", "legacy"),
             tables=page.get("tables", []),
+            metadata=page.get("metadata", {}),
         )
         for page in parsed
     ]
+
+
+def _quality_metadata(quality: ExtractionQuality) -> dict[str, Any]:
+    return {
+        "total_characters": quality.total_characters,
+        "average_characters_per_page": quality.average_characters_per_page,
+        "empty_page_ratio": quality.empty_page_ratio,
+        "ocr_recommended": quality.ocr_recommended,
+        "reason": quality.reason,
+    }
+
+
+def _parse_paddleocr_result(ocr_result: Any) -> tuple[str, float | None]:
+    lines: list[str] = []
+    confidences: list[float] = []
+    pages = ocr_result or []
+    if pages and isinstance(pages[0], list) and pages[0] and _looks_like_ocr_line(pages[0][0]):
+        pages = [pages]
+
+    for page in pages:
+        for line in page or []:
+            if not _looks_like_ocr_line(line):
+                continue
+            text_confidence = line[1]
+            if not isinstance(text_confidence, (list, tuple)) or not text_confidence:
+                continue
+            text = str(text_confidence[0]).strip()
+            if text:
+                lines.append(text)
+            if len(text_confidence) > 1 and isinstance(text_confidence[1], (int, float)):
+                confidences.append(float(text_confidence[1]))
+
+    confidence = sum(confidences) / len(confidences) if confidences else None
+    return " ".join(lines), confidence
+
+
+def _looks_like_ocr_line(value: Any) -> bool:
+    return isinstance(value, (list, tuple)) and len(value) >= 2
