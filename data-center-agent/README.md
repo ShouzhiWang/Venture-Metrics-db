@@ -37,6 +37,7 @@ postgresql+psycopg://postgres:postgres@localhost:5432/data_center_agent
 ## Workers
 
 Ingest Excel links. The sheet must contain at least one column named `url`, `link`, `source_url`, `original_url`, or `href`.
+The Excel file is treated only as a seed list: the worker reads and normalizes URLs, guesses an initial source type from the URL, and creates minimal `sources` rows with `crawl_status='pending'`. Titles, publishers, report years, article text, and other metadata are filled by later workers when evidence is available.
 
 ```bash
 python -m app.workers.ingest_excel --path data/input/reports.xlsx
@@ -48,11 +49,15 @@ Fetch and store one source:
 python -m app.workers.process_source --source-id <uuid>
 ```
 
+`process_source` detects actual content type from headers and file signatures. PDF/HTML sources create sparse `reports` rows; CSV/XLSX sources create `datasets` rows.
+
 Parse one report into extracted text and chunks:
 
 ```bash
 python -m app.workers.process_report --report-id <uuid>
 ```
+
+`process_report` parses the raw file, writes `raw_text.txt`, `parsed.json`, and `pages.json`, inserts `document_chunks`, enriches report metadata where possible, and marks the source `parsed`.
 
 Generate rule-based placeholder codebook entries:
 
@@ -73,6 +78,16 @@ python -m app.workers.ask "employment rate definition"
 - `data/parsed/<report_id>/parsed.json`: lightweight parser output.
 
 Do not store large PDFs, tables, or parsed blobs directly in PostgreSQL. Store paths and checksums in the database.
+
+## Source Statuses
+
+- `pending`: seed URL exists but has not been fetched.
+- `fetched`: raw content was fetched and stored.
+- `parsed`: a report source was parsed into text/chunks.
+- `failed`: fetch or local file read failed.
+- `needs_browser`: reserved for pages requiring browser automation.
+- `inaccessible`: URL appears unavailable, such as a 404.
+- `private_or_paywalled`: source appears gated, private, or paywalled.
 
 ## Backup
 

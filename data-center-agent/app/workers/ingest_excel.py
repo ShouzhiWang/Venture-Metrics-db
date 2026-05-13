@@ -1,5 +1,7 @@
 import argparse
+import re
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import pandas as pd
 
@@ -9,7 +11,7 @@ from app.db.repositories.sources import SourceRepository
 from app.utils.logging import configure_logging
 
 
-URL_COLUMNS = ["url", "link", "source_url", "original_url", "href"]
+URL_COLUMNS = ["url", "link", "source_url", "original_url", "href", "网址", "網站", "网站", "链接", "連結"]
 
 
 def find_url_column(columns: list[str]) -> str:
@@ -20,29 +22,61 @@ def find_url_column(columns: list[str]) -> str:
     raise ValueError(f"Could not find URL column. Expected one of: {', '.join(URL_COLUMNS)}")
 
 
+def normalize_url(url: str) -> str:
+    stripped = url.strip()
+    split = urlsplit(stripped)
+    if not split.scheme:
+        split = urlsplit(f"https://{stripped}")
+    scheme = split.scheme.lower()
+    netloc = split.netloc.lower()
+    path = split.path or ""
+    query = urlencode(sorted(parse_qsl(split.query, keep_blank_values=True)))
+    return urlunsplit((scheme, netloc, path, query, ""))
+
+
+def extract_first_url(value: str) -> str | None:
+    stripped = value.strip()
+    match = re.search(r"https?://[^\s，,；;）)]+", stripped, flags=re.IGNORECASE)
+    if match:
+        return match.group(0)
+    if re.fullmatch(r"(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:/[^\s，,；;）)]*)?", stripped):
+        return stripped
+    return None
+
+
+def iter_excel_frames(path: Path):
+    sheets = pd.read_excel(path, sheet_name=None)
+    for sheet_name, frame in sheets.items():
+        yield sheet_name, frame
+
+
 def ingest_excel(path: Path) -> int:
-    frame = pd.read_excel(path)
-    url_column = find_url_column(list(frame.columns))
     inserted = 0
     engine = get_engine()
     with engine.begin() as connection:
         repo = SourceRepository(connection)
-        for _, row in frame.iterrows():
-            url = str(row[url_column]).strip()
-            if not url or url.lower() == "nan":
-                continue
-            classification = classify_source(url)
-            repo.upsert_by_url(
-                url,
-                {
-                    **classification,
-                    "title": str(row["title"]).strip() if "title" in frame.columns and pd.notna(row["title"]) else None,
-                    "source_owner": str(row["source_owner"]).strip()
-                    if "source_owner" in frame.columns and pd.notna(row["source_owner"])
-                    else None,
-                },
-            )
-            inserted += 1
+        for sheet_name, frame in iter_excel_frames(path):
+            url_column = find_url_column(list(frame.columns))
+            for _, row in frame.iterrows():
+                raw_value = str(row[url_column]).strip()
+                if not raw_value or raw_value.lower() == "nan":
+                    continue
+                raw_url = extract_first_url(raw_value)
+                if not raw_url:
+                    continue
+                url = normalize_url(raw_url)
+                classification = classify_source(url)
+                repo.upsert_by_url(
+                    url,
+                    {
+                        **classification,
+                        "crawl_status": "pending",
+                        "title": None,
+                        "source_owner": None,
+                        "notes": f"seed_sheet={sheet_name}",
+                    },
+                )
+                inserted += 1
     return inserted
 
 

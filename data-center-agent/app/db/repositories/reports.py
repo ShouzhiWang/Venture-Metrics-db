@@ -67,3 +67,31 @@ class ReportRepository(BaseRepository):
             ),
             {"id": str(report_id), "raw_text_path": raw_text_path, "parsed_json_path": parsed_json_path},
         )
+
+    def update_metadata(self, report_id: UUID | str, values: dict[str, Any]) -> None:
+        self.connection.execute(
+            text(
+                """
+                UPDATE reports
+                SET title = coalesce(:title, title),
+                    publisher = coalesce(:publisher, publisher),
+                    publication_date = coalesce(:publication_date, publication_date),
+                    report_year = coalesce(:report_year, report_year),
+                    geography = coalesce(:geography, geography),
+                    language = coalesce(:language, language),
+                    summary = coalesce(:summary, summary),
+                    updated_at = now()
+                WHERE id = :id
+                """
+            ),
+            {
+                "id": str(report_id),
+                "title": values.get("title"),
+                "publisher": values.get("publisher"),
+                "publication_date": values.get("publication_date"),
+                "report_year": values.get("report_year"),
+                "geography": values.get("geography"),
+                "language": values.get("language"),
+                "summary": values.get("summary"),
+            },
+        )

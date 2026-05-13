@@ -33,4 +33,5 @@ def test_source_repository_upsert_by_url_uses_dedup_key() -> None:
     assert "ON CONFLICT (original_url)" in statement
     assert params["original_url"] == "https://example.gov/report.pdf"
     assert params["source_type"] == "pdf"
+    assert params["crawl_status"] == "pending"
     assert result["original_url"] == "https://example.gov/report.pdf"
