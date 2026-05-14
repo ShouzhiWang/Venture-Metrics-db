@@ -36,9 +36,11 @@ def generate_codebook(
             summary = {
                 "skipped": True,
                 "skip_reason": reason,
-                "content_quality": quality.label,
+                "content_quality": quality.source_resolution_status,
+                "extraction_eligibility": quality.extraction_eligibility,
                 "chunk_count": quality.chunk_count,
                 "total_characters": quality.total_characters,
+                "strong_keyword_score": quality.strong_keyword_score,
                 "candidate_chunks": 0,
                 "rule_based_variables": 0,
                 "llm_variables": 0,
@@ -47,15 +49,36 @@ def generate_codebook(
             }
             return {"summary": summary, "variables": []}
 
+        # Determine if this is a conditional extraction (all vars → needs_review)
+        is_conditional = quality.extraction_eligibility == "eligible_conditional"
+
         extractor = HybridCodebookExtractor(
             llm_extractor=MockLLMCodebookExtractor() if use_mock_llm else None,
             top_k=top_k,
         )
         variables = extractor.extract(report_id, chunks)
+
+        # If conditional, force all variables to needs_review
+        if is_conditional:
+            variables = [
+                variable.model_copy(update={
+                    "review_status": "needs_review",
+                    "metadata": {
+                        **variable.metadata,
+                        "quality_forced_needs_review": True,
+                        "conditional_reason": quality.eligibility_reason,
+                    },
+                })
+                for variable in variables
+            ]
+
         extraction_summary = {
             **extractor.last_summary,
             "skipped": False,
-            "content_quality": quality.label,
+            "content_quality": quality.source_resolution_status,
+            "extraction_eligibility": quality.extraction_eligibility,
+            "strong_keyword_score": quality.strong_keyword_score,
+            "strong_keyword_hits": quality.strong_keyword_hits,
             "chunk_count": quality.chunk_count,
             "total_characters": quality.total_characters,
         }
@@ -103,11 +126,15 @@ def _effective_quality(chunks: list[dict], report: dict | None, source: dict | N
     stored = citation_info.get("content_quality") if isinstance(citation_info, dict) else None
     if isinstance(stored, dict) and stored.get("label") in {"landing_page_only", "paywalled_or_gated", "js_required", "failed"}:
         return ContentQualityResult(
-            stored["label"],
-            stored.get("reason") or computed.reason,
-            computed.chunk_count,
-            computed.total_characters,
-            {"stored": stored, "computed": computed.metadata},
+            source_resolution_status=stored["label"],
+            resolution_reason=stored.get("reason") or computed.resolution_reason,
+            extraction_eligibility="ineligible_gated",
+            eligibility_reason=f"stored quality: {stored['label']}",
+            chunk_count=computed.chunk_count,
+            total_characters=computed.total_characters,
+            strong_keyword_score=computed.strong_keyword_score,
+            strong_keyword_hits=computed.strong_keyword_hits,
+            metadata={"stored": stored, "computed": computed.metadata},
         )
     return computed
 
@@ -139,6 +166,7 @@ def main() -> None:
             "Codebook generation skipped: "
             f"reason={summary.get('skip_reason')} "
             f"content_quality={summary.get('content_quality')} "
+            f"extraction_eligibility={summary.get('extraction_eligibility')} "
             f"chunks={summary.get('chunk_count')} "
             f"characters={summary.get('total_characters')}"
         )
@@ -150,7 +178,8 @@ def main() -> None:
         f"llm_variables={summary.get('llm_variables', 0)} "
         f"inserted={summary.get('inserted', 0)} "
         f"needs_review={summary.get('needs_review', 0)} "
-        f"private={summary.get('private', 0)}"
+        f"private={summary.get('private', 0)} "
+        f"eligibility={summary.get('extraction_eligibility', 'eligible')}"
     )
 
 

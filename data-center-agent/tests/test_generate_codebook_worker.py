@@ -100,7 +100,9 @@ def test_generate_codebook_dry_run_uses_mocked_repositories(monkeypatch) -> None
     assert FakeVariableRepository.inserted == []
 
 
-def test_generate_codebook_skips_low_content_report_unless_force(monkeypatch) -> None:
+def test_generate_codebook_allows_conditional_extraction_for_strong_keywords(monkeypatch) -> None:
+    """FakeChunkRepository has 1 chunk with 'defined as' + 'data sourced' → strong keywords.
+    Should extract conditionally (all vars needs_review) rather than skip."""
     monkeypatch.setattr(worker, "get_engine", lambda: FakeEngine())
     monkeypatch.setattr(worker, "ChunkRepository", FakeChunkRepository)
     monkeypatch.setattr(worker, "ReportRepository", FakeReportRepository)
@@ -109,8 +111,43 @@ def test_generate_codebook_skips_low_content_report_unless_force(monkeypatch) ->
 
     result = worker.generate_codebook(FakeChunkRepository.report_id, dry_run=True, top_k=5)
 
+    assert result["summary"]["skipped"] is False
+    assert result["summary"]["extraction_eligibility"] == "eligible_conditional"
+    assert result["summary"]["final_variables"] >= 1
+    # All variables should be forced to needs_review
+    for var in result["variables"]:
+        assert var["review_status"] == "needs_review"
+        assert var["metadata"].get("quality_forced_needs_review") is True
+
+
+class FakeWeakChunkRepository(FakeChunkRepository):
+    """Chunk with no strong methodology keywords — should be skipped."""
+    def list_by_report(self, report_id):
+        return [
+            {
+                "id": FakeChunkRepository.chunk_id,
+                "report_id": report_id,
+                "chunk_text": "The company reported strong revenue growth in Q3. Market conditions remained favorable.",
+                "page_number": 1,
+                "section_title": "Results",
+                "chunk_type": "narrative",
+                "metadata": {},
+            }
+        ]
+
+
+def test_generate_codebook_skips_weak_low_content_report(monkeypatch) -> None:
+    """1 chunk with no strong keywords → should skip unless --force."""
+    monkeypatch.setattr(worker, "get_engine", lambda: FakeEngine())
+    monkeypatch.setattr(worker, "ChunkRepository", FakeWeakChunkRepository)
+    monkeypatch.setattr(worker, "ReportRepository", FakeReportRepository)
+    monkeypatch.setattr(worker, "SourceRepository", FakeSourceRepository)
+    monkeypatch.setattr(worker, "VariableRepository", FakeVariableRepository)
+
+    result = worker.generate_codebook(FakeWeakChunkRepository.report_id, dry_run=True, top_k=5)
+
     assert result["summary"]["skipped"] is True
-    assert "minimum" in result["summary"]["skip_reason"]
+    assert "ineligible_low_text" in result["summary"]["skip_reason"]
     assert result["variables"] == []
 
 
