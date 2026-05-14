@@ -21,6 +21,8 @@ pip install -e ".[dev]"
 cp .env.example .env
 ```
 
+For OpenAI Batch extraction, set `OPENAI_API_KEY` in `.env`. Optional batch settings include `OPENAI_BATCH_MODEL`, `OPENAI_BATCH_REVIEW_MODEL`, `OPENAI_BATCH_MAX_INPUT_TOKENS_PER_REPORT`, and `OPENAI_BATCH_PROMPT_VERSION`.
+
 ## Docker PostgreSQL
 
 ```bash
@@ -64,6 +66,54 @@ Generate rule-based placeholder codebook entries:
 ```bash
 python -m app.workers.generate_codebook --report-id <uuid>
 ```
+
+Create an OpenAI Batch JSONL for LLM codebook extraction without submitting it:
+
+```bash
+python -m app.workers.create_extraction_batch --limit 5 --dry-run
+```
+
+Submit a small OpenAI Batch extraction job:
+
+```bash
+python -m app.workers.create_extraction_batch --limit 5 --submit
+```
+
+Check an asynchronous batch job. OpenAI Batch jobs can take up to 24 hours:
+
+```bash
+python -m app.workers.batch_status --batch-id <db_uuid_or_openai_batch_id>
+```
+
+Import completed extraction results and export review CSVs. By default this does not insert variables:
+
+```bash
+python -m app.workers.import_extraction_batch \
+  --batch-id <db_uuid_or_openai_batch_id> \
+  --review-csv /data/hermes/reviews/codebook_review_llm.csv \
+  --export-rejected
+```
+
+Optionally create and import a second LLM reviewer batch over parsed extraction outputs:
+
+```bash
+python -m app.workers.create_review_batch --batch-id <extraction_batch_id> --submit
+python -m app.workers.import_review_batch \
+  --batch-id <review_batch_id> \
+  --review-csv /data/hermes/reviews/codebook_review_llm_decisions.csv
+```
+
+Insert only after review when you explicitly opt in:
+
+```bash
+python -m app.workers.import_extraction_batch \
+  --batch-id <db_uuid_or_openai_batch_id> \
+  --review-csv /data/hermes/reviews/codebook_review_llm.csv \
+  --insert \
+  --min-confidence 0.75
+```
+
+The LLM batch pipeline sends selected high-signal chunks, not full PDFs. It excludes reference-like chunks before prompt creation, verifies evidence quotes after import, and never marks variables approved automatically. Accepted and rejected rows remain reviewable in CSV outputs.
 
 Run keyword search over chunks and report variables:
 
