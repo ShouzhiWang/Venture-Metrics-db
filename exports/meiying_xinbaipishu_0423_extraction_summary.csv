@@ -1,0 +1,10 @@
+metric,value
+workbook,/Users/shawnwang/Downloads/Cong/美英新白皮书0423.xlsx
+sheets,"美国, 英国, 新加坡"
+source_rows,201
+candidate_chunks,0
+total_candidates_before_validation,0
+rejected_candidates,0
+final_accepted_variables,0
+
+reject_reason,count

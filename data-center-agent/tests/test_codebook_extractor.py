@@ -8,8 +8,10 @@ from app.agents.codebook_extractor import (
     LLMCodebookOutput,
     MockLLMCodebookExtractor,
     RuleBasedCodebookExtractor,
+    VariableCandidateValidator,
     VariableQualityFilter,
     classify_source_availability,
+    is_reference_like_text,
 )
 from app.agents.content_quality import classify_content_quality
 from app.models.variable import ExtractedVariable
@@ -80,6 +82,32 @@ def test_candidate_chunk_selector_penalizes_chart_legend_chunks() -> None:
 
     assert selected[0].chunk_id == methodology["id"]
     assert any(reason.startswith("penalty:chart_legend_like") for reason in selected[1].reasons)
+
+
+def test_candidate_chunk_selector_excludes_reference_sections() -> None:
+    report_id = uuid4()
+    reference = {
+        "id": uuid4(),
+        "report_id": report_id,
+        "chunk_text": "References Fairlie, R. 2020. Journal article. Retrieved from https://example.com.",
+        "page_number": 13,
+        "section_title": "References",
+        "chunk_type": "narrative",
+        "metadata": {},
+    }
+    methodology = {
+        "id": uuid4(),
+        "report_id": report_id,
+        "chunk_text": "Startup density is defined as the number of startups per 1,000 residents.",
+        "page_number": 8,
+        "section_title": "Methodology",
+        "chunk_type": "methodology",
+        "metadata": {},
+    }
+
+    selected = CandidateChunkSelector().select([reference, methodology], top_k=5)
+
+    assert [candidate.chunk_id for candidate in selected] == [methodology["id"]]
 
 
 def test_html_one_chunk_classified_low_text_or_landing_page_only() -> None:
@@ -249,6 +277,79 @@ def test_methodology_definition_survives_quality_filter() -> None:
     assert filtered.review_status == "pending"
 
 
+def test_reference_like_text_detector_flags_citations_and_urls() -> None:
+    assert is_reference_like_text(
+        "References Fairlie, R. 2020. Journal of Economics, 29(4): 727-740. Retrieved from https://example.com."
+    )
+    assert is_reference_like_text("[1] BBC. Available from https://www.bbc.com. [2] Bloomberg. DOI: 10.123/example.")
+
+
+def test_variable_candidate_validator_rejects_reference_noise() -> None:
+    report_id = uuid4()
+    examples = [
+        ("BBC", "https://www", "BBC. Available from https://www.bbc.com."),
+        ("Bloomberg", "https://www", "Bloomberg. Available from https://www.bloomberg.com."),
+        ("Available from", "https://www.example.com", "Available from https://www.example.com."),
+        ("Andrew Bacevich, American Empire", None, "Andrew Bacevich, American Empire, Cambridge: Harvard University Press."),
+        ("Guardian", None, "Guardian. Retrieved from https://www.theguardian.com."),
+        ("Startup report", None, "References Fairlie, R. 2020. Journal article."),
+        ("Article title", None, "[1] BBC. https://www.bbc.com. [2] Bloomberg. https://www.bloomberg.com."),
+    ]
+    validator = VariableCandidateValidator()
+
+    for name, definition, evidence in examples:
+        variable = ExtractedVariable(
+            report_id=report_id,
+            raw_variable_name=name,
+            definition=definition,
+            evidence_chunk_id=uuid4(),
+            evidence_quote=evidence,
+            confidence_score=1.0,
+        )
+
+        assert not validator.validate(variable, {"chunk_text": evidence, "section_title": "References"}).is_valid
+
+
+def test_variable_candidate_validator_accepts_real_measurements() -> None:
+    report_id = uuid4()
+    examples = [
+        (
+            "Startup density",
+            "the number of startups per 1,000 working-age residents",
+            "Startup density is defined as the number of startups per 1,000 working-age residents.",
+        ),
+        (
+            "Venture capital investment",
+            None,
+            "Venture capital investment is measured as the total annual amount of VC funding received by startups.",
+        ),
+        (
+            "Business birth rate",
+            None,
+            "Business birth rate is calculated as the number of new enterprises divided by active enterprises.",
+        ),
+        (
+            "R&D intensity",
+            "R&D expenditure as a percentage of GDP",
+            "R&D intensity is defined as R&D expenditure as a percentage of GDP.",
+        ),
+    ]
+    validator = VariableCandidateValidator()
+
+    for name, definition, evidence in examples:
+        variable = ExtractedVariable(
+            report_id=report_id,
+            raw_variable_name=name,
+            definition=definition,
+            measurement_method=None if definition else evidence,
+            evidence_chunk_id=uuid4(),
+            evidence_quote=evidence,
+            confidence_score=0.7,
+        )
+
+        assert validator.validate(variable, {"chunk_text": evidence, "section_title": "Methodology"}).is_valid
+
+
 def test_evidence_verifier_passes_when_quote_appears() -> None:
     report_id = uuid4()
     chunk_id = uuid4()
@@ -378,3 +479,51 @@ def test_hybrid_extractor_combines_mock_llm_and_deduplicates() -> None:
     assert extractor.last_summary["candidate_chunks"] == 1
     assert extractor.last_summary["rule_based_variables"] == 1
     assert extractor.last_summary["llm_variables"] == 1
+
+
+def test_hybrid_extractor_rejects_bad_llm_candidates_before_scoring() -> None:
+    report_id = uuid4()
+    chunk_id = uuid4()
+    chunks = [
+        {
+            "id": chunk_id,
+            "report_id": report_id,
+            "chunk_text": "References BBC. Available from https://www.bbc.com. Bloomberg. Retrieved from https://www.bloomberg.com.",
+            "page_number": 12,
+            "section_title": "References",
+            "chunk_type": "narrative",
+            "metadata": {},
+        }
+    ]
+    llm_output = LLMCodebookOutput(
+        variables=[
+            {
+                "raw_variable_name": "BBC",
+                "definition": "https://www.bbc.com",
+                "measurement_method": None,
+                "unit": None,
+                "data_source_text": "BBC",
+                "data_source_type": "unknown",
+                "availability": "unclear",
+                "temporal_coverage": None,
+                "geographic_coverage": None,
+                "evidence_chunk_ids": [chunk_id],
+                "evidence_quotes": ["References BBC. Available from https://www.bbc.com."],
+                "confidence_score": 1.0,
+                "uncertainties": [],
+            }
+        ]
+    )
+
+    extractor = HybridCodebookExtractor(llm_extractor=MockLLMCodebookExtractor(llm_output), top_k=5)
+    variables = extractor.extract(report_id, chunks)
+
+    assert variables == []
+    assert extractor.last_summary["total_candidates_before_validation"] == 1
+    assert extractor.last_summary["validator_rejected_variables"] == 1
+    assert extractor.last_rejected[0]["reject_reason"] in {
+        "reference_section",
+        "reference_like_evidence",
+        "url_like_definition",
+        "source_or_publication_name",
+    }

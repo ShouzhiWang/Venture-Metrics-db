@@ -1,0 +1,12 @@
+metric,value
+input_review_rows,778
+unique_evidence_chunks,288
+candidate_chunks,97
+total_candidates_before_validation,6
+rejected_candidates,6
+final_accepted_variables,0
+
+reject_reason,count
+person_or_citation_title,3
+sentence_fragment_name,2
+source_or_publication_name,1

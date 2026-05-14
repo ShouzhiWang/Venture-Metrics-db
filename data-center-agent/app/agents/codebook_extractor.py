@@ -107,6 +107,113 @@ VAGUE_NAMES = {"index", "score", "indicator", "metric", "measure", "variable"}
 DIRECTIONAL_LABELS = {"up", "flat", "down", "increase", "decrease", "higher", "lower"}
 CHART_LABEL_TERMS = {"source", "legend", "axis", "chart", "figure", "note", "notes"}
 STRONG_DEFINITION_TERMS = ["defined as", "measured as", "measured by", "calculated as", "proxy for", "definition"]
+MEASUREMENT_SIGNAL_TERMS = [
+    "defined as",
+    "measured as",
+    "measured by",
+    "calculated as",
+    "proxied by",
+    "proxy for",
+    "derived from",
+    "based on",
+    "percentage of",
+    "number of",
+    "rate of",
+    "share of",
+    "index of",
+    "ratio of",
+    "total amount of",
+    "count of",
+]
+QUANTITATIVE_VARIABLE_TERMS = [
+    "count",
+    "rate",
+    "share",
+    "percentage",
+    "percent",
+    "index",
+    "ratio",
+    "score",
+    "amount",
+    "value",
+    "density",
+    "intensity",
+    "employment",
+    "funding",
+    "investment",
+    "revenue",
+    "patents",
+    "patent",
+    "startups",
+    "startup",
+    "firms",
+    "firm",
+    "businesses",
+    "business",
+    "r&d",
+    "research and development",
+    "productivity",
+    "exports",
+    "imports",
+    "gdp",
+    "vc",
+    "deals",
+    "enterprises",
+]
+REFERENCE_SECTION_TITLES = {
+    "references",
+    "bibliography",
+    "endnotes",
+    "notes",
+    "sources",
+    "works cited",
+    "further reading",
+    "citations",
+}
+REJECTED_SOURCE_NAMES = {
+    "available",
+    "available from",
+    "source",
+    "sources",
+    "references",
+    "reference",
+    "bibliography",
+    "bbc",
+    "bloomberg",
+    "guardian",
+    "the guardian",
+    "reuters",
+    "associated press",
+    "ap",
+    "financial times",
+    "ft",
+    "new york times",
+    "the new york times",
+    "washington post",
+    "the washington post",
+    "wall street journal",
+    "the wall street journal",
+    "economist",
+    "the economist",
+    "forbes",
+    "fortune",
+    "cnbc",
+    "cnn",
+    "photo",
+    "photos",
+    "figure",
+    "figures",
+    "table",
+    "tables",
+    "sidebar",
+    "sidebars",
+}
+
+
+class VariableValidationResult(BaseModel):
+    is_valid: bool
+    reject_reason: str | None = None
+    warnings: list[str] = Field(default_factory=list)
 
 
 class LLMVariableOutput(BaseModel):
@@ -140,6 +247,18 @@ class CandidateChunkSelector:
         text = _get(chunk, "chunk_text") or ""
         section_title = _get(chunk, "section_title")
         chunk_type = _get(chunk, "chunk_type")
+        if _is_reference_section_title(section_title) or is_reference_like_text(text):
+            return CandidateChunk(
+                chunk_id=chunk_id,
+                report_id=_get(chunk, "report_id"),
+                chunk_text=text,
+                page_number=_get(chunk, "page_number"),
+                section_title=section_title,
+                chunk_type=chunk_type,
+                score=0.0,
+                reasons=["excluded:reference_like"],
+                metadata={"embedding_similarity_score": None},
+            )
         lowered = text.lower()
         score = 0.0
         reasons: list[str] = []
@@ -252,13 +371,15 @@ class RuleBasedCodebookExtractor(CodebookExtractor):
         if _is_vague_variable_name(raw_name):
             return None
         value = _clean_sentence_fragment(match.group("value"))
+        pattern_text = match.re.pattern.lower()
+        if r"\s*:\s*" in pattern_text and not _has_measurement_signal(value):
+            return None
         full_text = _get(chunk, "chunk_text") or ""
         sentence = _sentence_containing(full_text, match.group(0)) or match.group(0)
         data_source_text = _extract_data_source_text(full_text)
-        source_type, availability, source_meta = classify_source_availability(data_source_text or full_text)
+        source_type, availability, source_meta = classify_source_availability(data_source_text)
         temporal_coverage = _extract_temporal_coverage(full_text)
         geographic_coverage = _extract_geographic_coverage(full_text)
-        pattern_text = match.re.pattern.lower()
         is_measurement = any(token in pattern_text for token in ["measured", "calculated", "proxy"])
         confidence = 0.66 if not is_measurement else 0.62
         if data_source_text:
@@ -329,6 +450,45 @@ class MockLLMCodebookExtractor(LLMCodebookExtractor):
         return variables
 
 
+class VariableCandidateValidator:
+    def validate(self, variable: ExtractedVariable, evidence_chunk: Any | None = None) -> VariableValidationResult:
+        name = variable.raw_variable_name or ""
+        definition = variable.definition or ""
+        measurement = variable.measurement_method or ""
+        evidence = variable.evidence_quote or ""
+        source_text = variable.data_source_text or ""
+        chunk_text = _get(evidence_chunk, "chunk_text") or ""
+        section_title = _get(evidence_chunk, "section_title")
+
+        if _is_reference_section_title(section_title):
+            return VariableValidationResult(is_valid=False, reject_reason="reference_section")
+        if is_reference_like_text(evidence) or is_reference_like_text(chunk_text):
+            return VariableValidationResult(is_valid=False, reject_reason="reference_like_evidence")
+        if _is_url_like(name):
+            return VariableValidationResult(is_valid=False, reject_reason="url_like_variable_name")
+        if _is_url_like(definition):
+            return VariableValidationResult(is_valid=False, reject_reason="url_like_definition")
+        if _looks_like_source_or_chart_note(definition) or _looks_like_source_or_chart_note(measurement):
+            return VariableValidationResult(is_valid=False, reject_reason="source_or_chart_note_definition")
+        if _is_rejected_source_or_name(name):
+            return VariableValidationResult(is_valid=False, reject_reason="source_or_publication_name")
+        if _looks_like_sentence_fragment_name(name):
+            return VariableValidationResult(is_valid=False, reject_reason="sentence_fragment_name")
+        if _looks_like_person_or_citation_title(name):
+            return VariableValidationResult(is_valid=False, reject_reason="person_or_citation_title")
+        if _is_url_like(evidence) and not _has_measurement_signal(evidence):
+            return VariableValidationResult(is_valid=False, reject_reason="url_like_evidence")
+        if source_text and not (definition or measurement):
+            return VariableValidationResult(is_valid=False, reject_reason="data_source_without_variable_definition")
+
+        structured_context = " ".join(part for part in [definition, measurement] if part)
+        name_has_quantitative_pattern = _has_quantitative_variable_pattern(name)
+        if not _has_measurement_signal(structured_context) and not name_has_quantitative_pattern:
+            return VariableValidationResult(is_valid=False, reject_reason="missing_measurement_signal")
+
+        return VariableValidationResult(is_valid=True)
+
+
 def build_llm_codebook_prompt(chunks: list[CandidateChunk]) -> str:
     chunk_payload = [
         {
@@ -359,7 +519,9 @@ def build_llm_codebook_prompt(chunks: list[CandidateChunk]) -> str:
         "7. If the report references PitchBook, Crunchbase, CB Insights, Preqin, Dealroom, Refinitiv, Bloomberg, proprietary database, or subscription database, classify as private_database and availability private.\n"
         "8. If the report references official statistics, census, data.gov, World Bank, OECD, government statistics, statistical bureau, or public open data portals, classify as public_dataset and availability obtainable.\n"
         "9. If source availability is unclear, use availability unclear.\n"
-        "10. Return valid JSON only.\n\n"
+        "10. Do not extract references, bibliography entries, article titles, media outlets, organizations, URLs, or citation fragments as variables.\n"
+        "11. Do not treat a cited publication as data_source_text unless the sentence explicitly says data are from, data are sourced from, based on data from, using data from, survey conducted by, or dataset provided by that source.\n"
+        "12. Return valid JSON only.\n\n"
         f"Selected chunks:\n{json.dumps(chunk_payload, ensure_ascii=True, indent=2)}"
     )
 
@@ -428,6 +590,9 @@ class EvidenceVerifier:
 
 
 class ConfidenceScorer:
+    def __init__(self, validator: VariableCandidateValidator | None = None):
+        self.validator = validator or VariableCandidateValidator()
+
     def score(
         self,
         variable: ExtractedVariable,
@@ -466,9 +631,15 @@ class ConfidenceScorer:
         if variable.availability in {"private", "unclear"} and not verification.is_supported:
             score -= 0.10
         score += verification.confidence_adjustment
+
+        validation = self.validator.validate(variable, evidence_chunk)
+        if not validation.is_valid:
+            score = min(score, 0.55)
+        elif not variable.measurement_method and not _has_measurement_signal(variable.definition or ""):
+            score = min(score, 0.55)
         score = _clamp(score)
 
-        if score >= 0.80:
+        if score >= 0.80 and validation.is_valid:
             status = "pending_high_confidence"
         elif score >= 0.55:
             status = "pending"
@@ -482,6 +653,8 @@ class ConfidenceScorer:
                 "chunk_type": chunk_type,
                 "evidence_quote_found": verification.evidence_quote_found,
                 "ocr_penalty_applied": bool(chunk_metadata.get("page_extraction_method") == "ocr" or chunk_metadata.get("is_scanned_pdf")),
+                "validator_passed": validation.is_valid,
+                "validator_reject_reason": validation.reject_reason,
             },
         }
         return variable.model_copy(update={"confidence_score": score, "review_status": status, "metadata": metadata})
@@ -533,23 +706,50 @@ class HybridCodebookExtractor(CodebookExtractor):
         verifier: EvidenceVerifier | None = None,
         scorer: ConfidenceScorer | None = None,
         quality_filter: VariableQualityFilter | None = None,
+        validator: VariableCandidateValidator | None = None,
         top_k: int = 40,
     ):
         self.selector = selector or CandidateChunkSelector()
         self.rule_extractor = rule_extractor or RuleBasedCodebookExtractor()
         self.llm_extractor = llm_extractor
         self.verifier = verifier or EvidenceVerifier()
-        self.scorer = scorer or ConfidenceScorer()
+        self.validator = validator or VariableCandidateValidator()
+        self.scorer = scorer or ConfidenceScorer(self.validator)
         self.quality_filter = quality_filter or VariableQualityFilter()
         self.top_k = top_k
         self.last_summary: dict[str, int] = {}
+        self.last_rejected: list[dict[str, Any]] = []
 
     def extract(self, report_id: UUID, chunks: list[Any]) -> list[ExtractedVariable]:
         candidate_chunks = self.selector.select(chunks, top_k=self.top_k)
         rule_variables = self.rule_extractor.extract(report_id, candidate_chunks)
         llm_variables = self.llm_extractor.extract(report_id, candidate_chunks) if self.llm_extractor else []
-        merged = deduplicate_variables([*rule_variables, *llm_variables])
         chunk_lookup = {_get(chunk, "chunk_id") or _get(chunk, "id"): chunk for chunk in [*chunks, *candidate_chunks]}
+        raw_variables = [*rule_variables, *llm_variables]
+
+        validated: list[ExtractedVariable] = []
+        rejected: list[dict[str, Any]] = []
+        for variable in raw_variables:
+            evidence_chunk = chunk_lookup.get(variable.evidence_chunk_id)
+            validation = self.validator.validate(variable, evidence_chunk)
+            if validation.is_valid:
+                validated.append(variable)
+                continue
+            rejected.append(
+                {
+                    "raw_variable_name": variable.raw_variable_name,
+                    "definition": variable.definition,
+                    "measurement_method": variable.measurement_method,
+                    "data_source_text": variable.data_source_text,
+                    "evidence_chunk_id": str(variable.evidence_chunk_id),
+                    "evidence_quote": variable.evidence_quote,
+                    "confidence_score": variable.confidence_score,
+                    "reject_reason": validation.reject_reason,
+                    "extractor": variable.metadata.get("extractor"),
+                }
+            )
+
+        merged = deduplicate_variables(validated)
 
         final: list[ExtractedVariable] = []
         filtered_count = 0
@@ -579,12 +779,15 @@ class HybridCodebookExtractor(CodebookExtractor):
             "candidate_chunks": len(candidate_chunks),
             "rule_based_variables": len(rule_variables),
             "llm_variables": len(llm_variables),
+            "total_candidates_before_validation": len(raw_variables),
+            "validator_rejected_variables": len(rejected),
             "final_variables": len(final),
             "quality_filtered_variables": filtered_count,
             "quality_downgraded_variables": downgraded_count,
             "needs_review": sum(1 for variable in final if variable.review_status == "needs_review"),
             "private": sum(1 for variable in final if variable.availability == "private"),
         }
+        self.last_rejected = rejected
         return final
 
 
@@ -700,6 +903,112 @@ def _has_strong_definition_language(text: str) -> bool:
     return any(term in lowered for term in STRONG_DEFINITION_TERMS)
 
 
+def is_reference_like_text(text: str | None) -> bool:
+    if not text:
+        return False
+    cleaned = _normalize_text(text)
+    if not cleaned:
+        return False
+    if re.match(r"^(references|bibliography|endnotes|notes|sources|works cited|further reading)\b", cleaned, re.IGNORECASE):
+        return True
+    if re.search(r"\b(available from|retrieved from|doi:?\s*|https?://|www\.)", cleaned, re.IGNORECASE):
+        url_hits = len(re.findall(r"https?://|www\.|doi:?\s*", cleaned, re.IGNORECASE))
+        if url_hits >= 1 and not _has_measurement_signal(cleaned):
+            return True
+    bracket_citations = len(re.findall(r"(?:^|\s)\[\d{1,3}\]", cleaned))
+    author_year_hits = len(re.findall(r"\b[A-Z][A-Za-z'’-]+,\s+(?:[A-Z]\.\s*){0,3}(?:19|20)\d{2}\b", text))
+    year_punct_hits = len(re.findall(r"\((?:19|20)\d{2}[a-z]?\)|\b(?:19|20)\d{2}[a-z]?\.", text))
+    year_hits = len(re.findall(r"\b(?:19|20)\d{2}[a-z]?\b", text))
+    reference_markers = len(re.findall(r"\b(journal|press|university|retrieved|available|doi|http|vol\.|pp\.|working paper)\b", cleaned))
+    words = re.findall(r"[a-zA-Z]+", text)
+
+    if bracket_citations >= 3:
+        return True
+    if author_year_hits >= 2 or (year_punct_hits >= 3 and reference_markers >= 1):
+        return True
+    if year_hits >= 4 and not _has_measurement_signal(cleaned):
+        return True
+    if words:
+        url_tokens = len(re.findall(r"https?://|www\.|doi", cleaned, re.IGNORECASE))
+        if url_tokens / max(len(words), 1) > 0.03 and reference_markers >= 1 and not _has_measurement_signal(cleaned):
+            return True
+    return False
+
+
+def _is_reference_section_title(section_title: str | None) -> bool:
+    if not section_title:
+        return False
+    normalized = re.sub(r"[^a-z ]+", " ", str(section_title).lower())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized in REFERENCE_SECTION_TITLES or any(normalized.startswith(f"{title} ") for title in REFERENCE_SECTION_TITLES)
+
+
+def _is_url_like(text: str | None) -> bool:
+    if not text:
+        return False
+    return bool(re.search(r"https?://|www\.|\bdoi\b|\.com\b|\.org\b|\.net\b|\.gov\b|\.edu\b", text, re.IGNORECASE))
+
+
+def _is_rejected_source_or_name(name: str) -> bool:
+    normalized = _normalize_text(name).strip(" .,:;")
+    if normalized in REJECTED_SOURCE_NAMES:
+        return True
+    if re.match(r"^(figure|fig|table|exhibit|sidebar|photo|photos)\s*\d*[a-z]?$", normalized):
+        return True
+    if normalized.startswith(("download this table", "download this chart", "key takeaways", "table of contents")):
+        return True
+    return normalized.startswith("available from")
+
+
+def _looks_like_sentence_fragment_name(name: str) -> bool:
+    stripped = name.strip()
+    if not stripped:
+        return True
+    if re.match(r"^[a-z]\b|^[a-z]'?s\b", stripped):
+        return True
+    if re.match(r"^[a-z]{1,3}\s", stripped) and not _has_quantitative_variable_pattern(stripped):
+        return True
+    if re.match(r"^(of|or|as|and|but|however|working with|opportunities cited)\b", stripped, re.IGNORECASE):
+        return True
+    if stripped.endswith((",", ";", ":")):
+        return True
+    return False
+
+
+def _looks_like_source_or_chart_note(text: str | None) -> bool:
+    if not text:
+        return False
+    lowered = _normalize_text(text)
+    source_markers = ["source:", "figure ", "download this chart", "download this table", "accessed on", "as at "]
+    if any(marker in lowered for marker in source_markers):
+        return True
+    if re.search(r"\b\.(xls|xlsx|csv)\b", lowered):
+        return True
+    return False
+
+
+def _looks_like_person_or_citation_title(name: str) -> bool:
+    stripped = name.strip()
+    if "," in stripped and not _has_quantitative_variable_pattern(stripped):
+        return True
+    tokens = re.findall(r"[A-Za-z][A-Za-z'’-]+", stripped)
+    if 2 <= len(tokens) <= 4 and all(token[:1].isupper() for token in tokens):
+        lowered = stripped.lower()
+        if not _has_quantitative_variable_pattern(lowered) and not _has_measurement_signal(lowered):
+            return True
+    return False
+
+
+def _has_measurement_signal(text: str | None) -> bool:
+    lowered = (text or "").lower()
+    return any(term in lowered for term in MEASUREMENT_SIGNAL_TERMS)
+
+
+def _has_quantitative_variable_pattern(text: str | None) -> bool:
+    lowered = (text or "").lower()
+    return any(re.search(rf"\b{re.escape(term)}\b", lowered) for term in QUANTITATIVE_VARIABLE_TERMS)
+
+
 def _normalize_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
@@ -714,18 +1023,20 @@ def _sentence_containing(text: str, excerpt: str) -> str | None:
 
 def _extract_data_source_text(text: str) -> str | None:
     patterns = [
+        r"Data\s+are\s+from\s+(?P<source>[^.]{3,180})\.",
+        r"Data\s+is\s+from\s+(?P<source>[^.]{3,180})\.",
         r"Data\s+are\s+sourced\s+from\s+(?P<source>[^.]{3,180})\.",
         r"Data\s+is\s+sourced\s+from\s+(?P<source>[^.]{3,180})\.",
-        r"Data\s+source(?:s)?\s*[:\-]\s*(?P<source>[^.]{3,180})\.",
-        r"Source\s*[:\-]\s*(?P<source>[^.]{3,180})\.",
+        r"Based\s+on\s+data\s+from\s+(?P<source>[^.]{3,180})\.",
+        r"Using\s+data\s+from\s+(?P<source>[^.]{3,180})\.",
+        r"Survey\s+conducted\s+by\s+(?P<source>[^.]{3,180})\.",
+        r"Dataset\s+provided\s+by\s+(?P<source>[^.]{3,180})\.",
     ]
     for pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             return _clean_sentence_fragment(match.group("source"))
-    source_type, _, metadata = classify_source_availability(text)
-    matched = metadata.get("matched_pattern")
-    return matched if source_type != "unknown" and matched else None
+    return None
 
 
 def _extract_temporal_coverage(text: str) -> str | None:
