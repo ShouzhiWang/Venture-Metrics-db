@@ -150,21 +150,20 @@ class BatchItemRepository(BaseRepository):
     def insert_items(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not items:
             return []
-        rows = self.connection.execute(
-            text(
-                """
-                INSERT INTO llm_extraction_items (
-                  batch_id, request_custom_id, report_id, status, raw_response,
-                  parsed_items, validation_errors, metadata
-                )
-                VALUES (
-                  :batch_id, :request_custom_id, :report_id, :status, CAST(:raw_response AS jsonb),
-                  CAST(:parsed_items AS jsonb), CAST(:validation_errors AS jsonb), CAST(:metadata AS jsonb)
-                )
-                RETURNING *
-                """
-            ),
-            [
+        for item in items:
+            self.connection.execute(
+                text(
+                    """
+                    INSERT INTO llm_extraction_items (
+                      batch_id, request_custom_id, report_id, status, raw_response,
+                      parsed_items, validation_errors, metadata
+                    )
+                    VALUES (
+                      :batch_id, :request_custom_id, :report_id, :status, CAST(:raw_response AS jsonb),
+                      CAST(:parsed_items AS jsonb), CAST(:validation_errors AS jsonb), CAST(:metadata AS jsonb)
+                    )
+                    """
+                ),
                 {
                     "batch_id": str(item["batch_id"]),
                     "request_custom_id": item["request_custom_id"],
@@ -174,11 +173,9 @@ class BatchItemRepository(BaseRepository):
                     "parsed_items": _json(item.get("parsed_items")),
                     "validation_errors": _json(item.get("validation_errors")),
                     "metadata": _json(item.get("metadata")),
-                }
-                for item in items
-            ],
-        )
-        return [dict(row._mapping) for row in rows]
+                },
+            )
+        return items
 
     def get_items_by_batch(self, batch_id: UUID | str) -> list[dict[str, Any]]:
         rows = self.connection.execute(

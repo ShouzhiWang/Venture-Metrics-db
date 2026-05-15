@@ -140,22 +140,33 @@ def _load_reports(connection: Any, *, report_ids: list[UUID | str] | None, limit
             {"report_ids": [str(report_id) for report_id in report_ids]},
         )
         return [dict(row._mapping) for row in rows]
-    rows = connection.execute(
-        text(
-            """
-            SELECT r.*
-            FROM reports r
-            WHERE EXISTS (SELECT 1 FROM document_chunks dc WHERE dc.report_id = r.id)
-              AND (
-                :eligibility IS NULL OR
-                r.citation_info->'content_quality'->>'extraction_eligibility' = ANY(:eligibility)
-              )
-            ORDER BY r.created_at DESC
-            LIMIT :limit
-            """
-        ),
-        {"eligibility": list(eligibility) if eligibility else None, "limit": limit},
-    )
+    if eligibility:
+        rows = connection.execute(
+            text(
+                """
+                SELECT r.*
+                FROM reports r
+                WHERE EXISTS (SELECT 1 FROM document_chunks dc WHERE dc.report_id = r.id)
+                  AND r.citation_info->'content_quality'->>'extraction_eligibility' = ANY(:eligibility)
+                ORDER BY r.created_at DESC
+                LIMIT :limit
+                """
+            ),
+            {"eligibility": list(eligibility), "limit": limit},
+        )
+    else:
+        rows = connection.execute(
+            text(
+                """
+                SELECT r.*
+                FROM reports r
+                WHERE EXISTS (SELECT 1 FROM document_chunks dc WHERE dc.report_id = r.id)
+                ORDER BY r.created_at DESC
+                LIMIT :limit
+                """
+            ),
+            {"limit": limit},
+        )
     return [dict(row._mapping) for row in rows]
 
 
