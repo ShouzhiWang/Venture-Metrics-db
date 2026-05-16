@@ -1,0 +1,25 @@
+concept_id,concept_name,venture_funding_sg_2022,startups_southeast_2025,uk_innovation_strategy_2021,longitudinal_sme_survey_2024,sg_digital_economy_2024
+C01,VC Deal Volume,present: Deal volume,present: Southeast VC Deal Count,absent,absent,absent
+C02,Total VC/Startup Investment Value,present: Deal value,present: Capital Deployed,present: Volume of investment into tech companies in 2020,absent,absent
+C03,Average Deal Size,present: Median value of Series B rounds,present: Average Check Size,absent,absent,absent
+C04,IPO Activity,present: IPO proceeds (USD Million),absent,absent,absent,absent
+C05,Deal Distribution by Sector,present: Deal value by vertical under Smart Nation theme,present: Capital Invested by Sector,absent,absent,absent
+C06,Deal Distribution by Stage,present: Deal count per size of equity funding,present: Capital Invested by Stage Cohorts (% Share),absent,absent,absent
+C07,Market Share Distribution,present: Share of deal value per market,absent,absent,absent,absent
+C08,Government R&D Expenditure Target,absent,absent,present: Public expenditure on R&D target,absent,absent
+C09,R&D-Intensive Company Investment as % of GDP,absent,absent,present: US R&D-intensive companies investment as % of GDP,absent,absent
+C10,Government Procurement Spending,absent,absent,present: Percentage of central government spend with SMEs,absent,absent
+C11,Technology-Specific Investment Programs,absent,absent,present: University Commercialisation funding,absent,absent
+C12,Technology Market Size/Economic Impact Forecast,absent,absent,present: Economic impact of RAS uptake,absent,absent
+C13,SME Business Demographics,absent,absent,absent,present: Business premises in residential settings,absent
+C14,SME Employment Change,absent,absent,absent,present: Expectations for employment growth,absent
+C15,SME Turnover Change,absent,absent,absent,present: Expectations of turnover in next 12 months,absent
+C16,SME Financial Performance,absent,absent,absent,present: Trade credit given to customers,absent
+C17,SME Innovation and R&D Activity,absent,absent,absent,present: Investment in R&D in last 3 years,absent
+C18,SME Growth Plans and Barriers,absent,absent,absent,present: Major obstacles to business success,absent
+C19,SME Digital Technology Adoption,absent,absent,absent,present: Use of technologies or web-based software,absent
+C20,SME Export Activity,absent,absent,absent,present: Exporting status,absent
+C21,Digital Economy Value Added,absent,absent,absent,absent,present: Annual real growth rate of VA from digitalisation
+C22,Technology Employment,absent,absent,absent,absent,present: Median monthly wages for resident tech workers
+C23,Enterprise Digital Adoption,absent,absent,absent,absent,present: Average cost savings per PSG application
+C24,Innovation Strategy Qualitative Frameworks,absent,absent,present: Number of policy projects by OIT,absent,absent
