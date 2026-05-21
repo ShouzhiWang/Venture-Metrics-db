@@ -161,6 +161,20 @@ These different data collection methods produce fundamentally different types of
 4. **Distinguish survey vs administrative data**: Mark measures by data collection method
 5. **Create crosswalk tables**: Map between different stage/size categorizations
 
+## Visualizations
+
+| Chart | File | Description |
+|-------|------|-------------|
+| Concept Heatmap | `viz_concept_heatmap.png` | Full 24×5 presence/absence matrix — blue dots for present, dashes for absent |
+| Concepts per Report | `viz_concepts_per_report.png` | Horizontal bar chart of concept count by report |
+| Overlap Distribution | `viz_overlap_distribution.png` | How many reports share each concept (19 unique, 4 shared by 2, 1 shared by 3) |
+| Pair Overlap Matrix | `viz_pair_overlap_matrix.png` | 5×5 heatmap showing shared concept counts between report pairs |
+| Definition Differences | `viz_definition_differences.png` | Bar chart comparing number of reports vs unique definitions for shared concepts |
+| Domain Distribution | `viz_domain_distribution.png` | Stacked bar chart of VC/Gov/SME/Digital domains per report |
+| Concept Word Cloud | `viz_concept_wordcloud.png` | Word cloud scaled by number of measured variables per concept |
+
+All visualizations are in `concept_eval_5_sources/viz_*.png`.
+
 ## Output Files
 
 1. `per_report_codebooks.csv` - Combined codebook for all 5 reports
@@ -168,3 +182,4 @@ These different data collection methods produce fundamentally different types of
 3. `concept_overlap_matrix.csv` - Concept-by-report presence matrix
 4. `concept_definition_differences.csv` - Detailed comparison of shared concepts
 5. `concept_eval_summary.md` - This summary document
+6. `viz_*.png` - 7 visualization images (see table above)

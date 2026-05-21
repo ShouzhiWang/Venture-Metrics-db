@@ -1,0 +1,127 @@
+variable_name,definition,measurement_method,unit,data_source_type,geographic_coverage,temporal_coverage,confidence_score
+vc_deal_volume_sg,"Total number of venture capital deals involving Singapore-headquartered firms","Count of closed VC deals recorded by PitchBook and supplemented by EnterpriseSG deal data",deal_count,Private market intelligence,Global (Singapore-HQ firms),9-month period 2024 (Jan-Sep),0.92
+vc_deal_value_sg,"Total monetary value of venture capital deals involving Singapore-headquartered firms",Sum of deal values from PitchBook and EnterpriseSG supplemental data,USD billions,Private market intelligence,Global (Singapore-HQ firms),9-month period 2024 (Jan-Sep),0.92
+vc_avg_deal_size_sg,"Average deal size for Singapore-headquartered VC deals",Deal value divided by deal count,USD millions,Private market intelligence,Global (Singapore-HQ firms),9-month period 2024 (Jan-Sep),0.90
+vc_deal_volume_quarterly_sg,"Quarterly deal volume for Singapore-HQ firms",Count of deals per calendar quarter,deal_count,Private market intelligence,Global (Singapore-HQ firms),Quarterly 9M2024 (Q1-Q3),0.92
+vc_deal_value_quarterly_sg,"Quarterly deal value for Singapore-HQ firms",Sum of deal values per calendar quarter,USD billions,Private market intelligence,Global (Singapore-HQ firms),Quarterly 9M2024 (Q1-Q3),0.92
+vc_deal_volume_q1_sg,"Deal volume in Q1 2024 for Singapore-HQ firms",Count of deals in Q1 2024,deal_count,Private market intelligence,Global (Singapore-HQ firms),Q1 2024,0.92
+vc_deal_volume_q2_sg,"Deal volume in Q2 2024 for Singapore-HQ firms",Count of deals in Q2 2024,deal_count,Private market intelligence,Global (Singapore-HQ firms),Q2 2024,0.92
+vc_deal_volume_q3_sg,"Deal volume in Q3 2024 for Singapore-HQ firms",Count of deals in Q3 2024,deal_count,Private market intelligence,Global (Singapore-HQ firms),Q3 2024,0.92
+vc_deal_value_q1_sg,"Deal value in Q1 2024 for Singapore-HQ firms",Sum of deal values in Q1 2024,USD billions,Private market intelligence,Global (Singapore-HQ firms),Q1 2024,0.92
+vc_deal_value_q2_sg,"Deal value in Q2 2024 for Singapore-HQ firms",Sum of deal values in Q2 2024,USD billions,Private market intelligence,Global (Singapore-HQ firms),Q2 2024,0.92
+vc_deal_value_q3_sg,"Deal value in Q3 2024 for Singapore-HQ firms",Sum of deal values in Q3 2024,USD billions,Private market intelligence,Global (Singapore-HQ firms),Q3 2024,0.92
+vc_deal_volume_9m20,"Deal volume for Singapore-HQ firms 9-month period 2020",Count of deals Jan-Sep 2020,deal_count,Private market intelligence,Global (Singapore-HQ firms),9-month period 2020 (Jan-Sep),0.92
+vc_deal_value_9m20,"Deal value for Singapore-HQ firms 9-month period 2020",Sum of deal values Jan-Sep 2020,USD billions,Private market intelligence,Global (Singapore-HQ firms),9-month period 2020 (Jan-Sep),0.92
+vc_deal_volume_9m21,"Deal volume for Singapore-HQ firms 9-month period 2021",Count of deals Jan-Sep 2021,deal_count,Private market intelligence,Global (Singapore-HQ firms),9-month period 2021 (Jan-Sep),0.92
+vc_deal_value_9m21,"Deal value for Singapore-HQ firms 9-month period 2021",Sum of deal values Jan-Sep 2021,USD billions,Private market intelligence,Global (Singapore-HQ firms),9-month period 2021 (Jan-Sep),0.92
+vc_deal_volume_9m22,"Deal volume for Singapore-HQ firms 9-month period 2022",Count of deals Jan-Sep 2022,deal_count,Private market intelligence,Global (Singapore-HQ firms),9-month period 2022 (Jan-Sep),0.92
+vc_deal_value_9m22,"Deal value for Singapore-HQ firms 9-month period 2022",Sum of deal values Jan-Sep 2022,USD billions,Private market intelligence,Global (Singapore-HQ firms),9-month period 2022 (Jan-Sep),0.92
+vc_deal_volume_9m23,"Deal volume for Singapore-HQ firms 9-month period 2023",Count of deals Jan-Sep 2023,deal_count,Private market intelligence,Global (Singapore-HQ firms),9-month period 2023 (Jan-Sep),0.92
+vc_deal_value_9m23,"Deal value for Singapore-HQ firms 9-month period 2023",Sum of deal values Jan-Sep 2023,USD billions,Private market intelligence,Global (Singapore-HQ firms),9-month period 2023 (Jan-Sep),0.92
+asean_vc_deal_volume_sg,"Singapore share of ASEAN VC deal volume",Singapore deal count as share of total ASEAN-6 deal count,percentage,Private market intelligence,Singapore (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_value_sg,"Singapore share of ASEAN VC deal value",Singapore deal value as share of total ASEAN-6 deal value,percentage,Private market intelligence,Singapore (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_volume_indonesia,"Indonesia share of ASEAN VC deal volume",Indonesia deal count as share of total ASEAN-6 deal count,percentage,Private market intelligence,Indonesia (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_value_indonesia,"Indonesia share of ASEAN VC deal value",Indonesia deal value as share of total ASEAN-6 deal value,percentage,Private market intelligence,Indonesia (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_volume_vietnam,"Vietnam share of ASEAN VC deal volume",Vietnam deal count as share of total ASEAN-6 deal count,percentage,Private market intelligence,Vietnam (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_value_vietnam,"Vietnam share of ASEAN VC deal value",Vietnam deal value as share of total ASEAN-6 deal value,percentage,Private market intelligence,Vietnam (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_volume_thailand,"Thailand share of ASEAN VC deal volume",Thailand deal count as share of total ASEAN-6 deal count,percentage,Private market intelligence,Thailand (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_value_thailand,"Thailand share of ASEAN VC deal value",Thailand deal value as share of total ASEAN-6 deal value,percentage,Private market intelligence,Thailand (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_volume_malaysia,"Malaysia share of ASEAN VC deal volume",Malaysia deal count as share of total ASEAN-6 deal count,percentage,Private market intelligence,Malaysia (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_value_malaysia,"Malaysia share of ASEAN VC deal value",Malaysia deal value as share of total ASEAN-6 deal value,percentage,Private market intelligence,Malaysia (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_volume_philippines,"Philippines share of ASEAN VC deal volume",Philippines deal count as share of total ASEAN-6 deal count,percentage,Private market intelligence,Philippines (within ASEAN-6),9M 2024,0.90
+asean_vc_deal_value_philippines,"Philippines share of ASEAN VC deal value",Philippines deal value as share of total ASEAN-6 deal value,percentage,Private market intelligence,Philippines (within ASEAN-6),9M 2024,0.90
+global_ecosystem_deal_volume_sg,"Singapore venture deal volume among top 10 global startup ecosystems",Count of VC deals in Singapore from global ecosystem ranking,deal_count,Private market intelligence,Singapore (global comparison),9M 2024,0.88
+global_ecosystem_deal_value_sg,"Singapore venture deal value among top 10 global startup ecosystems",Total VC deal value in Singapore from global ecosystem ranking,USD billions,Private market intelligence,Singapore (global comparison),9M 2024,0.88
+global_ecosystem_deal_value_silicon_valley,"Silicon Valley venture deal value among top 10 global ecosystems",Total VC deal value in Silicon Valley,USD billions,Private market intelligence,United States - Silicon Valley,9M 2024,0.88
+global_ecosystem_deal_value_london,"London venture deal value among top 10 global ecosystems",Total VC deal value in London,USD billions,Private market intelligence,United Kingdom - London,9M 2024,0.88
+global_ecosystem_deal_value_new_york,"New York City venture deal value among top 10 global ecosystems",Total VC deal value in New York City,USD billions,Private market intelligence,United States - New York City,9M 2024,0.88
+global_ecosystem_deal_value_tel_aviv,"Tel Aviv venture deal value among top 10 global ecosystems",Total VC deal value in Tel Aviv,USD billions,Private market intelligence,Israel - Tel Aviv,9M 2024,0.88
+global_ecosystem_deal_value_los_angeles,"Los Angeles venture deal value among top 10 global ecosystems",Total VC deal value in Los Angeles,USD billions,Private market intelligence,United States - Los Angeles,9M 2024,0.88
+global_ecosystem_deal_value_boston,"Boston venture deal value among top 10 global ecosystems",Total VC deal value in Boston,USD billions,Private market intelligence,United States - Boston,9M 2024,0.88
+global_ecosystem_deal_value_beijing,"Beijing venture deal value among top 10 global ecosystems",Total VC deal value in Beijing,USD billions,Private market intelligence,China - Beijing,9M 2024,0.88
+global_ecosystem_deal_value_seoul,"Seoul venture deal value among top 10 global ecosystems",Total VC deal value in Seoul,USD billions,Private market intelligence,South Korea - Seoul,9M 2024,0.88
+global_ecosystem_deal_value_tokyo,"Tokyo venture deal value among top 10 global ecosystems",Total VC deal value in Tokyo,USD billions,Private market intelligence,Japan - Tokyo,9M 2024,0.88
+general_tech_deal_volume_sg,"Deal volume for Singapore general (non-deep) tech startups",Count of VC deals classified as general tech,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.90
+general_tech_deal_value_sg,"Deal value for Singapore general (non-deep) tech startups",Total value of VC deals classified as general tech,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.90
+deep_tech_deal_volume_sg,"Deal volume for Singapore deep tech startups",Count of VC deals classified as deep tech (innovations with strong scientific foundations and proprietary research-based IP),deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.90
+deep_tech_deal_value_sg,"Deal value for Singapore deep tech startups",Total value of VC deals classified as deep tech,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.90
+general_tech_deal_volume_9m20,"General tech deal volume 9-month period 2020",Count of general tech deals Jan-Sep 2020,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.90
+general_tech_deal_value_9m20,"General tech deal value 9-month period 2020",Total value of general tech deals Jan-Sep 2020,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.90
+general_tech_deal_volume_9m21,"General tech deal volume 9-month period 2021",Count of general tech deals Jan-Sep 2021,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.90
+general_tech_deal_value_9m21,"General tech deal value 9-month period 2021",Total value of general tech deals Jan-Sep 2021,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.90
+general_tech_deal_volume_9m22,"General tech deal volume 9-month period 2022",Count of general tech deals Jan-Sep 2022,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.90
+general_tech_deal_value_9m22,"General tech deal value 9-month period 2022",Total value of general tech deals Jan-Sep 2022,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.90
+general_tech_deal_volume_9m23,"General tech deal volume 9-month period 2023",Count of general tech deals Jan-Sep 2023,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.90
+general_tech_deal_value_9m23,"General tech deal value 9-month period 2023",Total value of general tech deals Jan-Sep 2023,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.90
+deep_tech_deal_volume_9m20,"Deep tech deal volume 9-month period 2020",Count of deep tech deals Jan-Sep 2020,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.90
+deep_tech_deal_value_9m20,"Deep tech deal value 9-month period 2020",Total value of deep tech deals Jan-Sep 2020,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.90
+deep_tech_deal_volume_9m21,"Deep tech deal volume 9-month period 2021",Count of deep tech deals Jan-Sep 2021,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.90
+deep_tech_deal_value_9m21,"Deep tech deal value 9-month period 2021",Total value of deep tech deals Jan-Sep 2021,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.90
+deep_tech_deal_volume_9m22,"Deep tech deal volume 9-month period 2022",Count of deep tech deals Jan-Sep 2022,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.90
+deep_tech_deal_value_9m22,"Deep tech deal value 9-month period 2022",Total value of deep tech deals Jan-Sep 2022,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.90
+deep_tech_deal_volume_9m23,"Deep tech deal volume 9-month period 2023",Count of deep tech deals Jan-Sep 2023,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.90
+deep_tech_deal_value_9m23,"Deep tech deal value 9-month period 2023",Total value of deep tech deals Jan-Sep 2023,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.90
+rie_snde_deal_volume_sg,"Deal volume for Smart Nation and Digital Economy (SNDE) domain startups",Count of VC deals in SNDE RIE domain,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.88
+rie_snde_deal_value_sg,"Deal value for Smart Nation and Digital Economy (SNDE) domain startups",Total value of VC deals in SNDE RIE domain,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.88
+rie_hhp_deal_volume_sg,"Deal volume for Human Health and Potential (HHP) domain startups",Count of VC deals in HHP RIE domain,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.88
+rie_hhp_deal_value_sg,"Deal value for Human Health and Potential (HHP) domain startups",Total value of VC deals in HHP RIE domain,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.88
+rie_mtc_deal_volume_sg,"Deal volume for Manufacturing Trade and Connectivity (MTC) domain startups",Count of VC deals in MTC RIE domain,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.88
+rie_mtc_deal_value_sg,"Deal value for Manufacturing Trade and Connectivity (MTC) domain startups",Total value of VC deals in MTC RIE domain,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.88
+rie_uss_deal_volume_sg,"Deal volume for Urban Solutions and Sustainability (USS) domain startups",Count of VC deals in USS RIE domain,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.88
+rie_uss_deal_value_sg,"Deal value for Urban Solutions and Sustainability (USS) domain startups",Total value of VC deals in USS RIE domain,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2024,0.88
+rie_snde_deal_volume_9m20,"SNDE domain deal volume 9-month period 2020",Count of SNDE deals Jan-Sep 2020,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.88
+rie_snde_deal_value_9m20,"SNDE domain deal value 9-month period 2020",Total SNDE deal value Jan-Sep 2020,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.88
+rie_snde_deal_volume_9m21,"SNDE domain deal volume 9-month period 2021",Count of SNDE deals Jan-Sep 2021,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.88
+rie_snde_deal_value_9m21,"SNDE domain deal value 9-month period 2021",Total SNDE deal value Jan-Sep 2021,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.88
+rie_snde_deal_volume_9m22,"SNDE domain deal volume 9-month period 2022",Count of SNDE deals Jan-Sep 2022,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.88
+rie_snde_deal_value_9m22,"SNDE domain deal value 9-month period 2022",Total SNDE deal value Jan-Sep 2022,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.88
+rie_snde_deal_volume_9m23,"SNDE domain deal volume 9-month period 2023",Count of SNDE deals Jan-Sep 2023,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.88
+rie_snde_deal_value_9m23,"SNDE domain deal value 9-month period 2023",Total SNDE deal value Jan-Sep 2023,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.88
+rie_hhp_deal_volume_9m20,"HHP domain deal volume 9-month period 2020",Count of HHP deals Jan-Sep 2020,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.88
+rie_hhp_deal_value_9m20,"HHP domain deal value 9-month period 2020",Total HHP deal value Jan-Sep 2020,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.88
+rie_hhp_deal_volume_9m21,"HHP domain deal volume 9-month period 2021",Count of HHP deals Jan-Sep 2021,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.88
+rie_hhp_deal_value_9m21,"HHP domain deal value 9-month period 2021",Total HHP deal value Jan-Sep 2021,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.88
+rie_hhp_deal_volume_9m22,"HHP domain deal volume 9-month period 2022",Count of HHP deals Jan-Sep 2022,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.88
+rie_hhp_deal_value_9m22,"HHP domain deal value 9-month period 2022",Total HHP deal value Jan-Sep 2022,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.88
+rie_hhp_deal_volume_9m23,"HHP domain deal volume 9-month period 2023",Count of HHP deals Jan-Sep 2023,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.88
+rie_hhp_deal_value_9m23,"HHP domain deal value 9-month period 2023",Total HHP deal value Jan-Sep 2023,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.88
+rie_mtc_deal_volume_9m20,"MTC domain deal volume 9-month period 2020",Count of MTC deals Jan-Sep 2020,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.88
+rie_mtc_deal_value_9m20,"MTC domain deal value 9-month period 2020",Total MTC deal value Jan-Sep 2020,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.88
+rie_mtc_deal_volume_9m21,"MTC domain deal volume 9-month period 2021",Count of MTC deals Jan-Sep 2021,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.88
+rie_mtc_deal_value_9m21,"MTC domain deal value 9-month period 2021",Total MTC deal value Jan-Sep 2021,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.88
+rie_mtc_deal_volume_9m22,"MTC domain deal volume 9-month period 2022",Count of MTC deals Jan-Sep 2022,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.88
+rie_mtc_deal_value_9m22,"MTC domain deal value 9-month period 2022",Total MTC deal value Jan-Sep 2022,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.88
+rie_mtc_deal_volume_9m23,"MTC domain deal volume 9-month period 2023",Count of MTC deals Jan-Sep 2023,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.88
+rie_mtc_deal_value_9m23,"MTC domain deal value 9-month period 2023",Total MTC deal value Jan-Sep 2023,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.88
+rie_uss_deal_volume_9m20,"USS domain deal volume 9-month period 2020",Count of USS deals Jan-Sep 2020,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.88
+rie_uss_deal_value_9m20,"USS domain deal value 9-month period 2020",Total USS deal value Jan-Sep 2020,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2020,0.88
+rie_uss_deal_volume_9m21,"USS domain deal volume 9-month period 2021",Count of USS deals Jan-Sep 2021,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.88
+rie_uss_deal_value_9m21,"USS domain deal value 9-month period 2021",Total USS deal value Jan-Sep 2021,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2021,0.88
+rie_uss_deal_volume_9m22,"USS domain deal volume 9-month period 2022",Count of USS deals Jan-Sep 2022,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.88
+rie_uss_deal_value_9m22,"USS domain deal value 9-month period 2022",Total USS deal value Jan-Sep 2022,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2022,0.88
+rie_uss_deal_volume_9m23,"USS domain deal volume 9-month period 2023",Count of USS deals Jan-Sep 2023,deal_count,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.88
+rie_uss_deal_value_9m23,"USS domain deal value 9-month period 2023",Total USS deal value Jan-Sep 2023,USD billions,Private market intelligence,Global (Singapore-HQ firms),9M 2023,0.88
+sg_ecosystem_tech_startups,"Number of tech startups in Singapore ecosystem",Count of active tech startups headquartered in Singapore,count,Government administrative data,Singapore,Point-in-time 2024,0.85
+sg_ecosystem_vc_firms,"Number of VC firms operating in Singapore",Count of active venture capital firms in Singapore,count,Government administrative data,Singapore,Point-in-time 2024,0.85
+sg_ecosystem_accelerators,"Number of accelerators in Singapore",Count of active accelerator programmes in Singapore,count,Government administrative data,Singapore,Point-in-time 2024,0.85
+sg_gov_rie2025_budget,"RIE2025 total government budget for Research Innovation and Enterprise",Announced total budget under RIE2025 plan,S$28 billion,Government budget documentation,Singapore,2021-2025 plan period,0.95
+sg_startup_sg_equity_fund,"Startup SG Equity scheme total government co-investment pool",Total pool of government funding under Startup SG Equity scheme,USD billions,Government policy announcement,Singapore,Point-in-time 2024,0.90
+sg_startup_sg_equity_new_allocation,"Additional allocation to Startup SG Equity scheme for deep tech",Additional government co-investment allocation announced,S$440 million,Government policy announcement,Singapore,Announced 2024,0.90
+sg_seeds_capital_co_invest_cap,"SEEDS Capital individual startup investment cap",Maximum co-investment amount per startup under SEEDS Capital,S$12 million,Government programme documentation,Singapore,Updated 2024,0.90
+sg_seeds_capital_additional_fund,"Additional SEEDS Capital co-investment funding announced",Additional funding for co-investment with fund managers,S$150 million,Government programme documentation,Singapore,Announced 2024,0.90
+asean_vc_deal_volume_indonesia_abs,"Indonesia absolute VC deal volume 9M2024",Count of VC deals in Indonesia,deal_count,Private market intelligence,Indonesia,9M 2024,0.90
+asean_vc_deal_value_indonesia_abs,"Indonesia absolute VC deal value 9M2024",Total VC deal value in Indonesia,USD billions,Private market intelligence,Indonesia,9M 2024,0.90
+asean_vc_deal_volume_vietnam_abs,"Vietnam absolute VC deal volume 9M2024",Count of VC deals in Vietnam,deal_count,Private market intelligence,Vietnam,9M 2024,0.90
+asean_vc_deal_value_vietnam_abs,"Vietnam absolute VC deal value 9M2024",Total VC deal value in Vietnam,USD billions,Private market intelligence,Vietnam,9M 2024,0.90
+asean_vc_deal_volume_thailand_abs,"Thailand absolute VC deal volume 9M2024",Count of VC deals in Thailand,deal_count,Private market intelligence,Thailand,9M 2024,0.90
+asean_vc_deal_value_thailand_abs,"Thailand absolute VC deal value 9M2024",Total VC deal value in Thailand,USD billions,Private market intelligence,Thailand,9M 2024,0.90
+asean_vc_deal_volume_malaysia_abs,"Malaysia absolute VC deal volume 9M2024",Count of VC deals in Malaysia,deal_count,Private market intelligence,Malaysia,9M 2024,0.90
+asean_vc_deal_value_malaysia_abs,"Malaysia absolute VC deal value 9M2024",Total VC deal value in Malaysia,USD billions,Private market intelligence,Malaysia,9M 2024,0.90
+asean_vc_deal_volume_philippines_abs,"Philippines absolute VC deal volume 9M2024",Count of VC deals in Philippines,deal_count,Private market intelligence,Philippines,9M 2024,0.90
+asean_vc_deal_value_philippines_abs,"Philippines absolute VC deal value 9M2024",Total VC deal value in Philippines,USD billions,Private market intelligence,Philippines,9M 2024,0.90
+startup_genome_sg_global_ranking,"Singapore rank among global startup ecosystems per Startup Genome 2024",Ranking position in Startup Genome Global Startup Ecosystem Report 2024,rank,Third-party ranking,Singapore (global),2024,0.85
+early_stage_definition,"Seed to Series B venture rounds",PitchBook classification of early-stage venture deals,classification_method,Methodology definition,Global,Applicable across all periods,0.95
+late_stage_definition,"Series C and subsequent venture rounds",PitchBook classification of late-stage venture deals,classification_method,Methodology definition,Global,Applicable across all periods,0.95
+deep_tech_definition,"Startups possessing innovations/technologies with strong scientific foundations and proprietary research-based IP",PitchBook/EnterpriseSG classification criteria,classification_method,Methodology definition,Global,Applicable across all periods,0.95
+monetary_unit,"All monetary values reported in US dollars unless otherwise noted",Standard currency denomination for report,USD,Methodology definition,Global,Applicable across all periods,0.95
+asean6_definition,"ASEAN-6 countries: Singapore; Malaysia; Philippines; Thailand; Vietnam; and Indonesia",Geographic scope definition for ASEAN comparisons,classification_method,Methodology definition,Southeast Asia,Applicable across all periods,0.95

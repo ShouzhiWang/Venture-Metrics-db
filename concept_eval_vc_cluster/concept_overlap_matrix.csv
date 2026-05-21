@@ -1,0 +1,18 @@
+concept_id,concept_name,sg_venture_2022,se_us_startups_2025,sg_venture_2024,uk_equity_tracker_2024,uk_equity_tracker_2025
+angel_investment,Business Angel / Informal Investment,absent,absent,present: sg_seeds_capital_additional_fund,absent,present: angel_healthcare_medtech_share_pct
+avg_deal_size,Average Deal Size,absent,present: Average Check Size,absent,present: average_deal_size_overall,present: seed_avg_deal_size
+cleantech_sector,Cleantech / Green Tech Metrics,absent,absent,absent,present: green_tech_share_of_total_deals,absent
+deal_value,Total Deal Value / Investment Value,present: Deal value,present: Capital Deployed,present: global_ecosystem_deal_value_sg,present: total_equity_investment_value,present: total_equity_investment_value
+deal_volume,Deal Volume / Deal Count,present: Deal count by vertical under Smart Nation and Digital Economy theme,present: Southeast VC Deal Count,present: vc_deal_volume_sg,present: total_equity_deal_count,present: total_equity_deal_count
+ecosystem_size,Ecosystem Size / Number of Companies,absent,absent,present: sg_ecosystem_tech_startups,absent,absent
+gender_diversity,Gender Diversity in Founding Teams,absent,absent,absent,present: mixed_gender_deal_share,present: angel_pct_mixed_gender_teams
+govt_support,Government Support / Policy Programs,absent,absent,present: sg_gov_rie2025_budget,present: bbr_programme_coverage,present: angel_eis_seis_utilisation_pct
+intl_comparison,International Comparison,absent,absent,present: startup_genome_sg_global_ranking,present: uk_unicorn_share_global,absent
+ipo_activity,IPO / Exit Activity,present: Median value of Seed rounds,absent,present: sg_startup_sg_equity_fund,present: total_equity_deals_10yr_cumulative,present: total_market_estimated_deals
+median_deal_size,Median Deal Size,absent,absent,absent,present: median_deal_size_overall,absent
+pre_money_valuation,Pre-money Valuation,absent,absent,absent,present: average_pre_money_valuation_overall,absent
+regional_breakdown,Regional Distribution,present: IPO proceeds (USD Million),absent,absent,present: london_share_of_deals,present: announced_deal_share_pct_south_east
+sector_breakdown,Deal Distribution by Sector,absent,present: Capital Invested by Sector,present: sg_startup_sg_equity_new_allocation,present: london_european_fintech_share,present: angel_fintech_share_pct
+spinout_activity,University Spinout Activity,absent,absent,absent,present: bbr_spinout_deal_share,present: spinout_share_of_total_equity_pct
+stage_breakdown,Deal Distribution by Stage,absent,absent,present: early_stage_definition,present: average_pre_money_valuation_venture,present: angel_pct_investing_in_early_stage
+yoy_change,Year-on-Year Change / Growth Rate,absent,absent,absent,present: tech_sector_yoy_investment_change,present: eis_seis_angel_investment_yoy_change_pct
