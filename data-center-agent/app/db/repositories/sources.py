@@ -1,3 +1,4 @@
+import json
 from typing import Any
 from uuid import UUID
 
@@ -17,21 +18,29 @@ class SourceRepository(BaseRepository):
             "title": values.get("title"),
             "notes": values.get("notes"),
             "crawl_status": values.get("crawl_status", "pending"),
+            "parent_source_id": str(values["parent_source_id"]) if values.get("parent_source_id") else None,
+            "source_role": values.get("source_role"),
+            "resolution_status": values.get("resolution_status"),
         }
         row = self.connection.execute(
             text(
                 """
                 INSERT INTO sources (
                   original_url, source_type, source_owner, access_type,
-                  detected_format, title, notes, crawl_status
+                  detected_format, title, notes, crawl_status,
+                  parent_source_id, source_role, resolution_status
                 )
                 VALUES (
                   :original_url, :source_type, :source_owner, :access_type,
-                  :detected_format, :title, :notes, :crawl_status
+                  :detected_format, :title, :notes, :crawl_status,
+                  :parent_source_id, :source_role, :resolution_status
                 )
                 ON CONFLICT (original_url) DO UPDATE SET
                   source_type = EXCLUDED.source_type,
                   detected_format = EXCLUDED.detected_format,
+                  parent_source_id = coalesce(sources.parent_source_id, EXCLUDED.parent_source_id),
+                  source_role = coalesce(sources.source_role, EXCLUDED.source_role),
+                  resolution_status = coalesce(sources.resolution_status, EXCLUDED.resolution_status),
                   crawl_status = sources.crawl_status,
                   updated_at = now()
                 RETURNING *
@@ -46,6 +55,37 @@ class SourceRepository(BaseRepository):
     def get(self, source_id: UUID | str) -> dict[str, Any] | None:
         return row_to_dict(
             self.connection.execute(text("SELECT * FROM sources WHERE id = :id"), {"id": str(source_id)}).first()
+        )
+
+    def get_by_url(self, original_url: str) -> dict[str, Any] | None:
+        return row_to_dict(
+            self.connection.execute(
+                text("SELECT * FROM sources WHERE original_url = :original_url"),
+                {"original_url": original_url},
+            ).first()
+        )
+
+    def create_child_source(
+        self,
+        *,
+        parent_source_id: UUID | str,
+        original_url: str,
+        source_type: str,
+        source_role: str,
+        detected_format: str | None = None,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        return self.upsert_by_url(
+            original_url,
+            {
+                "source_type": source_type,
+                "detected_format": detected_format,
+                "notes": notes,
+                "crawl_status": "pending",
+                "parent_source_id": parent_source_id,
+                "source_role": source_role,
+                "resolution_status": "not_needed",
+            },
         )
 
     def update_fetch_result(
@@ -89,6 +129,43 @@ class SourceRepository(BaseRepository):
                 "source_type": source_type,
                 "title": title,
                 "notes": notes,
+            },
+        ).first()
+        result = row_to_dict(row)
+        assert result is not None
+        return result
+
+    def update_resolution(
+        self,
+        source_id: UUID | str,
+        *,
+        source_role: str | None = None,
+        resolution_status: str | None = None,
+        resolved_source_id: UUID | str | None = None,
+        resolution_notes: str | None = None,
+        discovered_artifacts: list[dict[str, Any]] | dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        row = self.connection.execute(
+            text(
+                """
+                UPDATE sources
+                SET source_role = coalesce(:source_role, source_role),
+                    resolution_status = coalesce(:resolution_status, resolution_status),
+                    resolved_source_id = coalesce(:resolved_source_id, resolved_source_id),
+                    resolution_notes = coalesce(:resolution_notes, resolution_notes),
+                    discovered_artifacts = coalesce(CAST(:discovered_artifacts AS jsonb), discovered_artifacts),
+                    updated_at = now()
+                WHERE id = :id
+                RETURNING *
+                """
+            ),
+            {
+                "id": str(source_id),
+                "source_role": source_role,
+                "resolution_status": resolution_status,
+                "resolved_source_id": str(resolved_source_id) if resolved_source_id else None,
+                "resolution_notes": resolution_notes,
+                "discovered_artifacts": json.dumps(discovered_artifacts) if discovered_artifacts is not None else None,
             },
         ).first()
         result = row_to_dict(row)

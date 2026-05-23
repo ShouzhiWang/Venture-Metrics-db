@@ -25,6 +25,7 @@ class FakeSettings:
 class FakeSourceRepository:
     source_id = uuid4()
     updated = {}
+    child = None
 
     def __init__(self, _connection):
         pass
@@ -38,6 +39,14 @@ class FakeSourceRepository:
 
     def update_status(self, source_id, *, crawl_status, notes=None):
         type(self).updated = {"id": source_id, "crawl_status": crawl_status, "notes": notes}
+        return type(self).updated
+
+    def create_child_source(self, **kwargs):
+        type(self).child = {"id": uuid4(), "original_url": kwargs["original_url"], **kwargs}
+        return type(self).child
+
+    def update_resolution(self, source_id, **kwargs):
+        type(self).updated = {"id": source_id, "original_url": "https://example.gov/report", **kwargs}
         return type(self).updated
 
 
@@ -68,6 +77,7 @@ class FakeDatasetRepository:
 
 def install_fakes(monkeypatch, tmp_path: Path, fetch_result: FetchResult):
     FakeSourceRepository.updated = {}
+    FakeSourceRepository.child = None
     FakeReportRepository.created = None
     FakeDatasetRepository.created = None
     monkeypatch.setattr(worker, "get_settings", lambda: FakeSettings(tmp_path))
@@ -101,3 +111,34 @@ def test_process_source_csv_creates_dataset_not_report(tmp_path: Path, monkeypat
     assert result["report"] is None
     assert result["dataset"]["source_id"] == FakeSourceRepository.source_id
     assert result["dataset"]["raw_data_path"].endswith("data.csv")
+
+
+def test_process_source_html_resolves_pdf_child_without_creating_report(tmp_path: Path, monkeypatch) -> None:
+    html = b'<html><body><a href="/files/report.pdf">Download PDF</a></body></html>'
+    install_fakes(monkeypatch, tmp_path, FetchResult(html, "index.html", "text/html"))
+
+    class FakeVerification:
+        final_url = "https://example.gov/files/report.pdf"
+        content_type = "application/pdf"
+        artifact_type = "pdf"
+        is_downloadable = True
+
+        def to_dict(self):
+            return {
+                "final_url": self.final_url,
+                "content_type": self.content_type,
+                "artifact_type": self.artifact_type,
+                "is_downloadable": self.is_downloadable,
+            }
+
+    monkeypatch.setattr(worker, "verify_artifact_url", lambda url, timeout_seconds: FakeVerification())
+
+    result = worker.process_source(FakeSourceRepository.source_id)
+
+    assert result["report"] is None
+    assert result["dataset"] is None
+    assert result["resolved_source"]["source_type"] == "pdf"
+    assert result["resolved_source"]["source_role"] == "report_pdf"
+    assert result["source"]["source_role"] == "landing_page"
+    assert result["source"]["resolution_status"] == "resolved"
+    assert FakeReportRepository.created is None

@@ -9,14 +9,13 @@ import csv
 import json
 import time
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
 
 import httpx
 import trafilatura
-from bs4 import BeautifulSoup
 
 from app.agents.content_quality import classify_content_quality, compute_strong_keyword_score
 from app.agents.parser import chunk_text_by_tokens, count_tokens_rough
+from app.agents.source_resolver import SourceResolver
 from app.db.connection import get_engine
 from sqlalchemy import text
 
@@ -39,33 +38,46 @@ def classify_url(url: str) -> str:
     if lower.endswith(".pdf") or "/pdf/" in lower:
         return "direct_pdf"
     if lower.endswith((".xlsx", ".xlsm", ".csv", ".xls")):
-        return "direct_xlsx_csv"
+        return "direct_dataset"
     return "unknown"
 
 
 def extract_candidate_links(html: str, url: str) -> dict:
-    """Extract PDF, dataset, and API links from HTML."""
-    soup = BeautifulSoup(html, "html.parser")
-    pdf_links, dataset_links, api_links = [], [], []
-
-    for a_tag in soup.find_all("a", href=True):
-        href = a_tag["href"]
-        full_url = urljoin(url, href)
-        href_lower = href.lower()
-
-        if href_lower.endswith(".pdf") or "pdf" in href_lower:
-            pdf_links.append(full_url)
-        if href_lower.endswith((".xlsx", ".xlsm", ".xls", ".csv")):
-            dataset_links.append(full_url)
-        if any(term in href_lower for term in ["/api/", "data.gov", "download"]):
-            if href_lower.endswith((".json", ".csv", ".xlsx")):
-                api_links.append(full_url)
+    """Extract ranked downloadable artifact candidates from HTML."""
+    artifacts = SourceResolver().discover_artifacts(html, url)
+    pdfs = [artifact for artifact in artifacts if artifact.artifact_type == "pdf"]
+    datasets = [artifact for artifact in artifacts if artifact.artifact_type == "dataset_file"]
+    top = artifacts[0] if artifacts else None
 
     return {
-        "pdfs": list(set(pdf_links))[:10],
-        "datasets": list(set(dataset_links))[:5],
-        "apis": list(set(api_links))[:5],
+        "pdfs": [artifact.url for artifact in pdfs[:10]],
+        "datasets": [artifact.url for artifact in datasets[:5]],
+        "apis": [],
+        "candidate_pdf_count": len(pdfs),
+        "top_candidate_url": top.url if top else "",
+        "top_candidate_score": top.score if top else "",
+        "top_candidate_link_text": top.link_text if top else "",
     }
+
+
+def classify_html_source_kind(html: str, url: str, quality_status: str, links: dict) -> str:
+    signals = SourceResolver().inspect_html(html)
+    lowered = html.lower()
+    news_hits = sum(1 for term in ("news", "article", "blog", "press release", "announced") if term in lowered)
+    report_hits = sum(1 for term in ("methodology", "data source", "defined as", "technical notes", "appendix") if term in lowered)
+    if signals.status == "gated_or_paywalled" or quality_status == "paywalled_or_gated":
+        return "gated_or_paywalled"
+    if signals.status == "needs_browser" or quality_status == "js_required":
+        return "needs_browser"
+    if links["pdfs"]:
+        return "html_landing_with_pdf_candidate"
+    if links["datasets"]:
+        return "html_landing_with_dataset_candidate"
+    if news_hits >= 2 and report_hits < 2:
+        return "news_article"
+    if quality_status in {"full_report", "partial_report", "low_text"} and report_hits >= 2:
+        return "html_full_report"
+    return "html_landing_no_artifact"
 
 
 def pipeline_extract_and_chunk(text_content: str) -> tuple[list[dict], list[str]]:
@@ -99,6 +111,10 @@ def audit_source(source_id: str, url: str, source_type: str, crawl_status: str,
         "candidate_pdfs": "",
         "candidate_datasets": "",
         "candidate_apis": "",
+        "candidate_pdf_count": 0,
+        "top_candidate_url": "",
+        "top_candidate_score": "",
+        "top_candidate_link_text": "",
         "content_quality_score": 0.0,
         "source_resolution_status": "",
         "extraction_eligibility": "",
@@ -141,13 +157,13 @@ def audit_source(source_id: str, url: str, source_type: str, crawl_status: str,
                     crawl_status=crawl_status,
                 )
                 row["content_quality_score"] = kw_score
-                row["source_resolution_status"] = quality.source_resolution_status
+                row["source_resolution_status"] = "direct_pdf" if source_type == "pdf" else quality.source_resolution_status
                 row["extraction_eligibility"] = quality.extraction_eligibility
 
                 if source_type == "pdf":
-                    row["recommended_next_action"] = "process_directly"
+                    row["recommended_next_action"] = "process_direct_pdf"
                 elif quality.extraction_eligibility in ("eligible", "eligible_conditional"):
-                    row["recommended_next_action"] = "process_directly"
+                    row["recommended_next_action"] = "process_html_report"
                 elif quality.extraction_eligibility == "ineligible_gated":
                     row["recommended_next_action"] = "mark_paywalled"
                 elif quality.extraction_eligibility == "ineligible_low_text":
@@ -185,9 +201,9 @@ def audit_source(source_id: str, url: str, source_type: str, crawl_status: str,
     # --- URL-based classification ---
     url_class = classify_url(url)
     if url_class == "direct_pdf":
-        row["source_resolution_status"] = "pending"
+        row["source_resolution_status"] = "direct_pdf"
         row["extraction_eligibility"] = "eligible"
-        row["recommended_next_action"] = "process_directly"
+        row["recommended_next_action"] = "process_direct_pdf"
         # Check HTTP status
         try:
             with httpx.Client(timeout=TIMEOUT, follow_redirects=True, headers=HEADERS) as client:
@@ -211,8 +227,8 @@ def audit_source(source_id: str, url: str, source_type: str, crawl_status: str,
             row["recommended_next_action"] = "mark_failed"
         return row
 
-    if url_class == "direct_xlsx_csv":
-        row["source_resolution_status"] = "pending"
+    if url_class == "direct_dataset":
+        row["source_resolution_status"] = "direct_dataset"
         row["extraction_eligibility"] = "eligible"
         row["recommended_next_action"] = "create_child_dataset_source"
         return row
@@ -249,6 +265,10 @@ def audit_source(source_id: str, url: str, source_type: str, crawl_status: str,
             row["candidate_pdfs"] = "|".join(links["pdfs"][:5])
             row["candidate_datasets"] = "|".join(links["datasets"][:3])
             row["candidate_apis"] = "|".join(links["apis"][:3])
+            row["candidate_pdf_count"] = links["candidate_pdf_count"]
+            row["top_candidate_url"] = links["top_candidate_url"]
+            row["top_candidate_score"] = links["top_candidate_score"]
+            row["top_candidate_link_text"] = links["top_candidate_link_text"]
 
             # Keyword analysis
             combined = "\n".join(chunk_texts)
@@ -264,23 +284,28 @@ def audit_source(source_id: str, url: str, source_type: str, crawl_status: str,
                 crawl_status=crawl_status,
             )
             row["content_quality_score"] = kw_score
-            row["source_resolution_status"] = quality.source_resolution_status
+            row["source_resolution_status"] = classify_html_source_kind(
+                html_content,
+                url,
+                quality.source_resolution_status,
+                links,
+            )
             row["extraction_eligibility"] = quality.extraction_eligibility
             row["skip_reason_codes"] = quality.eligibility_reason if quality.extraction_eligibility.startswith("ineligible") else ""
 
             # Recommended action
-            if quality.extraction_eligibility in ("eligible", "eligible_conditional"):
-                row["recommended_next_action"] = "process_directly"
-            elif quality.extraction_eligibility == "ineligible_gated":
-                if links["pdfs"]:
-                    row["recommended_next_action"] = "create_child_pdf_source"
-                else:
-                    row["recommended_next_action"] = "mark_paywalled"
-            elif quality.extraction_eligibility == "ineligible_low_text":
-                if links["pdfs"]:
-                    row["recommended_next_action"] = "create_child_pdf_source"
-                else:
-                    row["recommended_next_action"] = "skip_low_text"
+            if row["source_resolution_status"] == "html_landing_with_pdf_candidate":
+                row["recommended_next_action"] = "create_child_pdf_source"
+            elif row["source_resolution_status"] == "html_landing_with_dataset_candidate":
+                row["recommended_next_action"] = "create_child_dataset_source"
+            elif row["source_resolution_status"] == "html_full_report":
+                row["recommended_next_action"] = "process_html_report"
+            elif row["source_resolution_status"] == "gated_or_paywalled":
+                row["recommended_next_action"] = "manual_download_needed"
+            elif row["source_resolution_status"] == "needs_browser":
+                row["recommended_next_action"] = "browser_resolution_needed"
+            elif row["source_resolution_status"] == "news_article":
+                row["recommended_next_action"] = "skip_news_article"
             else:
                 row["recommended_next_action"] = "browser_resolution_needed"
 
@@ -338,6 +363,7 @@ def main():
         "http_status", "content_type", "char_count", "chunk_count",
         "keyword_score", "keyword_hits",
         "candidate_pdfs", "candidate_datasets", "candidate_apis",
+        "candidate_pdf_count", "top_candidate_url", "top_candidate_score", "top_candidate_link_text",
         "content_quality_score", "source_resolution_status", "extraction_eligibility",
         "recommended_next_action", "skip_reason_codes", "notes",
     ]

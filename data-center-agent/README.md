@@ -51,7 +51,31 @@ Fetch and store one source:
 python -m app.workers.process_source --source-id <uuid>
 ```
 
-`process_source` detects actual content type from headers and file signatures. PDF/HTML sources create sparse `reports` rows; CSV/XLSX sources create `datasets` rows.
+`process_source` detects actual content type from headers and file signatures. Direct PDF URLs still create sparse `reports` rows; CSV/XLSX sources create `datasets` rows. HTML sources are resolved by default: if the page contains a verified downloadable PDF/report or dataset link, the worker creates or reuses a child `sources` row and marks the HTML source as a `landing_page` with `resolution_status='resolved'`. The child is not processed recursively unless explicitly requested:
+
+```bash
+python -m app.workers.process_source --source-id <uuid> --process-resolved
+```
+
+Resolve one HTML source without changing the database:
+
+```bash
+python -m app.workers.resolve_source --source-id <uuid> --dry-run
+```
+
+Create or reuse a child PDF/dataset source from a landing page:
+
+```bash
+python -m app.workers.resolve_source --source-id <uuid>
+```
+
+Resolve and immediately process the child source:
+
+```bash
+python -m app.workers.resolve_source --source-id <uuid> --process-resolved
+```
+
+The resolver follows direct links only. Gated pages, login pages, email forms, and JavaScript-only download buttons are classified as `gated_or_paywalled` or `needs_browser`; the pipeline does not submit forms, use credentials, or bypass access controls. Manual download or browser-assisted resolution is still required for those sources.
 
 Parse one report into extracted text and chunks:
 
@@ -138,6 +162,16 @@ Do not store large PDFs, tables, or parsed blobs directly in PostgreSQL. Store p
 - `needs_browser`: reserved for pages requiring browser automation.
 - `inaccessible`: URL appears unavailable, such as a 404.
 - `private_or_paywalled`: source appears gated, private, or paywalled.
+
+## Source Resolution Metadata
+
+- `source_role`: semantic role of a row, such as `seed_url`, `landing_page`, `report_pdf`, `dataset_file`, `html_report_body`, or `gated_or_paywalled`.
+- `resolution_status`: resolution state for landing/seed URLs, such as `not_needed`, `resolved`, `unresolved`, `needs_browser`, `gated_or_paywalled`, or `failed`.
+- `parent_source_id`: parent landing/seed source when a child artifact source was discovered.
+- `resolved_source_id`: child source selected as the best verified artifact for a landing page.
+- `discovered_artifacts`: ranked resolver candidates and verification metadata.
+
+Child source creation is duplicate-safe by `sources.original_url`; if the resolved PDF or dataset URL already exists, the landing page points to that existing source instead of creating a duplicate.
 
 ## Backup
 

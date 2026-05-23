@@ -20,3 +20,9 @@ class Source(BaseModel):
     mime_type: str | None = None
     last_checked_at: datetime | None = None
     notes: str | None = None
+    parent_source_id: UUID | None = None
+    source_role: str | None = None
+    resolution_status: str | None = None
+    resolved_source_id: UUID | None = None
+    resolution_notes: str | None = None
+    discovered_artifacts: list[dict] | dict | None = None

@@ -35,3 +35,24 @@ def test_source_repository_upsert_by_url_uses_dedup_key() -> None:
     assert params["source_type"] == "pdf"
     assert params["crawl_status"] == "pending"
     assert result["original_url"] == "https://example.gov/report.pdf"
+
+
+def test_source_repository_create_child_source_uses_original_url_dedup() -> None:
+    connection = FakeConnection()
+    repo = SourceRepository(connection)
+
+    result = repo.create_child_source(
+        parent_source_id="parent-1",
+        original_url="https://example.gov/report.pdf",
+        source_type="pdf",
+        source_role="report_pdf",
+        detected_format="pdf",
+        notes="Resolved from landing page",
+    )
+
+    statement, params = connection.calls[0]
+    assert "ON CONFLICT (original_url)" in statement
+    assert params["parent_source_id"] == "parent-1"
+    assert params["source_role"] == "report_pdf"
+    assert params["resolution_status"] == "not_needed"
+    assert result["original_url"] == "https://example.gov/report.pdf"
