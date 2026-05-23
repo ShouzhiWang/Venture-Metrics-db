@@ -25,6 +25,21 @@ def test_verifies_download_report_link_as_pdf_from_content_type() -> None:
     assert verification.is_downloadable is True
 
 
+def test_verify_falls_back_to_get_when_head_is_forbidden() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            return httpx.Response(403, request=request)
+        return httpx.Response(200, headers={"content-type": "application/pdf"}, content=b"%PDF-1.7", request=request)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+    verification = verify_artifact_url("https://example.gov/report.pdf", client=client)
+
+    assert verification.status_code == 200
+    assert verification.artifact_type == "pdf"
+    assert verification.is_downloadable is True
+
+
 def test_discovers_dataset_links() -> None:
     html = """
     <a href="/data/table.csv">Download data</a>

@@ -2,6 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.agents.fetcher import FetchResult
+from app.agents.source_resolver import DiscoveredArtifact
 from app.workers import process_source as worker
 
 
@@ -142,3 +143,40 @@ def test_process_source_html_resolves_pdf_child_without_creating_report(tmp_path
     assert result["source"]["source_role"] == "landing_page"
     assert result["source"]["resolution_status"] == "resolved"
     assert FakeReportRepository.created is None
+
+
+def test_process_source_auto_mode_uses_browser_fallback_for_js_pdf_link(tmp_path: Path, monkeypatch) -> None:
+    html = b"<html><body><button>Download PDF</button><script>renderLink()</script></body></html>"
+    install_fakes(monkeypatch, tmp_path, FetchResult(html, "index.html", "text/html"))
+
+    class FakeBrowserResult:
+        artifacts = [
+            DiscoveredArtifact(
+                url="https://example.gov/rendered/report.pdf",
+                artifact_type="pdf",
+                link_text="Download PDF",
+                score=210,
+                reason=["rendered_dom"],
+                discovery_method="rendered_dom",
+            )
+        ]
+        rendered_html = '<a href="/rendered/report.pdf">Download PDF</a>'
+        status = "resolved"
+        notes = "browser discovered downloadable artifact candidates"
+
+    class FakeBrowserResolver:
+        def __init__(self, timeout_seconds=20, allow_download_clicks=True):
+            self.timeout_seconds = timeout_seconds
+            self.allow_download_clicks = allow_download_clicks
+
+        def resolve(self, url):
+            return FakeBrowserResult()
+
+    monkeypatch.setattr(worker, "BrowserSourceResolver", FakeBrowserResolver)
+
+    result = worker.process_source(FakeSourceRepository.source_id, resolve_mode="auto")
+
+    assert result["report"] is None
+    assert result["resolved_source"]["original_url"] == "https://example.gov/rendered/report.pdf"
+    assert result["source"]["resolution_status"] == "resolved"
+    assert result["discovered_artifacts"][0]["discovery_method"] == "rendered_dom"

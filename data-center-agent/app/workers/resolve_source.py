@@ -1,9 +1,9 @@
 import argparse
-from pathlib import Path
 from uuid import UUID
 
 import httpx
 
+from app.agents.browser_source_resolver import BrowserResolverUnavailable, BrowserSourceResolver
 from app.agents.fetcher import fetch_source
 from app.agents.source_resolver import SourceResolver, verify_artifact_url
 from app.config import get_settings
@@ -11,7 +11,7 @@ from app.db.connection import get_engine
 from app.db.repositories.sources import SourceRepository
 from app.storage.local_storage import LocalStorageClient
 from app.utils.logging import configure_logging
-from app.workers.process_source import _dataset_source_type, process_source
+from app.workers.process_source import _browser_verification_for_artifact, _dataset_source_type, process_source
 
 
 def _load_or_fetch_html(source: dict, storage: LocalStorageClient, timeout_seconds: int) -> tuple[str, str]:
@@ -32,6 +32,9 @@ def resolve_source(
     limit_candidates: int = 10,
     dry_run: bool = False,
     force: bool = False,
+    mode: str = "auto",
+    browser_timeout_seconds: int = 20,
+    allow_download_clicks: bool = True,
 ) -> dict:
     settings = get_settings()
     storage = LocalStorageClient(settings.storage_root)
@@ -56,7 +59,7 @@ def resolve_source(
             }
 
         html, base_url = _load_or_fetch_html(source, storage, settings.http_timeout_seconds)
-        artifacts = resolver.discover_artifacts(html, base_url)[:limit_candidates]
+        artifacts = ([] if mode == "browser" else resolver.discover_artifacts(html, base_url))[:limit_candidates]
         verified = []
         best_child = None
 
@@ -97,8 +100,69 @@ def resolve_source(
             )
             child_to_process = best_child["id"]
 
+        signals = resolver.inspect_html(html)
+        should_try_browser = not best_child and (
+            mode == "browser" or (mode == "auto" and signals.status in {"needs_browser", "unresolved"})
+        )
+        if should_try_browser:
+            try:
+                browser_result = BrowserSourceResolver(
+                    timeout_seconds=browser_timeout_seconds,
+                    allow_download_clicks=allow_download_clicks,
+                ).resolve(source["original_url"])
+                for artifact in browser_result.artifacts[:limit_candidates]:
+                    verification = _browser_verification_for_artifact(artifact)
+                    payload = artifact.to_dict()
+                    payload["verification"] = verification.to_dict()
+                    verified.append(payload)
+                    if best_child or not verification.is_downloadable or artifact.url == source["original_url"]:
+                        continue
+                    if dry_run:
+                        best_child = {"original_url": artifact.url, "source_type": verification.artifact_type}
+                        continue
+                    if verification.artifact_type == "pdf":
+                        child_source_type, detected_format, source_role = "pdf", "pdf", "report_pdf"
+                    else:
+                        child_source_type, detected_format = _dataset_source_type(artifact.url, verification.content_type)
+                        source_role = "dataset_file"
+                    best_child = source_repo.create_child_source(
+                        parent_source_id=source["id"],
+                        original_url=artifact.url,
+                        source_type=child_source_type,
+                        source_role=source_role,
+                        detected_format=detected_format,
+                        notes=f"Resolved from landing page source {source['id']}",
+                    )
+                    source_repo.update_resolution(
+                        source["id"],
+                        source_role="landing_page",
+                        resolution_status="resolved",
+                        resolved_source_id=best_child["id"],
+                        resolution_notes=f"Resolved downloadable {verification.artifact_type} via {artifact.discovery_method}: {artifact.url}",
+                        discovered_artifacts=verified,
+                    )
+                    child_to_process = best_child["id"]
+                if not best_child and not dry_run and browser_result.status in {"needs_browser", "gated_or_paywalled"}:
+                    role = "gated_or_paywalled" if browser_result.status == "gated_or_paywalled" else "landing_page"
+                    source_repo.update_resolution(
+                        source["id"],
+                        source_role=role,
+                        resolution_status=browser_result.status,
+                        resolution_notes=browser_result.notes,
+                        discovered_artifacts=verified or [artifact.to_dict() for artifact in browser_result.artifacts],
+                    )
+            except BrowserResolverUnavailable as exc:
+                if not dry_run:
+                    source_repo.update_resolution(
+                        source["id"],
+                        source_role="landing_page",
+                        resolution_status="needs_browser",
+                        resolution_notes=str(exc),
+                        discovered_artifacts=verified or [artifact.to_dict() for artifact in artifacts],
+                    )
+                verified.append({"discovery_method": "browser", "error": str(exc)})
+
         if not best_child and not dry_run:
-            signals = resolver.inspect_html(html)
             role = "gated_or_paywalled" if signals.status == "gated_or_paywalled" else "landing_page"
             source_repo.update_resolution(
                 source["id"],
@@ -144,6 +208,9 @@ def main() -> None:
     parser.add_argument("--limit-candidates", type=int, default=10)
     parser.add_argument("--dry-run", action="store_true", default=False)
     parser.add_argument("--force", action="store_true", default=False)
+    parser.add_argument("--mode", choices=["static", "browser", "auto"], default="auto")
+    parser.add_argument("--browser-timeout-seconds", type=int, default=20)
+    parser.add_argument("--no-clicks", dest="allow_download_clicks", action="store_false", default=True)
     args = parser.parse_args()
     configure_logging()
     try:
@@ -153,6 +220,9 @@ def main() -> None:
             limit_candidates=args.limit_candidates,
             dry_run=args.dry_run,
             force=args.force,
+            mode=args.mode,
+            browser_timeout_seconds=args.browser_timeout_seconds,
+            allow_download_clicks=args.allow_download_clicks,
         )
     except httpx.HTTPError as exc:
         raise SystemExit(f"Fetch failed: {exc}") from exc

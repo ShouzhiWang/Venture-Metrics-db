@@ -40,6 +40,7 @@ class DiscoveredArtifact:
     link_text: str | None
     score: float
     reason: list[str]
+    discovery_method: str = "static_html"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -268,7 +269,7 @@ def verify_artifact_url(
     try:
         try:
             response = active_client.head(url)
-            if response.status_code in {405, 501} or response.status_code >= 500:
+            if response.status_code in {403, 405, 501} or response.status_code >= 500:
                 response = active_client.get(url, headers={"Range": "bytes=0-4095"})
         except httpx.HTTPError:
             response = active_client.get(url, headers={"Range": "bytes=0-4095"})

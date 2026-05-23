@@ -57,10 +57,17 @@ python -m app.workers.process_source --source-id <uuid>
 python -m app.workers.process_source --source-id <uuid> --process-resolved
 ```
 
+For selected sources that need rendered JavaScript, opt into browser resolution:
+
+```bash
+python -m app.workers.process_source --source-id <uuid> --resolve-mode auto
+python -m app.workers.process_source --source-id <uuid> --resolve-mode browser --no-clicks
+```
+
 Resolve one HTML source without changing the database:
 
 ```bash
-python -m app.workers.resolve_source --source-id <uuid> --dry-run
+python -m app.workers.resolve_source --source-id <uuid> --dry-run --mode auto
 ```
 
 Create or reuse a child PDF/dataset source from a landing page:
@@ -75,7 +82,20 @@ Resolve and immediately process the child source:
 python -m app.workers.resolve_source --source-id <uuid> --process-resolved
 ```
 
-The resolver follows direct links only. Gated pages, login pages, email forms, and JavaScript-only download buttons are classified as `gated_or_paywalled` or `needs_browser`; the pipeline does not submit forms, use credentials, or bypass access controls. Manual download or browser-assisted resolution is still required for those sources.
+Resolution modes:
+
+- `static`: parse saved/fetched HTML with BeautifulSoup only. This remains the default for `process_source`.
+- `auto`: try static resolution first, then render the page with Playwright if static HTML has no verified artifact and the page looks unresolved or browser-dependent. This is the default for `resolve_source`.
+- `browser`: render with Playwright and inspect rendered DOM, network responses, and safe download clicks.
+
+Browser resolution requires the optional browser extra and Playwright browsers:
+
+```bash
+pip install -e ".[browser]"
+playwright install chromium
+```
+
+The resolver follows direct links and only clicks safe download/report controls when browser mode is enabled. Gated pages, login pages, email forms, and subscription walls are classified as `gated_or_paywalled` or `needs_browser`; the pipeline does not submit forms, use credentials, or bypass access controls. Manual download or provider-specific public API integration is still required for those sources.
 
 Parse one report into extracted text and chunks:
 
