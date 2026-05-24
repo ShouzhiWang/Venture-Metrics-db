@@ -11,6 +11,7 @@ from app.agents.search_index_builder import (
     DEFAULT_OBJECT_TYPES,
     chunk_item,
     dataset_item,
+    organization_item,
     report_item,
     should_index_chunk,
     source_item,
@@ -77,6 +78,9 @@ def iter_search_items(connection, object_types: list[str], *, report_id: UUID | 
             report = {key.removeprefix("report_"): value for key, value in row.items() if key.startswith("report_") and value is not None}
             source = {key.removeprefix("source_"): value for key, value in row.items() if key.startswith("source_") and value is not None}
             yield dataset_item(dataset, source or None, report or None)
+    if "organization" in object_types:
+        for row in _organization_rows(connection, source_id=source_id, limit=limit):
+            yield organization_item(row)
     if "variable" in object_types:
         for row in _variable_rows(connection, report_id=report_id, source_id=source_id, limit=limit):
             variable = {key.removeprefix("variable_"): value for key, value in row.items() if key.startswith("variable_")}
@@ -149,6 +153,29 @@ def _dataset_rows(connection, *, report_id: UUID | None, source_id: UUID | None,
         LIMIT :limit
         """,
         report_id=report_id,
+        source_id=source_id,
+        limit=limit,
+    )
+
+
+def _organization_rows(connection, *, source_id: UUID | None, limit: int | None) -> list[dict]:
+    return _rows(
+        connection,
+        """
+        SELECT
+          o.id, o.name, o.website_url, o.description, o.organization_type,
+          o.geography, o.country, o.city, o.region, o.sector_focus,
+          o.stage_focus, o.market_focus, o.source_id, o.original_source_url,
+          o.confidence_score, o.review_status, o.metadata,
+          s.original_url AS source_original_url,
+          s.access_type AS source_access_type,
+          s.raw_file_path AS source_raw_file_path
+        FROM ecosystem_organizations o
+        LEFT JOIN sources s ON s.id = o.source_id
+        WHERE (CAST(:source_id AS uuid) IS NULL OR o.source_id = CAST(:source_id AS uuid))
+        ORDER BY o.updated_at DESC
+        LIMIT :limit
+        """,
         source_id=source_id,
         limit=limit,
     )
@@ -227,7 +254,7 @@ def _rows(connection, statement: str, **params) -> list[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build or refresh rows in the rebuildable search_index table.")
-    parser.add_argument("--object-types", help="Comma-separated object types. Default: variable,report,source,dataset")
+    parser.add_argument("--object-types", help="Comma-separated object types. Default: variable,report,source,dataset,organization")
     parser.add_argument("--report-id", type=UUID)
     parser.add_argument("--source-id", type=UUID)
     parser.add_argument("--rebuild", action="store_true")

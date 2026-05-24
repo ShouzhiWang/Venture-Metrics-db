@@ -5,6 +5,11 @@ from uuid import UUID
 import httpx
 import trafilatura
 
+from app.agents.ecosystem_org_extractor import (
+    classify_source_route,
+    extract_directory_candidates,
+    extract_ecosystem_organization,
+)
 from app.agents.browser_source_resolver import BrowserResolverUnavailable, BrowserSourceResolver
 from app.agents.fetcher import detect_content_format, fetch_source
 from app.agents.report_reader import basic_report_metadata
@@ -12,6 +17,7 @@ from app.agents.source_resolver import ArtifactVerification, DiscoveredArtifact,
 from app.config import get_settings
 from app.db.connection import get_engine
 from app.db.repositories.datasets import DatasetRepository
+from app.db.repositories.ecosystem_organizations import EcosystemOrganizationRepository
 from app.db.repositories.reports import ReportRepository
 from app.db.repositories.sources import SourceRepository
 from app.storage.local_storage import LocalStorageClient
@@ -195,6 +201,7 @@ def process_source(
         source_repo = SourceRepository(connection)
         report_repo = ReportRepository(connection)
         dataset_repo = DatasetRepository(connection)
+        organization_repo = EcosystemOrganizationRepository(connection)
         source = source_repo.get(source_id)
         if not source:
             raise ValueError(f"Source not found: {source_id}")
@@ -236,9 +243,34 @@ def process_source(
 
         report = None
         dataset = None
+        organization = None
         discovered_artifacts = []
         resolved_source = None
-        if actual_source_type == "html" and resolve_html_artifacts:
+        source_route = classify_source_route(
+            url=source["original_url"],
+            source_type=actual_source_type,
+            html=fetched.content if actual_source_type == "html" else None,
+        )
+        if actual_source_type == "html" and source_route.source_route == "ecosystem_organization":
+            values = extract_ecosystem_organization(fetched.content, {**source, **updated})
+            organization = organization_repo.upsert(values)
+            updated = source_repo.update_resolution(
+                source_id,
+                source_role="ecosystem_organization_page",
+                resolution_status="not_needed",
+                resolution_notes=source_route.reason,
+                discovered_artifacts={"source_route": source_route.source_route, "confidence_score": source_route.confidence_score},
+            )
+        elif actual_source_type == "html" and source_route.source_route == "organization_directory":
+            discovered_artifacts = extract_directory_candidates(fetched.content, source["original_url"])
+            updated = source_repo.update_resolution(
+                source_id,
+                source_role="organization_directory",
+                resolution_status="needs_review",
+                resolution_notes=f"{source_route.reason}; extracted {len(discovered_artifacts)} simple candidates",
+                discovered_artifacts=discovered_artifacts,
+            )
+        elif actual_source_type == "html" and resolve_html_artifacts:
             updated, resolved_source, discovered_artifacts = _resolve_html_source(
                 source=source,
                 updated=updated,
@@ -280,6 +312,7 @@ def process_source(
             "source": updated,
             "report": report,
             "dataset": dataset,
+            "organization": organization,
             "resolved_source": resolved_source,
             "discovered_artifacts": discovered_artifacts,
         }
@@ -315,8 +348,12 @@ def main() -> None:
     )
     report_id = result["report"]["id"] if result["report"] else None
     dataset_id = result["dataset"]["id"] if result.get("dataset") else None
+    organization_id = result["organization"]["id"] if result.get("organization") else None
     resolved_id = result["resolved_source"]["id"] if result.get("resolved_source") else None
-    print(f"Processed source {args.source_id}; report_id={report_id}; dataset_id={dataset_id}; resolved_source_id={resolved_id}")
+    print(
+        f"Processed source {args.source_id}; report_id={report_id}; dataset_id={dataset_id}; "
+        f"organization_id={organization_id}; resolved_source_id={resolved_id}"
+    )
 
 
 if __name__ == "__main__":

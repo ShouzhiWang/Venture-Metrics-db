@@ -1,6 +1,8 @@
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
+from app.agents.ecosystem_org_extractor import classify_source_route
+
 
 EXTENSION_TO_TYPE = {
     ".pdf": "pdf",
@@ -32,8 +34,11 @@ def classify_source(url_or_path: str | None) -> dict[str, str | None]:
     if source_type is None and parsed.scheme in {"http", "https"}:
         source_type = "html"
 
+    route = classify_source_route(url=url_or_path, source_type=source_type)
+
     return {
         "source_type": source_type or "unknown",
         "detected_format": extension.lstrip(".") if extension else None,
         "access_type": "public" if parsed.scheme in {"http", "https"} else "unknown",
+        "source_route": route.source_route,
     }

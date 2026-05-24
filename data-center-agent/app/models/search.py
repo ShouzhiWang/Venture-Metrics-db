@@ -68,6 +68,7 @@ class FindDataResult(BaseModel):
     closest_variables: list[dict] = Field(default_factory=list)
     closest_datasets: list[dict] = Field(default_factory=list)
     relevant_reports: list[dict] = Field(default_factory=list)
+    relevant_organizations: list[dict] = Field(default_factory=list)
     source_links: list[dict] = Field(default_factory=list)
     suggested_clarifications: list[SuggestedClarification] = Field(default_factory=list)
     search_mode: str = "hybrid"

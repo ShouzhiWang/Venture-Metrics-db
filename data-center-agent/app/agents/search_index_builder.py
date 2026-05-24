@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 
-DEFAULT_OBJECT_TYPES = ("variable", "report", "source", "dataset")
+DEFAULT_OBJECT_TYPES = ("variable", "report", "source", "dataset", "organization")
 HIGH_VALUE_CHUNK_TYPES = {"methodology", "definitions", "data_sources", "technical_notes", "source_note"}
 HIGH_VALUE_TERMS = (
     "data",
@@ -172,6 +172,45 @@ def dataset_item(dataset: dict[str, Any], source: dict[str, Any] | None = None, 
         local_path=dataset.get("raw_data_path") or (source.get("raw_file_path") if source else None),
         rank_weight=1.0,
         metadata={"data_origin_type": dataset.get("data_origin_type")},
+    )
+
+
+def organization_item(organization: dict[str, Any]) -> dict[str, Any]:
+    source_url = organization.get("source_original_url") or organization.get("original_source_url") or organization.get("website_url")
+    content = compact_text(
+        organization.get("name"),
+        organization.get("description"),
+        organization.get("organization_type"),
+        organization.get("geography"),
+        organization.get("country"),
+        organization.get("city"),
+        organization.get("region"),
+        organization.get("sector_focus"),
+        organization.get("stage_focus"),
+        organization.get("market_focus"),
+        organization.get("website_url"),
+    )
+    return _base_item(
+        object_type="organization",
+        object_id=organization["id"],
+        source_id=organization.get("source_id"),
+        title=organization.get("name"),
+        content=content,
+        search_text=content,
+        geography=organization.get("geography") or organization.get("country") or organization.get("region"),
+        availability=organization.get("source_access_type") or "public",
+        source_url=source_url,
+        local_path=organization.get("source_raw_file_path"),
+        rank_weight=0.9,
+        metadata={
+            "organization_type": organization.get("organization_type"),
+            "sector_focus": organization.get("sector_focus"),
+            "stage_focus": organization.get("stage_focus"),
+            "market_focus": organization.get("market_focus"),
+            "review_status": organization.get("review_status"),
+            "confidence_score": float(organization["confidence_score"]) if organization.get("confidence_score") is not None else None,
+            "website_url": organization.get("website_url"),
+        },
     )
 
 

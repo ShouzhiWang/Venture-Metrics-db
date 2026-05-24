@@ -43,7 +43,7 @@ def find_data(
     }
     search = semantic_search(
         query,
-        object_types=["variable", "dataset", "report", "source"],
+        object_types=["variable", "dataset", "report", "source", "organization"],
         limit=max(limit * 3, 20),
         hybrid=True,
         client=client,
@@ -59,6 +59,7 @@ def find_data(
         "closest_datasets": groups["datasets"],
         "relevant_reports": groups["reports"],
         "source_links": groups["sources"],
+        "relevant_organizations": groups["organizations"],
         "suggested_clarifications": [item.model_dump() for item in suggest_clarifications(query, intent)],
     }
 
@@ -101,7 +102,7 @@ def is_broad_query(lowered_query: str) -> bool:
 
 
 def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
-    grouped = {"variables": [], "datasets": [], "reports": [], "sources": []}
+    grouped = {"variables": [], "datasets": [], "reports": [], "sources": [], "organizations": []}
     seen_sources: set[str] = set()
     for row in results:
         item = format_find_data_item(row)
@@ -112,6 +113,8 @@ def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
             grouped["datasets"].append(item)
         elif object_type == "report" and len(grouped["reports"]) < limit:
             grouped["reports"].append(item)
+        elif object_type == "organization" and len(grouped["organizations"]) < limit:
+            grouped["organizations"].append(item)
         source_key = row.get("source_url") or row.get("source_id") or row.get("object_id")
         if source_key and source_key not in seen_sources and len(grouped["sources"]) < limit:
             seen_sources.add(source_key)

@@ -76,16 +76,29 @@ class FakeDatasetRepository:
         return type(self).created
 
 
+class FakeOrganizationRepository:
+    created = None
+
+    def __init__(self, _connection):
+        pass
+
+    def upsert(self, values, *, force=False):
+        type(self).created = {"id": uuid4(), **values}
+        return type(self).created
+
+
 def install_fakes(monkeypatch, tmp_path: Path, fetch_result: FetchResult):
     FakeSourceRepository.updated = {}
     FakeSourceRepository.child = None
     FakeReportRepository.created = None
     FakeDatasetRepository.created = None
+    FakeOrganizationRepository.created = None
     monkeypatch.setattr(worker, "get_settings", lambda: FakeSettings(tmp_path))
     monkeypatch.setattr(worker, "get_engine", lambda: FakeEngine())
     monkeypatch.setattr(worker, "SourceRepository", FakeSourceRepository)
     monkeypatch.setattr(worker, "ReportRepository", FakeReportRepository)
     monkeypatch.setattr(worker, "DatasetRepository", FakeDatasetRepository)
+    monkeypatch.setattr(worker, "EcosystemOrganizationRepository", FakeOrganizationRepository)
     monkeypatch.setattr(worker, "fetch_source", lambda location, timeout_seconds: fetch_result)
 
 
@@ -180,3 +193,26 @@ def test_process_source_auto_mode_uses_browser_fallback_for_js_pdf_link(tmp_path
     assert result["resolved_source"]["original_url"] == "https://example.gov/rendered/report.pdf"
     assert result["source"]["resolution_status"] == "resolved"
     assert result["discovered_artifacts"][0]["discovery_method"] == "rendered_dom"
+
+
+def test_process_source_organization_homepage_creates_org_and_skips_report(tmp_path: Path, monkeypatch) -> None:
+    html = b"""
+    <html>
+      <head>
+        <title>Singapore FinTech Association</title>
+        <meta name="description" content="Singapore FinTech Association supports fintech startups, investors, and ecosystem partners in Singapore.">
+      </head>
+      <body><p>About us: we support startups and members across the fintech ecosystem in Singapore.</p></body>
+    </html>
+    """
+    install_fakes(monkeypatch, tmp_path, FetchResult(html, "index.html", "text/html"))
+
+    result = worker.process_source(FakeSourceRepository.source_id)
+
+    assert result["report"] is None
+    assert result["dataset"] is None
+    assert result["organization"]["name"] == "Singapore FinTech Association"
+    assert result["organization"]["organization_type"] == "association"
+    assert result["source"]["source_role"] == "ecosystem_organization_page"
+    assert result["source"]["resolution_status"] == "not_needed"
+    assert FakeReportRepository.created is None

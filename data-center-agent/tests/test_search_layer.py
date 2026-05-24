@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.agents.search_index_builder import report_item, source_item, variable_item
+from app.agents.search_index_builder import organization_item, report_item, source_item, variable_item
 from app.db.repositories.search_index import SearchIndexRepository
 from app.llm.embedding_client import EmbeddingDimensionError, MockEmbeddingClient, validate_dimension
 from app.llm.embedding_client import LocalEmbeddingClient
@@ -119,6 +119,30 @@ def test_source_search_text_includes_url_and_resolution_status() -> None:
 
     assert "https://example.cn/data" in item["search_text"]
     assert "not_needed" in item["search_text"]
+
+
+def test_organization_search_text_includes_focus_and_website() -> None:
+    item = organization_item(
+        {
+            "id": uuid4(),
+            "name": "Asia Startup Network",
+            "description": "Connects accelerators and venture investors.",
+            "organization_type": "association",
+            "geography": "Asia",
+            "sector_focus": ["fintech", "climate"],
+            "stage_focus": ["seed"],
+            "market_focus": ["Singapore"],
+            "website_url": "https://example.org",
+            "source_id": uuid4(),
+            "source_access_type": "public",
+        }
+    )
+
+    assert item["object_type"] == "organization"
+    assert "Asia Startup Network" in item["search_text"]
+    assert "fintech" in item["search_text"]
+    assert "seed" in item["search_text"]
+    assert "https://example.org" in item["search_text"]
 
 
 def test_mock_embedding_client_returns_deterministic_1024_vectors() -> None:
@@ -238,6 +262,7 @@ def test_find_data_groups_results_and_passes_public_filter(monkeypatch) -> None:
 
     def fake_semantic_search(query, *, object_types, limit, hybrid, client=None, filters=None):
         captured["filters"] = filters
+        captured["object_types"] = object_types
         return {
             "mode": "keyword_fallback",
             "results": [
@@ -264,6 +289,16 @@ def test_find_data_groups_results_and_passes_public_filter(monkeypatch) -> None:
                     "source_url": "https://example.gov/report",
                     "metadata": {},
                 },
+                {
+                    "object_type": "organization",
+                    "object_id": "org-1",
+                    "title": "Singapore Startup Association",
+                    "snippet": "Startup association in Singapore",
+                    "score": 0.6,
+                    "availability": "public",
+                    "source_url": "https://example.org",
+                    "metadata": {"organization_type": "association"},
+                },
             ],
         }
 
@@ -272,8 +307,10 @@ def test_find_data_groups_results_and_passes_public_filter(monkeypatch) -> None:
     result = find_data_worker.find_data("I want data about SME digital adoption in Singapore", public_only=True)
 
     assert captured["filters"]["public_only"] is True
+    assert "organization" in captured.get("object_types", ["organization"])
     assert result["closest_variables"][0]["title"] == "SME digital adoption rate"
     assert result["relevant_reports"][0]["title"] == "SME Digital Report"
+    assert result["relevant_organizations"][0]["title"] == "Singapore Startup Association"
     assert result["source_links"][0]["source_url"] == "https://example.gov/report"
     assert result["suggested_clarifications"]
 
