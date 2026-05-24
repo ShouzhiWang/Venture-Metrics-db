@@ -1,27 +1,56 @@
 import type { VariableResult } from "../../types";
 import { AvailabilityBadge } from "./AvailabilityBadge";
-import { EvidenceBlock } from "./EvidenceBlock";
 
 type Props = {
   variable: VariableResult;
+  onViewEvidence: () => void;
 };
 
-export function VariableCard({ variable }: Props) {
+export function VariableCard({ variable, onViewEvidence }: Props) {
+  const name = variable.title || variable.raw_variable_name || "Variable";
+
   return (
     <article className="result-card">
       <div className="card-head">
-        <h4>{variable.title || variable.raw_variable_name || "Variable"}</h4>
+        <h4>{name}</h4>
         <AvailabilityBadge value={variable.availability} />
       </div>
-      {variable.definition && <p>{variable.definition}</p>}
-      <dl className="meta-grid">
-        {variable.measurement_method && <><dt>Measurement</dt><dd>{variable.measurement_method}</dd></>}
-        {variable.data_source && <><dt>Data source</dt><dd>{variable.data_source}</dd></>}
-        {variable.geographic_coverage && <><dt>Geography</dt><dd>{variable.geographic_coverage}</dd></>}
-        {variable.temporal_coverage && <><dt>Time</dt><dd>{variable.temporal_coverage}</dd></>}
-      </dl>
-      <EvidenceBlock quote={variable.evidence_quote} />
-      {variable.source_url && <a href={variable.source_url} target="_blank" rel="noreferrer">Open source</a>}
+
+      {variable.definition && (
+        <p className="card-def">{variable.definition}</p>
+      )}
+
+      <div className="card-meta">
+        {variable.data_source && (
+          <span className="meta-chip">{variable.data_source}</span>
+        )}
+        {variable.geographic_coverage && (
+          <span className="meta-chip">{variable.geographic_coverage}</span>
+        )}
+        {variable.temporal_coverage && (
+          <span className="meta-chip">{variable.temporal_coverage}</span>
+        )}
+      </div>
+
+      <div className="card-actions">
+        <button
+          type="button"
+          className="card-action-btn"
+          onClick={onViewEvidence}
+        >
+          View evidence
+        </button>
+        {variable.source_url && (
+          <a
+            href={variable.source_url}
+            target="_blank"
+            rel="noreferrer"
+            className="card-action-link"
+          >
+            Open source
+          </a>
+        )}
+      </div>
     </article>
   );
 }

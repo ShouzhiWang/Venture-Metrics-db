@@ -1,7 +1,9 @@
-import { FormEvent, useMemo, useState } from "react";
-import { Send } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { Search } from "lucide-react";
 import { sendChat, submitFeedback, type ChatHistoryItem } from "./api";
+import { AnswerSummary } from "./components/AnswerSummary";
 import { ResultSections } from "./components/ResultSections";
+import { DetailDrawer, type DrawerItem } from "./components/DetailDrawer";
 import type { ChatResponse, ClarifyingQuestion } from "./types";
 
 const EXAMPLES = [
@@ -10,7 +12,7 @@ const EXAMPLES = [
   "R&D expenditure as % of GDP",
   "SME digital adoption",
   "Compare startup funding definitions",
-  "Shenzhen startup organizations"
+  "Shenzhen startup organizations",
 ];
 
 type Turn = {
@@ -25,36 +27,44 @@ export function App() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const answerId = useMemo(() => `answer-${Date.now()}`, [turns.length]);
+  const [drawerItem, setDrawerItem] = useState<DrawerItem | null>(null);
+  const [lastQuery, setLastQuery] = useState("");
+  const [answerId, setAnswerId] = useState(() => `answer-${Date.now()}`);
+
+  const latestAssistant = [...turns].reverse().find(t => t.role === "assistant");
+  const hasTurns = turns.length > 0;
 
   function historyFromTurns(nextTurns = turns): ChatHistoryItem[] {
     return nextTurns
-      .filter((turn) => turn.content.trim())
+      .filter(t => t.content.trim())
       .slice(-10)
-      .map((turn) => ({ role: turn.role, content: turn.content }));
+      .map(t => ({ role: t.role, content: t.content }));
   }
 
   async function runQuery(query: string) {
     const trimmed = query.trim();
     if (!trimmed || loading) return;
+    setLastQuery(trimmed);
+    setDrawerItem(null);
     const userTurn: Turn = { id: crypto.randomUUID(), role: "user", content: trimmed };
     const nextTurns = [...turns, userTurn];
     setTurns(nextTurns);
     setMessage("");
     setLoading(true);
     setError("");
+    setAnswerId(`answer-${Date.now()}`);
     try {
       const response = await sendChat(trimmed, {}, historyFromTurns(nextTurns));
       const assistantTurn: Turn = {
         id: crypto.randomUUID(),
         role: "assistant",
         content: response.assistant_message || response.message,
-        response
+        response,
       };
       setTurns([...nextTurns, assistantTurn]);
     } catch (err) {
-      const messageText = err instanceof Error ? err.message : "Request failed";
-      setError(messageText);
+      const msg = err instanceof Error ? err.message : "Request failed";
+      setError(msg);
       setTurns([
         ...nextTurns,
         {
@@ -63,8 +73,8 @@ export function App() {
           content: "The demo API request failed before the agent could respond.",
           response: {
             type: "error",
-            message: messageText,
-            assistant_message: messageText,
+            message: msg,
+            assistant_message: msg,
             intent: "unknown",
             clarifying_questions: [],
             tool_calls: [],
@@ -73,11 +83,11 @@ export function App() {
               relevant_reports: [],
               relevant_organizations: [],
               source_links: [],
-              comparison: {}
+              comparison: {},
             },
-            limitations: [messageText]
-          }
-        }
+            limitations: [msg],
+          },
+        },
       ]);
     } finally {
       setLoading(false);
@@ -89,6 +99,11 @@ export function App() {
     void runQuery(message);
   }
 
+  function handleChipClick(option: string) {
+    const refined = lastQuery ? `${lastQuery}, ${option}` : option;
+    void runQuery(refined);
+  }
+
   async function feedback(type: string) {
     try {
       await submitFeedback(answerId, type);
@@ -97,95 +112,135 @@ export function App() {
     }
   }
 
-  const hasTurns = turns.length > 0;
+  const latestResponse = latestAssistant?.response;
+  const isClarification = latestResponse?.type === "clarification";
+  const hasResults = latestResponse && latestResponse.type !== "clarification";
+  const clarifyingQuestions = latestResponse?.clarifying_questions ?? [];
 
   return (
-    <main className="app-shell chat-shell">
+    <div className="page-shell">
       <header className="topbar">
-        <div>
-          <h1>Startup Data Intelligence Demo</h1>
-          <p>Ask for variables, reports, organizations, definitions, and evidence.</p>
-        </div>
+        <span className="site-name">Startup Data Intelligence</span>
+        <span className="site-tag">Demo</span>
       </header>
 
-      <section className="chat-panel" aria-live="polite">
-        {!hasTurns && (
-          <div className="empty-state">
-            <p>Ask a question about startup, VC, SME, innovation, or ecosystem data.</p>
-            <div className="chips">
-              {EXAMPLES.map((example) => (
-                <button key={example} type="button" onClick={() => void runQuery(example)}>
-                  {example}
+      <main className="main-content">
+        {/* Search input */}
+        <div className="search-area">
+          <form onSubmit={onSubmit}>
+            <div className="search-row">
+              <Search size={17} className="search-icon" aria-hidden="true" />
+              <input
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="Ask about a metric, geography, source, organization, or definition…"
+                autoFocus
+                aria-label="Search query"
+              />
+              <button type="submit" disabled={loading || !message.trim()}>
+                {loading ? "Searching…" : "Search"}
+              </button>
+            </div>
+          </form>
+
+          {!hasTurns && (
+            <div className="example-chips">
+              {EXAMPLES.map(ex => (
+                <button
+                  key={ex}
+                  type="button"
+                  className="chip"
+                  onClick={() => void runQuery(ex)}
+                >
+                  {ex}
                 </button>
               ))}
             </div>
-          </div>
-        )}
-
-        <div className="transcript">
-          {turns.map((turn) => (
-            <article className={`turn ${turn.role}`} key={turn.id}>
-              <div className="turn-body">
-                <p>{turn.content}</p>
-                {turn.response?.tool_calls && turn.response.tool_calls.length > 0 && (
-                  <ToolCallSummary calls={turn.response.tool_calls} />
-                )}
-                {turn.response?.clarifying_questions && turn.response.clarifying_questions.length > 0 && (
-                  <QuickReplies questions={turn.response.clarifying_questions} onChoose={runQuery} />
-                )}
-                {turn.response && turn.response.type !== "clarification" && (
-                  <>
-                    <ResultSections results={turn.response.results} limitations={turn.response.limitations} />
-                    <div className="feedback">
-                      <button type="button" onClick={() => void feedback("thumbs_up")}>Useful</button>
-                      <button type="button" onClick={() => void feedback("thumbs_down")}>Not useful</button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </article>
-          ))}
-          {loading && (
-            <article className="turn assistant">
-              <div className="turn-body">
-                <p>Checking the data tools...</p>
-              </div>
-            </article>
           )}
         </div>
-      </section>
 
-      {error && <div className="notice error">{error}</div>}
+        {/* Error */}
+        {error && <div className="notice error">{error}</div>}
 
-      <form onSubmit={onSubmit} className="composer">
-        <label htmlFor="query">Message</label>
-        <div className="composer-row">
-          <input
-            id="query"
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder="Ask about a metric, geography, source, organization, or definition..."
-          />
-          <button type="submit" disabled={loading || !message.trim()} aria-label="Send message">
-            <Send size={18} aria-hidden="true" />
-          </button>
-        </div>
-      </form>
-    </main>
+        {/* Answer area */}
+        {(latestResponse || loading) && (
+          <div className="result-area">
+            {latestResponse && (
+              <AnswerSummary response={latestResponse} loading={loading} />
+            )}
+
+            {/* Clarification panel (when type === "clarification") */}
+            {isClarification && clarifyingQuestions.length > 0 && (
+              <ClarificationPanel
+                questions={clarifyingQuestions}
+                lastQuery={lastQuery}
+                onChoose={handleChipClick}
+              />
+            )}
+
+            {/* Narrow chips (when results + clarifying questions) */}
+            {hasResults && clarifyingQuestions.length > 0 && (
+              <NarrowChips
+                questions={clarifyingQuestions}
+                lastQuery={lastQuery}
+                onChoose={handleChipClick}
+              />
+            )}
+
+            {/* Result tabs */}
+            {hasResults && latestResponse && (
+              <ResultSections
+                results={latestResponse.results}
+                limitations={latestResponse.limitations}
+                onViewEvidence={setDrawerItem}
+              />
+            )}
+
+            {/* Feedback */}
+            {hasResults && !loading && (
+              <div className="feedback-row">
+                <button type="button" onClick={() => void feedback("thumbs_up")}>
+                  Useful
+                </button>
+                <button type="button" onClick={() => void feedback("thumbs_down")}>
+                  Not useful
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
+    </div>
   );
 }
 
-function QuickReplies({ questions, onChoose }: { questions: ClarifyingQuestion[]; onChoose: (value: string) => void }) {
+function ClarificationPanel({
+  questions,
+  lastQuery,
+  onChoose,
+}: {
+  questions: ClarifyingQuestion[];
+  lastQuery: string;
+  onChoose: (option: string) => void;
+}) {
   return (
-    <div className="quick-replies">
-      {questions.map((item) => (
-        <div className="quick-question" key={item.question}>
-          <p>{item.question}</p>
-          {item.options && item.options.length > 0 && (
-            <div className="option-row">
-              {item.options.map((option) => (
-                <button key={option} type="button" onClick={() => onChoose(option)}>
-                  {option}
+    <div className="clarification-panel">
+      <p>Could you clarify what you&rsquo;re looking for?</p>
+      {questions.map(q => (
+        <div className="clarification-question" key={q.question}>
+          <p>{q.question}</p>
+          {q.options && q.options.length > 0 && (
+            <div className="example-chips">
+              {q.options.map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  className="chip"
+                  onClick={() => onChoose(lastQuery ? `${lastQuery}, ${opt}` : opt)}
+                >
+                  {opt}
                 </button>
               ))}
             </div>
@@ -196,11 +251,30 @@ function QuickReplies({ questions, onChoose }: { questions: ClarifyingQuestion[]
   );
 }
 
-function ToolCallSummary({ calls }: { calls: { name: string; status: string }[] }) {
+function NarrowChips({
+  questions,
+  lastQuery,
+  onChoose,
+}: {
+  questions: ClarifyingQuestion[];
+  lastQuery: string;
+  onChoose: (option: string) => void;
+}) {
+  const allOptions = questions.flatMap(q => q.options ?? []);
+  if (allOptions.length === 0) return null;
+
   return (
-    <div className="tool-strip">
-      {calls.map((call, index) => (
-        <span key={`${call.name}-${index}`}>{call.name} · {call.status}</span>
+    <div className="narrow-section">
+      <span className="narrow-label">Narrow your search:</span>
+      {allOptions.map(opt => (
+        <button
+          key={opt}
+          type="button"
+          className="chip"
+          onClick={() => onChoose(lastQuery ? `${lastQuery}, ${opt}` : opt)}
+        >
+          {opt}
+        </button>
       ))}
     </div>
   );

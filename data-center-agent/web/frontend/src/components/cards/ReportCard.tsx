@@ -2,22 +2,45 @@ import type { ReportResult } from "../../types";
 
 type Props = {
   report: ReportResult;
+  onViewEvidence: () => void;
 };
 
-export function ReportCard({ report }: Props) {
+export function ReportCard({ report, onViewEvidence }: Props) {
+  const geo = report.geography || report.geographic_coverage;
+
   return (
     <article className="result-card">
       <h4>{report.title || "Report"}</h4>
-      <dl className="meta-grid">
-        {report.publisher && <><dt>Publisher</dt><dd>{report.publisher}</dd></>}
-        {report.report_year && <><dt>Year</dt><dd>{report.report_year}</dd></>}
-        {(report.geography || report.geographic_coverage) && <><dt>Geography</dt><dd>{report.geography || report.geographic_coverage}</dd></>}
-      </dl>
-      {report.why_it_matched && <p>{report.why_it_matched}</p>}
-      {report.matched_variables && report.matched_variables.length > 0 && (
-        <p>Matched variables: {report.matched_variables.map((item) => item.raw_variable_name || item.title).filter(Boolean).join(", ")}</p>
+
+      <div className="card-meta">
+        {report.publisher && <span className="meta-chip">{report.publisher}</span>}
+        {report.report_year && <span className="meta-chip">{report.report_year}</span>}
+        {geo && <span className="meta-chip">{geo}</span>}
+      </div>
+
+      {report.why_it_matched && (
+        <p className="card-def">{report.why_it_matched}</p>
       )}
-      {report.source_url && <a href={report.source_url} target="_blank" rel="noreferrer">Open source</a>}
+
+      <div className="card-actions">
+        <button
+          type="button"
+          className="card-action-btn"
+          onClick={onViewEvidence}
+        >
+          View details
+        </button>
+        {report.source_url && (
+          <a
+            href={report.source_url}
+            target="_blank"
+            rel="noreferrer"
+            className="card-action-link"
+          >
+            Open source
+          </a>
+        )}
+      </div>
     </article>
   );
 }

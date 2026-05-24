@@ -2,20 +2,43 @@ import type { OrganizationResult } from "../../types";
 
 type Props = {
   organization: OrganizationResult;
+  onViewEvidence: () => void;
 };
 
-export function OrganizationCard({ organization }: Props) {
+export function OrganizationCard({ organization, onViewEvidence }: Props) {
+  const url = organization.website_url || organization.source_url;
+
   return (
     <article className="result-card">
       <h4>{organization.name || organization.title || "Organization"}</h4>
-      <dl className="meta-grid">
-        {organization.organization_type && <><dt>Type</dt><dd>{organization.organization_type}</dd></>}
-        {organization.geography && <><dt>Geography</dt><dd>{organization.geography}</dd></>}
-      </dl>
-      {organization.description && <p>{organization.description}</p>}
-      {(organization.website_url || organization.source_url) && (
-        <a href={organization.website_url || organization.source_url} target="_blank" rel="noreferrer">Open website</a>
+
+      <div className="card-meta">
+        {organization.organization_type && (
+          <span className="meta-chip">{organization.organization_type}</span>
+        )}
+        {organization.geography && (
+          <span className="meta-chip">{organization.geography}</span>
+        )}
+      </div>
+
+      {organization.description && (
+        <p className="card-def">{organization.description}</p>
       )}
+
+      <div className="card-actions">
+        <button
+          type="button"
+          className="card-action-btn"
+          onClick={onViewEvidence}
+        >
+          View details
+        </button>
+        {url && (
+          <a href={url} target="_blank" rel="noreferrer" className="card-action-link">
+            Open website
+          </a>
+        )}
+      </div>
     </article>
   );
 }
