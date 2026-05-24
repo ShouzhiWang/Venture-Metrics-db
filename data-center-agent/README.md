@@ -265,6 +265,74 @@ Export fixed retrieval evaluation queries for manual inspection:
 python -m app.workers.evaluate_search_quality --limit 10
 ```
 
+## MVP demo website
+
+The MVP website is a separate demo app under `web/`. It exposes a small API and a single React page for the future data robot experience. It only calls demo-safe tools: query planning, `find_data`, `semantic_search`, `compare_concepts_auto`, detail lookups, filter listing, and feedback. It does not expose ingestion, parsing, extraction, migrations, embedding jobs, file uploads, deletion, or shell commands.
+
+Install web backend dependencies:
+
+```bash
+pip install -e ".[web]"
+```
+
+Run the API locally:
+
+```bash
+cd data-center-agent
+uvicorn web.backend.app:app --host 127.0.0.1 --port 8000
+```
+
+Run the frontend locally:
+
+```bash
+cd data-center-agent/web/frontend
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to `http://127.0.0.1:8000`.
+
+Useful API calls:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Startup funding in Singapore"}'
+
+curl -X POST http://127.0.0.1:8000/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Compare startup funding definitions across reports"}'
+```
+
+Example demo queries:
+
+- Startup funding in Singapore
+- VC deal count by stage
+- R&D expenditure as percentage of GDP
+- SME digital adoption
+- Compare startup funding definitions across reports
+- Shenzhen startup organizations
+
+Environment variables:
+
+- `DATABASE_URL`: primary database URL.
+- `DEMO_READ_DATABASE_URL`: optional read-only database URL for demo read tools.
+- `LOG_LEVEL`: backend logging level.
+
+Deployment notes for Hermes:
+
+- Run the API and frontend as separate services behind Nginx.
+- Put Basic Auth or another access control layer in front of the demo if it is internet-accessible.
+- Do not expose Postgres directly.
+- Keep secrets only on the backend host; the frontend has no database credentials.
+- Keep the API route allowlist limited to `web/backend/services/tool_client.py`.
+
+Current limitations:
+
+- The answer text is deterministic and summarizes tool output; it does not use an LLM answer generator.
+- Result quality depends on the existing `search_index` and embedded/keyword retrieval state.
+- The site is intentionally read-only except for lightweight feedback.
+
 `search_index` is additive and rebuildable. Core records stay in `sources`, `reports`, `report_variables`, `datasets`, and `document_chunks`. Chunk indexing is intentionally limited to high-value chunks or evidence-linked chunks; the default build indexes variables, reports, sources, and datasets. Embeddings improve retrieval quality but are not required for ingestion, parsing, source resolution, or codebook extraction.
 
 ## Data Layout
