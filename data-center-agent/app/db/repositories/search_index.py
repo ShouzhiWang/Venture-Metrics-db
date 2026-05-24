@@ -302,6 +302,10 @@ class SearchIndexRepository(BaseRepository):
             if params.get(key) is not None:
                 params[key] = str(params[key])
         params["availability"] = params.get("availability") or "unclear"
+        # If source has a downloadable URL or local file, override not_obtainable/unclear
+        has_download = bool(params.get("source_url") or params.get("local_path"))
+        if has_download and params["availability"] in ("not_obtainable", "unclear"):
+            params["availability"] = "obtainable"
         params["rank_weight"] = params.get("rank_weight") or 1.0
         params["metadata"] = json.dumps(item.get("metadata") or {}, default=str)
         return params
