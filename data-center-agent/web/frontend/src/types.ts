@@ -54,8 +54,14 @@ export type SourceLink = {
 export type ChatResponse = {
   type: "clarification" | "answer" | "no_results" | "error";
   message: string;
+  assistant_message?: string;
   intent: string;
   clarifying_questions: ClarifyingQuestion[];
+  tool_calls?: {
+    name: string;
+    args: Record<string, unknown>;
+    status: string;
+  }[];
   results: {
     closest_variables: VariableResult[];
     relevant_reports: ReportResult[];

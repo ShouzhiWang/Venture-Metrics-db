@@ -220,3 +220,4 @@ __marimo__/
 node_modules/
 package-lock.json
 !data-center-agent/web/frontend/package-lock.json
+.env.demo

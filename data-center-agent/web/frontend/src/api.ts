@@ -1,10 +1,19 @@
 import type { ChatResponse } from "./types";
 
-export async function sendChat(message: string, context: Record<string, unknown> = {}): Promise<ChatResponse> {
+export type ChatHistoryItem = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export async function sendChat(
+  message: string,
+  context: Record<string, unknown> = {},
+  history: ChatHistoryItem[] = []
+): Promise<ChatResponse> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, context })
+    body: JSON.stringify({ message, context, history })
   });
   if (!response.ok) {
     throw new Error(`API error ${response.status}`);

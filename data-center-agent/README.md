@@ -267,7 +267,7 @@ python -m app.workers.evaluate_search_quality --limit 10
 
 ## MVP demo website
 
-The MVP website is a separate demo app under `web/`. It exposes a small API and a single React page for the future data robot experience. It only calls demo-safe tools: query planning, `find_data`, `semantic_search`, `compare_concepts_auto`, detail lookups, filter listing, and feedback. It does not expose ingestion, parsing, extraction, migrations, embedding jobs, file uploads, deletion, or shell commands.
+The MVP website is a separate demo app under `web/`. It exposes a small API and a single React page for the future data robot experience. Chat uses a guarded MiMo LLM layer: the model plans a strict JSON tool request, the backend validates it against the demo-safe allowlist, and the model then summarizes only the returned tool results. It does not expose ingestion, parsing, extraction, migrations, embedding jobs, file uploads, deletion, or shell commands.
 
 Install web backend dependencies:
 
@@ -318,6 +318,11 @@ Environment variables:
 - `DATABASE_URL`: primary database URL.
 - `DEMO_READ_DATABASE_URL`: optional read-only database URL for demo read tools.
 - `LOG_LEVEL`: backend logging level.
+- `DEMO_LLM_API_KEY`: required MiMo API key for `/api/chat`.
+- `DEMO_LLM_BASE_URL`: OpenAI-compatible MiMo base URL, default `https://api.mimo-v2.com/v1`.
+- `DEMO_LLM_MODEL`: demo chat model, default `mimo-v2.5`.
+- `DEMO_LLM_TIMEOUT_SECONDS`: provider timeout, default `30`.
+- `DEMO_LLM_MAX_OUTPUT_TOKENS`: max planner/answer output tokens, default `900`.
 
 Deployment notes for Hermes:
 
@@ -347,7 +352,7 @@ For public exposure, put your server-level Nginx or load balancer in front of th
 
 Current limitations:
 
-- The answer text is deterministic and summarizes tool output; it does not use an LLM answer generator.
+- `/api/chat` requires `DEMO_LLM_API_KEY`; if it is missing, the API returns a structured configuration error.
 - Result quality depends on the existing `search_index` and embedded/keyword retrieval state.
 - The site is intentionally read-only except for lightweight feedback.
 

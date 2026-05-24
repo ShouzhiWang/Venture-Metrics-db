@@ -18,18 +18,8 @@ input {
   font: inherit;
 }
 
-.app-shell {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 28px;
-}
-
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  border-bottom: 1px solid #d9dee6;
-  padding-bottom: 18px;
+button {
+  cursor: pointer;
 }
 
 h1,
@@ -40,51 +30,116 @@ p {
   margin: 0;
 }
 
+.app-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 28px 112px;
+}
+
+.topbar {
+  border-bottom: 1px solid #d9dee6;
+  padding-bottom: 16px;
+}
+
 h1 {
-  font-size: 24px;
-  line-height: 1.2;
+  font-size: 22px;
+  line-height: 1.25;
 }
 
 .topbar p,
-.summary-row p,
+.empty-state p,
 .result-card p,
 .plain-list {
   color: #5c6675;
 }
 
-.query-panel,
-.response-panel {
-  margin-top: 24px;
-  background: #ffffff;
+.chat-panel {
+  min-height: calc(100vh - 230px);
+  padding: 18px 0;
+}
+
+.empty-state {
   border: 1px solid #d9dee6;
   border-radius: 8px;
-  padding: 20px;
+  background: #ffffff;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
 }
 
-.query-form label {
+.transcript {
+  display: grid;
+  gap: 16px;
+}
+
+.turn {
+  display: flex;
+}
+
+.turn.user {
+  justify-content: flex-end;
+}
+
+.turn.assistant {
+  justify-content: flex-start;
+}
+
+.turn-body {
+  max-width: min(820px, 100%);
+  border: 1px solid #d9dee6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.turn.user .turn-body {
+  max-width: min(680px, 88%);
+  background: #1f2933;
+  border-color: #1f2933;
+  color: #ffffff;
+}
+
+.composer {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  width: min(1120px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 12px 0 16px;
+  background: #f6f7f9;
+  border-top: 1px solid #d9dee6;
+}
+
+.composer label {
   display: block;
   font-weight: 650;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
-.input-row {
+.composer-row {
   display: grid;
-  grid-template-columns: 20px 1fr auto;
-  gap: 10px;
-  align-items: center;
+  grid-template-columns: 1fr 44px;
+  gap: 8px;
+}
+
+.composer-row input {
+  min-height: 44px;
   border: 1px solid #cbd3df;
   border-radius: 8px;
-  padding: 8px 8px 8px 12px;
-}
-
-.input-row input {
-  border: 0;
+  padding: 8px 12px;
   outline: 0;
-  min-height: 36px;
   color: #1f2933;
+  background: #ffffff;
 }
 
-.input-row button,
+.composer-row input:focus {
+  border-color: #64748b;
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.14);
+}
+
+.composer-row button,
 .chips button,
 .option-row button,
 .feedback button {
@@ -93,17 +148,19 @@ h1 {
   color: #1f2933;
   border-radius: 7px;
   padding: 8px 12px;
-  cursor: pointer;
 }
 
-.input-row button {
+.composer-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: #1f2933;
   border-color: #1f2933;
   color: #ffffff;
 }
 
-.input-row button:disabled {
-  opacity: 0.65;
+.composer-row button:disabled {
+  opacity: 0.6;
   cursor: default;
 }
 
@@ -115,8 +172,32 @@ h1 {
   gap: 8px;
 }
 
-.chips {
-  margin-top: 14px;
+.quick-replies,
+.sections-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.quick-question {
+  border: 1px solid #d9dee6;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.tool-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tool-strip span {
+  border: 1px solid #d4dae3;
+  border-radius: 6px;
+  color: #5c6675;
+  font-size: 12px;
+  padding: 3px 6px;
 }
 
 .notice {
@@ -132,23 +213,9 @@ h1 {
   color: #8a1f1f;
 }
 
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  border-bottom: 1px solid #e5e9ef;
-  padding-bottom: 16px;
-}
-
-.sections-grid {
-  display: grid;
-  gap: 18px;
-  margin-top: 18px;
-}
-
 .section-block {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .section-block h3 {
@@ -157,8 +224,8 @@ h1 {
 
 .card-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
 }
 
 .card-list.compact {
@@ -166,11 +233,10 @@ h1 {
 }
 
 .result-card,
-.question-card,
 .comparison-box {
   border: 1px solid #d9dee6;
   border-radius: 8px;
-  padding: 14px;
+  padding: 12px;
   background: #ffffff;
   display: grid;
   gap: 10px;
@@ -268,18 +334,18 @@ h1 {
 
 @media (max-width: 720px) {
   .app-shell {
-    padding: 16px;
+    padding: 16px 16px 116px;
   }
 
-  .input-row {
-    grid-template-columns: 20px 1fr;
+  .composer {
+    width: calc(100vw - 24px);
   }
 
-  .input-row button {
-    grid-column: 1 / -1;
+  .turn.user .turn-body {
+    max-width: 94%;
   }
 
-  .summary-row {
-    flex-direction: column;
+  .composer-row {
+    grid-template-columns: 1fr 42px;
   }
 }
