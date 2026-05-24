@@ -127,6 +127,55 @@ class LocalEmbeddingClient(EmbeddingClient):
         return results
 
 
+class OpenAIEmbeddingClient(EmbeddingClient):
+    provider = "openai"
+
+    def __init__(
+        self,
+        model: str | None = None,
+        expected_dimension: int | None = None,
+        normalize: bool | None = None,
+        batch_size: int = 2048,
+    ):
+        settings = get_settings()
+        self.model = model or settings.openai_embedding_model
+        self.expected_dimension = expected_dimension or settings.embedding_dimension
+        self.normalized = settings.embedding_normalize if normalize is None else normalize
+        self.batch_size = batch_size
+        if not settings.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is required for OpenAI embeddings")
+        from openai import OpenAI
+        self._client = OpenAI(api_key=settings.openai_api_key)
+        # Dimension is determined by the API (we request it via dimensions param)
+        self.dimension = self.expected_dimension
+
+    def embed_texts(self, texts: list[str]) -> list[EmbeddingResult]:
+        if not texts:
+            return []
+        all_results: list[EmbeddingResult] = []
+        for i in range(0, len(texts), self.batch_size):
+            batch = texts[i:i + self.batch_size]
+            response = self._client.embeddings.create(
+                input=batch,
+                model=self.model,
+                dimensions=self.expected_dimension,
+            )
+            for item in response.data:
+                values = list(item.embedding)
+                if self.normalized:
+                    values = normalize_vector(values)
+                all_results.append(
+                    EmbeddingResult(
+                        vector=values,
+                        provider=self.provider,
+                        model=self.model,
+                        dimension=len(values),
+                        normalized=self.normalized,
+                    )
+                )
+        return all_results
+
+
 class MockEmbeddingClient(EmbeddingClient):
     provider = "mock"
 

@@ -6,9 +6,20 @@ import json
 from app.config import get_settings
 from app.db.connection import get_engine
 from app.db.repositories.search_index import SearchIndexRepository
-from app.llm.embedding_client import EmbeddingClient, LocalEmbeddingClient, validate_dimension
+from app.llm.embedding_client import EmbeddingClient, LocalEmbeddingClient, OpenAIEmbeddingClient, validate_dimension
 from app.utils.logging import configure_logging
 from app.workers.build_search_index import parse_object_types
+
+
+def _build_client(settings, model_override: str | None = None) -> EmbeddingClient:
+    """Build the appropriate embedding client based on EMBEDDING_PROVIDER config."""
+    provider = settings.embedding_provider
+    if provider == "openai":
+        return OpenAIEmbeddingClient(model=model_override)
+    elif provider == "local":
+        return LocalEmbeddingClient(model=model_override)
+    else:
+        raise ValueError(f"Unknown embedding provider: {provider!r}. Use 'openai' or 'local'.")
 
 
 def embed_search_index(
@@ -36,7 +47,7 @@ def embed_search_index(
                     for item in items[:5]
                 ],
             }
-        embedding_client = client or LocalEmbeddingClient(model=model)
+        embedding_client = client or _build_client(settings, model)
         embedded = 0
         failed = 0
         texts = [(item.get("search_text") or "")[:max_chars] for item in items]
@@ -63,8 +74,8 @@ def embed_search_index(
                 failed += 1
     return {
         "dry_run": False,
-        "provider": (client.provider if client else "local"),
-        "model": model or (client.model if client else settings.local_embedding_model),
+        "provider": embedding_client.provider,
+        "model": model or embedding_client.model,
         "embedded": embedded,
         "failed": failed,
     }

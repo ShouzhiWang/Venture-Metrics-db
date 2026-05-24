@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     )
     openai_batch_prompt_version: str = Field(default="codebook_extraction_v1", alias="OPENAI_BATCH_PROMPT_VERSION")
     embedding_provider: str = Field(default="local", alias="EMBEDDING_PROVIDER")
+    openai_embedding_model: str = Field(default="text-embedding-3-small", alias="OPENAI_EMBEDDING_MODEL")
     local_embedding_model: str = Field(default="Qwen/Qwen3-Embedding-0.6B", alias="LOCAL_EMBEDDING_MODEL")
     local_embedding_fallback_model: str = Field(default="BAAI/bge-m3", alias="LOCAL_EMBEDDING_FALLBACK_MODEL")
     embedding_dimension: int = Field(default=1024, alias="EMBEDDING_DIMENSION")

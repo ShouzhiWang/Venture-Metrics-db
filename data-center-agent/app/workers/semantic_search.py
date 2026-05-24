@@ -6,9 +6,20 @@ import json
 from app.config import get_settings
 from app.db.connection import get_engine
 from app.db.repositories.search_index import SearchIndexRepository
-from app.llm.embedding_client import EmbeddingClient, LocalEmbeddingClient
+from app.llm.embedding_client import EmbeddingClient, LocalEmbeddingClient, OpenAIEmbeddingClient
 from app.utils.logging import configure_logging
 from app.workers.build_search_index import parse_object_types
+
+
+def _build_search_client(settings, model_override: str | None = None) -> EmbeddingClient:
+    """Build the appropriate embedding client based on EMBEDDING_PROVIDER config."""
+    provider = settings.embedding_provider
+    if provider == "openai":
+        return OpenAIEmbeddingClient(model=model_override)
+    elif provider == "local":
+        return LocalEmbeddingClient(model=model_override)
+    else:
+        raise ValueError(f"Unknown embedding provider: {provider!r}")
 
 
 def semantic_search(
@@ -21,9 +32,10 @@ def semantic_search(
     filters: dict | None = None,
 ) -> dict:
     settings = get_settings()
-    provider = client.provider if client else settings.embedding_provider
-    model = client.model if client else settings.local_embedding_model
-    dimension = client.dimension if client else settings.embedding_dimension
+    embedding_client = client or _build_search_client(settings)
+    provider = embedding_client.provider
+    model = embedding_client.model
+    dimension = embedding_client.dimension
     engine = get_engine()
     with engine.begin() as connection:
         repo = SearchIndexRepository(connection)
@@ -35,7 +47,6 @@ def semantic_search(
                 "warning": f"No embedded search_index rows found for provider={provider}, model={model}, dimension={dimension}.",
                 "results": [_format_result(row) for row in rows],
             }
-        embedding_client = client or LocalEmbeddingClient(model=model)
         embedded_query = embedding_client.embed_text(query)
         if hybrid:
             rows = repo.hybrid_search(

@@ -16,30 +16,41 @@ except ImportError:  # pragma: no cover - project installs trafilatura; fallback
 
 
 ORG_TYPE_TERMS = {
-    "accelerator": ("accelerator", "incubator", "venture studio"),
-    "association": ("association", "chamber", "alliance", "network", "coalition"),
-    "vc_group": ("venture capital", " vc ", "investor", "fund"),
-    "government_agency": ("government", "ministry", "agency", ".gov", "authority"),
+    "accelerator": ("accelerator", "incubator", "venture studio", "孵化器", "加速器", "创业服务中心"),
+    "association": ("association", "chamber", "alliance", "network", "coalition",
+                    "协会", "公会", "商会", "联盟", "联会", "促进会", "联合会"),
+    "vc_group": ("venture capital", " vc ", "investor", "fund",
+                 "创投", "私募", "天使投资", "风投", "基金"),
+    "government_agency": ("government", "ministry", "agency", ".gov", "authority",
+                          "政府", "局", "委员会", "办公室"),
     "directory": ("directory", "members", "member directory", "ecosystem map", "startup database"),
-    "university": ("university", "college", "research institute"),
-    "nonprofit": ("nonprofit", "non-profit", "foundation"),
+    "university": ("university", "college", "research institute",
+                   "大学", "学院", "研究院", "实验室", "研究中心"),
+    "nonprofit": ("nonprofit", "non-profit", "foundation",
+                  "基金会", "非营利", "非盈利", "慈善"),
+    "industry_group": ("industry", "chamber of commerce", "trade",
+                       "产业", "行业", "工业", "电子", "半导体", "新能源", "无人机"),
 }
 
 GEOGRAPHY_TERMS = (
-    "Singapore",
-    "Hong Kong",
-    "Shenzhen",
-    "China",
-    "Asia",
-    "Malaysia",
-    "Indonesia",
-    "Vietnam",
-    "Thailand",
-    "India",
-    "Japan",
-    "Korea",
-    "United States",
-    "United Kingdom",
+    "Singapore", "新加坡",
+    "Hong Kong", "香港",
+    "Shenzhen", "深圳",
+    "China", "中国", "中国内地",
+    "Asia", "亚洲",
+    "Malaysia", "马来西亚",
+    "Indonesia", "印度尼西亚", "印尼",
+    "Vietnam", "越南",
+    "Thailand", "泰国",
+    "India", "印度",
+    "Japan", "日本",
+    "Korea", "韩国",
+    "United States", "美国",
+    "United Kingdom", "英国",
+    "Guangdong", "广东",
+    "Beijing", "北京",
+    "Shanghai", "上海",
+    "Greater Bay Area", "大湾区", "粤港澳大湾区",
 )
 
 REPORT_TERMS = ("report", "white paper", "whitepaper", "methodology", "executive summary", "appendix")
@@ -185,9 +196,38 @@ def infer_organization_type(text: str) -> str | None:
 
 def infer_geography(text: str) -> str | None:
     lowered = text.lower()
-    for geography in GEOGRAPHY_TERMS:
-        if geography.lower() in lowered:
-            return geography
+    # Priority order: specific cities first, then regions
+    # This prevents "Hong Kong" matching before "Shenzhen" in texts like "香港中文大学（深圳）"
+    CITY_PRIORITY = (
+        ("Shenzhen", ("shenzhen", "深圳")),
+        ("Hong Kong", ("hong kong", "香港")),
+        ("Singapore", ("singapore", "新加坡")),
+        ("Beijing", ("beijing", "北京")),
+        ("Shanghai", ("shanghai", "上海")),
+    )
+    REGION_PRIORITY = (
+        ("Greater Bay Area", ("greater bay area", "大湾区", "粤港澳大湾区")),
+        ("Guangdong", ("guangdong", "广东")),
+        ("China", ("china", "中国")),
+        ("Asia", ("asia", "亚洲")),
+        ("Malaysia", ("malaysia", "马来西亚")),
+        ("Indonesia", ("indonesia", "印度尼西亚", "印尼")),
+        ("Vietnam", ("vietnam", "越南")),
+        ("Thailand", ("thailand", "泰国")),
+        ("India", ("india", "印度")),
+        ("Japan", ("japan", "日本")),
+        ("Korea", ("korea", "韩国")),
+        ("United States", ("united states", "美国")),
+        ("United Kingdom", ("united kingdom", "英国")),
+    )
+    # Check cities first (more specific)
+    for english_name, keywords in CITY_PRIORITY:
+        if any(kw in lowered for kw in keywords):
+            return english_name
+    # Then regions
+    for english_name, keywords in REGION_PRIORITY:
+        if any(kw in lowered for kw in keywords):
+            return english_name
     return None
 
 
