@@ -327,6 +327,24 @@ Deployment notes for Hermes:
 - Keep secrets only on the backend host; the frontend has no database credentials.
 - Keep the API route allowlist limited to `web/backend/services/tool_client.py`.
 
+Docker deployment:
+
+```bash
+cd data-center-agent
+cp web/.env.demo.example web/.env.demo
+docker compose --env-file web/.env.demo -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+```
+
+This starts:
+
+- `postgres`: existing pgvector database.
+- `web-api`: FastAPI demo API, reachable only inside the Compose network.
+- `web`: Nginx serving the built React app and proxying `/api/*` to `web-api`.
+
+By default the public demo listens on `http://127.0.0.1:8080` if run locally, or port `8080` on the server unless `WEB_PORT` is changed.
+
+For public exposure, put your server-level Nginx or load balancer in front of the `web` service. The frontend Nginx config is at `web/frontend/nginx.conf`; it includes security headers and commented Basic Auth directives. To enable Basic Auth inside the container, mount an htpasswd file at `/etc/nginx/.htpasswd` and uncomment the `auth_basic` lines.
+
 Current limitations:
 
 - The answer text is deterministic and summarizes tool output; it does not use an LLM answer generator.

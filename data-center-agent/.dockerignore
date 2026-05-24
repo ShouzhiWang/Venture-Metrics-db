@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.git/
+
+data/input/*
+data/raw/*
+data/parsed/*
+backups/*
+
+web/frontend/node_modules/
+web/frontend/dist/
