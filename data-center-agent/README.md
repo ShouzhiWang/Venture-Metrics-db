@@ -23,6 +23,24 @@ cp .env.example .env
 
 For OpenAI Batch extraction, set `OPENAI_API_KEY` in `.env`. Optional batch settings include `OPENAI_BATCH_MODEL`, `OPENAI_BATCH_REVIEW_MODEL`, `OPENAI_BATCH_MAX_INPUT_TOKENS_PER_REPORT`, and `OPENAI_BATCH_PROMPT_VERSION`.
 
+For local embedding-powered search, install the embeddings extra:
+
+```bash
+pip install -e ".[embeddings]"
+```
+
+Configure one active embedding model at a time:
+
+```bash
+EMBEDDING_PROVIDER=local
+LOCAL_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
+LOCAL_EMBEDDING_FALLBACK_MODEL=BAAI/bge-m3
+EMBEDDING_DIMENSION=1024
+EMBEDDING_NORMALIZE=true
+```
+
+The retrieval layer does not require `OPENAI_API_KEY`, and it does not call OpenAI for embeddings. If you switch `LOCAL_EMBEDDING_MODEL`, rebuild the `search_index` embeddings before semantic search so a query is never compared against vectors from a different model.
+
 ## Docker PostgreSQL
 
 ```bash
@@ -164,6 +182,42 @@ Run keyword search over chunks and report variables:
 ```bash
 python -m app.workers.ask "employment rate definition"
 ```
+
+Build the rebuildable retrieval index without embedding anything:
+
+```bash
+python -m app.workers.build_search_index --object-types variable,report,source --limit 100 --dry-run
+python -m app.workers.build_search_index --object-types variable,report,source,dataset --limit 100
+```
+
+Embed a small pending batch with the active local model:
+
+```bash
+python -m app.workers.embed_search_index --limit 20
+```
+
+The embedding worker loads `LOCAL_EMBEDDING_MODEL`, probes the actual dimension, validates it against `EMBEDDING_DIMENSION`, normalizes vectors when `EMBEDDING_NORMALIZE=true`, and stores provider/model/dimension metadata alongside `vector(1024)` embeddings. If Qwen3 loading fails and `LOCAL_EMBEDDING_FALLBACK_MODEL` is configured, it tries BGE-M3 and records the actual model used.
+
+Run semantic or hybrid search. If no compatible embeddings exist, the worker falls back to keyword search and prints a warning:
+
+```bash
+python -m app.workers.semantic_search "startup funding in Singapore" --limit 10 --hybrid --json
+```
+
+Ask the data discovery worker for user-style requests:
+
+```bash
+python -m app.workers.find_data "I want data about SME digital adoption in Singapore" --limit 10 --json
+python -m app.workers.find_data "VC deal count by stage" --public-only --json
+```
+
+Export fixed retrieval evaluation queries for manual inspection:
+
+```bash
+python -m app.workers.evaluate_search_quality --limit 10
+```
+
+`search_index` is additive and rebuildable. Core records stay in `sources`, `reports`, `report_variables`, `datasets`, and `document_chunks`. Chunk indexing is intentionally limited to high-value chunks or evidence-linked chunks; the default build indexes variables, reports, sources, and datasets. Embeddings improve retrieval quality but are not required for ingestion, parsing, source resolution, or codebook extraction.
 
 ## Data Layout
 

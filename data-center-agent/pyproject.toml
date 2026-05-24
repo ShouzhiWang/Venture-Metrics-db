@@ -28,6 +28,10 @@ dev = [
   "pytest>=8.0.0",
   "pytest-postgresql>=6.0.0",
 ]
+embeddings = [
+  "sentence-transformers>=3.0.0",
+  "torch>=2.2.0",
+]
 browser = [
   "playwright>=1.42.0",
 ]
