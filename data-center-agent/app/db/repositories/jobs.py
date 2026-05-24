@@ -27,3 +27,11 @@ class JobRepository(BaseRepository):
         result = row_to_dict(row)
         assert result is not None
         return result
+
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        return row_to_dict(
+            self.connection.execute(
+                text("SELECT * FROM ingestion_jobs WHERE id = :id"),
+                {"id": str(job_id)},
+            ).first()
+        )

@@ -34,6 +34,7 @@ def find_data(
     geography: str | None = None,
     time_range: str | None = None,
     client: EmbeddingClient | None = None,
+    search_fn=None,
 ) -> dict:
     intent = parse_query_intent(query, geography=geography, time_range=time_range, public_only=public_only)
     filters = {
@@ -41,7 +42,8 @@ def find_data(
         "geography": intent.get("geography"),
         "time_range": intent.get("time_range"),
     }
-    search = semantic_search(
+    search_callable = search_fn or semantic_search
+    search = search_callable(
         query,
         object_types=["variable", "dataset", "report", "source", "organization"],
         limit=max(limit * 3, 20),

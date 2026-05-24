@@ -10,6 +10,7 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://postgres:postgres@localhost:5432/data_center_agent",
         alias="DATABASE_URL",
     )
+    demo_read_database_url: str | None = Field(default=None, alias="DEMO_READ_DATABASE_URL")
     storage_root: Path = Field(default=Path("data"), alias="STORAGE_ROOT")
     http_timeout_seconds: int = Field(default=30, alias="HTTP_TIMEOUT_SECONDS")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

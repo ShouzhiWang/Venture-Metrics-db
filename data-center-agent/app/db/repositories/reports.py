@@ -54,6 +54,27 @@ class ReportRepository(BaseRepository):
             ).first()
         )
 
+    def get_detail(self, report_id: UUID | str) -> dict[str, Any] | None:
+        return row_to_dict(
+            self.connection.execute(
+                text(
+                    """
+                    SELECT
+                      r.*,
+                      s.original_url AS source_url,
+                      s.source_type AS source_type,
+                      s.access_type AS source_access_type,
+                      s.source_role AS source_role,
+                      s.resolution_status AS source_resolution_status
+                    FROM reports r
+                    LEFT JOIN sources s ON s.id = r.source_id
+                    WHERE r.id = :id
+                    """
+                ),
+                {"id": str(report_id)},
+            ).first()
+        )
+
     def update_paths(self, report_id: UUID | str, *, raw_text_path: str | None, parsed_json_path: str | None = None) -> None:
         self.connection.execute(
             text(

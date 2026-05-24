@@ -75,6 +75,61 @@ class VariableRepository(BaseRepository):
         )
         return [dict(row._mapping) for row in rows]
 
+    def get_detail(self, variable_id: UUID | str) -> dict[str, Any] | None:
+        return row_to_dict(
+            self.connection.execute(
+                text(
+                    """
+                    SELECT
+                      v.*,
+                      r.title AS report_title,
+                      r.publisher AS report_publisher,
+                      r.report_year AS report_year,
+                      r.geography AS report_geography,
+                      s.original_url AS source_url,
+                      c.chunk_text AS evidence_chunk_text,
+                      c.page_number AS evidence_page_number
+                    FROM report_variables v
+                    LEFT JOIN reports r ON r.id = v.report_id
+                    LEFT JOIN sources s ON s.id = r.source_id
+                    LEFT JOIN document_chunks c ON c.id = v.evidence_chunk_id
+                    WHERE v.id = :id
+                    """
+                ),
+                {"id": str(variable_id)},
+            ).first()
+        )
+
+    def compare_concepts(self, query: str, report_ids: list[str] | None = None, limit: int = 25) -> list[dict[str, Any]]:
+        try:
+            UUID(query)
+            where = ["(v.id = CAST(:concept_id AS uuid) OR v.variable_id = CAST(:concept_id AS uuid))"]
+            params: dict[str, Any] = {"concept_id": query, "pattern": f"%{query}%", "limit": limit}
+        except ValueError:
+            where = ["(v.raw_variable_name ILIKE :pattern OR v.definition ILIKE :pattern)"]
+            params = {"pattern": f"%{query}%", "limit": limit}
+        if report_ids:
+            where.append("v.report_id = ANY(CAST(:report_ids AS uuid[]))")
+            params["report_ids"] = [str(report_id) for report_id in report_ids]
+        rows = self.connection.execute(
+            text(
+                f"""
+                SELECT
+                  v.id, v.report_id, v.raw_variable_name, v.definition,
+                  v.measurement_method, v.unit, v.temporal_coverage,
+                  v.geographic_coverage, v.confidence_score, v.review_status,
+                  r.title AS report_title, r.report_year, r.geography AS report_geography
+                FROM report_variables v
+                LEFT JOIN reports r ON r.id = v.report_id
+                WHERE {' AND '.join(where)}
+                ORDER BY v.confidence_score DESC NULLS LAST, v.updated_at DESC
+                LIMIT :limit
+                """
+            ),
+            params,
+        )
+        return [dict(row._mapping) for row in rows]
+
     def keyword_search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         rows = self.connection.execute(
             text(

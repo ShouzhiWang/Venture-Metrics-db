@@ -65,6 +65,32 @@ class SourceRepository(BaseRepository):
             ).first()
         )
 
+    def get_detail(self, source_id: UUID | str) -> dict[str, Any] | None:
+        return row_to_dict(
+            self.connection.execute(
+                text(
+                    """
+                    SELECT
+                      s.*,
+                      r.id AS report_id,
+                      r.title AS report_title,
+                      d.id AS dataset_id,
+                      d.dataset_name AS dataset_name,
+                      o.id AS organization_id,
+                      o.name AS organization_name
+                    FROM sources s
+                    LEFT JOIN reports r ON r.source_id = s.id
+                    LEFT JOIN datasets d ON d.source_id = s.id
+                    LEFT JOIN ecosystem_organizations o ON o.source_id = s.id
+                    WHERE s.id = :id
+                    ORDER BY r.created_at DESC NULLS LAST, d.created_at DESC NULLS LAST
+                    LIMIT 1
+                    """
+                ),
+                {"id": str(source_id)},
+            ).first()
+        )
+
     def create_child_source(
         self,
         *,

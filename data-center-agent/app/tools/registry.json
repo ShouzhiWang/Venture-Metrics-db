@@ -1,0 +1,72 @@
+[
+  {
+    "name": "find_data",
+    "args": {"query": "string", "limit": "integer?", "public_only": "boolean?", "geography": "string?", "time_range": "string?"},
+    "return_schema": {"ok": "boolean", "tool": "find_data", "data": "discovery result"},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "semantic_search",
+    "args": {"query": "string", "object_types": "string[]?", "limit": "integer?"},
+    "return_schema": {"ok": "boolean", "tool": "semantic_search", "data": {"query": "string", "mode": "string", "results": "array"}},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "get_variable_detail",
+    "args": {"variable_id": "uuid"},
+    "return_schema": {"ok": "boolean", "tool": "get_variable_detail", "data": "variable detail object"},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "get_report_detail",
+    "args": {"report_id": "uuid"},
+    "return_schema": {"ok": "boolean", "tool": "get_report_detail", "data": "report detail object"},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "get_source_detail",
+    "args": {"source_id": "uuid"},
+    "return_schema": {"ok": "boolean", "tool": "get_source_detail", "data": "source detail object"},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "get_organization_detail",
+    "args": {"organization_id": "uuid"},
+    "return_schema": {"ok": "boolean", "tool": "get_organization_detail", "data": "organization detail object"},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "compare_concepts",
+    "args": {"query_or_concept_id": "string", "report_ids": "uuid[]?"},
+    "return_schema": {"ok": "boolean", "tool": "compare_concepts", "data": {"query_or_concept_id": "string", "comparisons": "array"}},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "list_available_filters",
+    "args": {},
+    "return_schema": {"ok": "boolean", "tool": "list_available_filters", "data": "filter option object"},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "job_status",
+    "args": {"job_id": "uuid"},
+    "return_schema": {"ok": "boolean", "tool": "job_status", "data": "job status object"},
+    "risk": "read",
+    "demo_safe": true
+  },
+  {
+    "name": "submit_feedback",
+    "args": {"answer_id": "string?", "result_id": "string?", "feedback_type": "string", "comment": "string?"},
+    "return_schema": {"ok": "boolean", "tool": "submit_feedback", "data": "created feedback object"},
+    "risk": "low_write",
+    "demo_safe": true
+  }
+]

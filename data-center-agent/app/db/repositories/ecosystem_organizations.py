@@ -16,6 +16,25 @@ class EcosystemOrganizationRepository(BaseRepository):
             ).first()
         )
 
+    def get_detail(self, organization_id: UUID | str) -> dict[str, Any] | None:
+        return row_to_dict(
+            self.connection.execute(
+                text(
+                    """
+                    SELECT
+                      o.*,
+                      s.original_url AS source_url,
+                      s.access_type AS source_access_type,
+                      s.source_role AS source_role
+                    FROM ecosystem_organizations o
+                    LEFT JOIN sources s ON s.id = o.source_id
+                    WHERE o.id = :id
+                    """
+                ),
+                {"id": str(organization_id)},
+            ).first()
+        )
+
     def get_by_source(self, source_id: UUID | str) -> dict[str, Any] | None:
         return row_to_dict(
             self.connection.execute(

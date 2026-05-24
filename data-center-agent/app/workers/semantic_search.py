@@ -30,47 +30,93 @@ def semantic_search(
     hybrid: bool = False,
     client: EmbeddingClient | None = None,
     filters: dict | None = None,
+    connection=None,
 ) -> dict:
     settings = get_settings()
-    embedding_client = client or _build_search_client(settings)
-    provider = embedding_client.provider
-    model = embedding_client.model
-    dimension = embedding_client.dimension
+    provider = client.provider if client else settings.embedding_provider
+    model = client.model if client else (
+        settings.openai_embedding_model if settings.embedding_provider == "openai" else settings.local_embedding_model
+    )
+    dimension = client.dimension if client else settings.embedding_dimension
+    if connection is not None:
+        return _semantic_search_with_connection(
+            connection,
+            query,
+            object_types=object_types,
+            limit=limit,
+            hybrid=hybrid,
+            embedding_client=client,
+            settings=settings,
+            filters=filters,
+            provider=provider,
+            model=model,
+            dimension=dimension,
+        )
     engine = get_engine()
-    with engine.begin() as connection:
-        repo = SearchIndexRepository(connection)
-        if repo.embedded_count(provider=provider, model=model, dimension=dimension) == 0:
-            rows = repo.keyword_search(query, object_types=object_types, limit=limit, filters=filters)
-            return {
-                "query": query,
-                "mode": "keyword_fallback",
-                "warning": f"No embedded search_index rows found for provider={provider}, model={model}, dimension={dimension}.",
-                "results": [_format_result(row) for row in rows],
-            }
-        embedded_query = embedding_client.embed_text(query)
-        if hybrid:
-            rows = repo.hybrid_search(
-                query,
-                embedded_query.vector,
-                provider=embedded_query.provider,
-                model=embedded_query.model,
-                dimension=embedded_query.dimension,
-                object_types=object_types,
-                limit=limit,
-                filters=filters,
-            )
-            mode = "hybrid"
-        else:
-            rows = repo.semantic_search(
-                embedded_query.vector,
-                provider=embedded_query.provider,
-                model=embedded_query.model,
-                dimension=embedded_query.dimension,
-                object_types=object_types,
-                limit=limit,
-                filters=filters,
-            )
-            mode = "semantic"
+    with engine.begin() as db_connection:
+        return _semantic_search_with_connection(
+            db_connection,
+            query,
+            object_types=object_types,
+            limit=limit,
+            hybrid=hybrid,
+            embedding_client=client,
+            settings=settings,
+            filters=filters,
+            provider=provider,
+            model=model,
+            dimension=dimension,
+        )
+
+
+def _semantic_search_with_connection(
+    connection,
+    query: str,
+    *,
+    object_types: list[str] | None,
+    limit: int,
+    hybrid: bool,
+    embedding_client: EmbeddingClient | None,
+    settings,
+    filters: dict | None,
+    provider: str,
+    model: str,
+    dimension: int,
+) -> dict:
+    repo = SearchIndexRepository(connection)
+    if repo.embedded_count(provider=provider, model=model, dimension=dimension) == 0:
+        rows = repo.keyword_search(query, object_types=object_types, limit=limit, filters=filters)
+        return {
+            "query": query,
+            "mode": "keyword_fallback",
+            "warning": f"No embedded search_index rows found for provider={provider}, model={model}, dimension={dimension}.",
+            "results": [_format_result(row) for row in rows],
+        }
+    active_client = embedding_client or _build_search_client(settings, model_override=model)
+    embedded_query = active_client.embed_text(query)
+    if hybrid:
+        rows = repo.hybrid_search(
+            query,
+            embedded_query.vector,
+            provider=embedded_query.provider,
+            model=embedded_query.model,
+            dimension=embedded_query.dimension,
+            object_types=object_types,
+            limit=limit,
+            filters=filters,
+        )
+        mode = "hybrid"
+    else:
+        rows = repo.semantic_search(
+            embedded_query.vector,
+            provider=embedded_query.provider,
+            model=embedded_query.model,
+            dimension=embedded_query.dimension,
+            object_types=object_types,
+            limit=limit,
+            filters=filters,
+        )
+        mode = "semantic"
     return {"query": query, "mode": mode, "results": [_format_result(row) for row in rows]}
 
 

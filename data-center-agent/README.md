@@ -211,6 +211,42 @@ python -m app.workers.find_data "I want data about SME digital adoption in Singa
 python -m app.workers.find_data "VC deal count by stage" --public-only --json
 ```
 
+## Demo-safe tools
+
+The demo chatbot must call only the allowlisted tool surface in `app.tools.demo`. It does not expose arbitrary shell commands, ingestion, deletion, migrations, embedding rebuilds, report parsing, LLM batch creation/import, or other batch-processing workers.
+
+Read tools use `DEMO_READ_DATABASE_URL` when set, otherwise `DATABASE_URL`, and run inside a read-only transaction where supported by the database. `submit_feedback` is the only demo-safe write tool.
+
+Run a tool from CLI:
+
+```bash
+python -m app.tools.demo find_data --args '{"query":"startup funding in Singapore","limit":3,"public_only":true}'
+python -m app.tools.demo semantic_search --args '{"query":"VC deal count","object_types":["variable","dataset"],"limit":3}'
+python -m app.tools.demo get_variable_detail --args '{"variable_id":"<variable_uuid>"}'
+python -m app.tools.demo get_report_detail --args '{"report_id":"<report_uuid>"}'
+python -m app.tools.demo get_source_detail --args '{"source_id":"<source_uuid>"}'
+python -m app.tools.demo get_organization_detail --args '{"organization_id":"<organization_uuid>"}'
+python -m app.tools.demo compare_concepts --args '{"query_or_concept_id":"venture funding","report_ids":["<report_uuid>"]}'
+python -m app.tools.demo list_available_filters --args '{}'
+python -m app.tools.demo job_status --args '{"job_id":"<job_uuid>"}'
+python -m app.tools.demo submit_feedback --args '{"answer_id":"answer-123","feedback_type":"thumbs_up","comment":"Useful result."}'
+python -m app.tools.demo readiness_report
+```
+
+Every tool returns structured JSON:
+
+```json
+{"ok": true, "tool": "find_data", "data": {}}
+```
+
+Errors use a stable shape:
+
+```json
+{"ok": false, "tool": "find_data", "error": {"code": "invalid_args", "message": "query is required."}}
+```
+
+The registries in `app/tools/registry.py` and `app/tools/registry.json` document each tool name, arguments, return shape, read/write risk, and demo-safe status. The readiness report is in `DEMO_TOOL_READINESS_REPORT.md`.
+
 Export fixed retrieval evaluation queries for manual inspection:
 
 ```bash
