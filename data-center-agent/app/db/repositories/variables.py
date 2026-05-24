@@ -116,7 +116,7 @@ class VariableRepository(BaseRepository):
                 f"""
                 SELECT
                   v.id, v.report_id, v.raw_variable_name, v.definition,
-                  v.measurement_method, v.unit, v.temporal_coverage,
+                  v.measurement_method, v.unit, v.data_source_text, v.data_source_type, v.temporal_coverage,
                   v.geographic_coverage, v.confidence_score, v.review_status,
                   r.title AS report_title, r.report_year, r.geography AS report_geography
                 FROM report_variables v

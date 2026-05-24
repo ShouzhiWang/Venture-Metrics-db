@@ -9,6 +9,7 @@
 - `get_source_detail`
 - `get_organization_detail`
 - `compare_concepts`
+- `compare_concepts_auto`
 - `list_available_filters`
 - `job_status`
 - `submit_feedback`
@@ -59,6 +60,7 @@ python -m app.tools.demo get_report_detail --args '{"report_id":"<report_uuid>"}
 python -m app.tools.demo get_source_detail --args '{"source_id":"<source_uuid>"}'
 python -m app.tools.demo get_organization_detail --args '{"organization_id":"<organization_uuid>"}'
 python -m app.tools.demo compare_concepts --args '{"query_or_concept_id":"venture funding","report_ids":["<report_uuid>"]}'
+python -m app.tools.demo compare_concepts_auto --args '{"query":"Compare startup funding definitions across reports","limit_reports":5}'
 python -m app.tools.demo list_available_filters --args '{}'
 python -m app.tools.demo job_status --args '{"job_id":"<job_uuid>"}'
 python -m app.tools.demo submit_feedback --args '{"answer_id":"answer-123","feedback_type":"thumbs_up","comment":"Useful result."}'

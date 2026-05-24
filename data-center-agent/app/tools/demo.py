@@ -15,6 +15,7 @@ from app.db.repositories.reports import ReportRepository
 from app.db.repositories.search_index import SearchIndexRepository
 from app.db.repositories.sources import SourceRepository
 from app.db.repositories.variables import VariableRepository
+from app.services.compare_concepts_auto import compare_concepts_auto
 from app.tools.registry import DEMO_TOOL_REGISTRY, UNSAFE_TOOLS_NOT_EXPOSED
 from app.utils.logging import configure_logging
 from app.workers.find_data import find_data as find_data_worker
@@ -29,6 +30,7 @@ READ_TOOL_NAMES = {
     "get_source_detail",
     "get_organization_detail",
     "compare_concepts",
+    "compare_concepts_auto",
     "list_available_filters",
     "job_status",
 }
@@ -137,10 +139,21 @@ def _call_read_tool(name: str, args: dict[str, Any], connection) -> Any:
     if name == "compare_concepts":
         query = require_string(args, "query_or_concept_id")
         report_ids = args.get("report_ids")
-        if report_ids is not None and not isinstance(report_ids, list):
-            raise ValueError("report_ids must be an array when provided.")
+        if not isinstance(report_ids, list) or not report_ids:
+            raise ValueError("report_ids must be a non-empty array for compare_concepts. Use compare_concepts_auto for natural-language comparison.")
         rows = VariableRepository(connection).compare_concepts(query, report_ids=report_ids)
         return {"query_or_concept_id": query, "report_ids": report_ids or [], "comparisons": rows}
+    if name == "compare_concepts_auto":
+        return compare_concepts_auto(
+            require_string(args, "query"),
+            connection=connection,
+            limit_reports=optional_int(args, "limit_reports", 5, minimum=2, maximum=5),
+            limit_variables=optional_int(args, "limit_variables", 20, minimum=1, maximum=50),
+            geography=args.get("geography"),
+            public_only=bool(args.get("public_only", False)),
+            min_confidence=optional_float(args, "min_confidence"),
+            object_types=validate_object_types(args.get("object_types")) or ["variable", "report"],
+        )
     if name == "list_available_filters":
         return _list_available_filters(connection)
     if name == "job_status":
@@ -204,6 +217,15 @@ def optional_int(args: dict[str, Any], key: str, default: int, *, minimum: int, 
     return min(max(value, minimum), maximum)
 
 
+def optional_float(args: dict[str, Any], key: str) -> float | None:
+    value = args.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"{key} must be a number.")
+    return float(value)
+
+
 def validate_object_types(value: Any) -> list[str] | None:
     if value is None:
         return None
@@ -224,6 +246,7 @@ def readiness_report() -> dict[str, Any]:
         "get_source_detail": {"source_id": "<source_uuid>"},
         "get_organization_detail": {"organization_id": "<organization_uuid>"},
         "compare_concepts": {"query_or_concept_id": "venture funding", "report_ids": ["<report_uuid>"]},
+        "compare_concepts_auto": {"query": "Compare startup funding definitions across reports", "limit_reports": 5},
         "list_available_filters": {},
         "job_status": {"job_id": "<job_uuid>"},
         "submit_feedback": {"answer_id": "answer-123", "feedback_type": "thumbs_up", "comment": "Useful result."},

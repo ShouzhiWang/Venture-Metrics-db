@@ -156,6 +156,29 @@ def test_compare_concepts_tool(monkeypatch):
     assert result["data"]["comparisons"][0]["raw_variable_name"] == "funding"
 
 
+def test_compare_concepts_auto_tool(monkeypatch):
+    install_common_fakes(monkeypatch)
+
+    monkeypatch.setattr(
+        demo,
+        "compare_concepts_auto",
+        lambda query, **kwargs: {
+            "query": query,
+            "status": "ok",
+            "selected_reports": [],
+            "comparison": {"summary": "Compared reports", "comparability": "medium"},
+            "limitations": [],
+            "clarifying_questions": [],
+            "metadata": {"tool_chain": ["semantic_search", "find_data", "compare_concepts"]},
+        },
+    )
+
+    result = demo.call_tool("compare_concepts_auto", {"query": "Compare startup funding definitions"})
+
+    assert result["ok"] is True
+    assert result["data"]["status"] == "ok"
+
+
 def test_list_available_filters_tool(monkeypatch):
     install_common_fakes(monkeypatch)
 
@@ -190,3 +213,10 @@ def test_unsafe_tool_is_not_exposed(monkeypatch):
 
     assert result["ok"] is False
     assert result["error"]["code"] == "tool_not_allowed"
+
+
+def test_registry_marks_compare_concepts_auto_demo_safe():
+    registry = {tool["name"]: tool for tool in demo.DEMO_TOOL_REGISTRY}
+
+    assert registry["compare_concepts_auto"]["risk"] == "read_only"
+    assert registry["compare_concepts_auto"]["demo_safe"] is True

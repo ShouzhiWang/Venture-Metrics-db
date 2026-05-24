@@ -227,6 +227,7 @@ python -m app.tools.demo get_report_detail --args '{"report_id":"<report_uuid>"}
 python -m app.tools.demo get_source_detail --args '{"source_id":"<source_uuid>"}'
 python -m app.tools.demo get_organization_detail --args '{"organization_id":"<organization_uuid>"}'
 python -m app.tools.demo compare_concepts --args '{"query_or_concept_id":"venture funding","report_ids":["<report_uuid>"]}'
+python -m app.tools.demo compare_concepts_auto --args '{"query":"Compare startup funding definitions across reports","limit_reports":5}'
 python -m app.tools.demo list_available_filters --args '{}'
 python -m app.tools.demo job_status --args '{"job_id":"<job_uuid>"}'
 python -m app.tools.demo submit_feedback --args '{"answer_id":"answer-123","feedback_type":"thumbs_up","comment":"Useful result."}'
@@ -246,6 +247,17 @@ Errors use a stable shape:
 ```
 
 The registries in `app/tools/registry.py` and `app/tools/registry.json` document each tool name, arguments, return shape, read/write risk, and demo-safe status. The readiness report is in `DEMO_TOOL_READINESS_REPORT.md`.
+
+`compare_concepts_auto` is intended for demo/chatbot concept-comparison questions where users do not know report IDs. It is read-only: it searches existing indexed variables/reports first, auto-selects a small set of relevant reports, then delegates to the existing `compare_concepts` logic. It does not ingest sources, extract codebooks, run embeddings, or modify the database. The demo chatbot should prefer `compare_concepts_auto` for natural-language comparison requests; raw `compare_concepts` is for cases where report IDs are already known.
+
+Examples:
+
+```bash
+python -m app.workers.compare_concepts_auto "Compare startup funding definitions across reports"
+python -m app.workers.compare_concepts_auto "How do reports define VC investment differently?" --debug
+python -m app.workers.compare_concepts_auto "Compare R&D expenditure metrics" --public-only
+python -m app.workers.compare_concepts_auto "Are startup funding metrics comparable across reports?" --json
+```
 
 Export fixed retrieval evaluation queries for manual inspection:
 

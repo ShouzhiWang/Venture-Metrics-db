@@ -49,6 +49,14 @@
     "demo_safe": true
   },
   {
+    "name": "compare_concepts_auto",
+    "description": "Automatically finds relevant reports/variables for a concept query and compares definitions across reports.",
+    "args": {"query": "string", "limit_reports": "integer?", "limit_variables": "integer?", "geography": "string?", "public_only": "boolean?", "min_confidence": "number?", "object_types": "string[]?"},
+    "return_schema": {"ok": "boolean", "tool": "compare_concepts_auto", "data": {"query": "string", "status": "string", "selected_reports": "array", "comparison": "object", "limitations": "array", "metadata": "object"}},
+    "risk": "read_only",
+    "demo_safe": true
+  },
+  {
     "name": "list_available_filters",
     "args": {},
     "return_schema": {"ok": "boolean", "tool": "list_available_filters", "data": "filter option object"},

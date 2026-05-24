@@ -49,6 +49,22 @@ DEMO_TOOL_REGISTRY = [
         "demo_safe": True,
     },
     {
+        "name": "compare_concepts_auto",
+        "description": "Automatically finds relevant reports/variables for a concept query and compares definitions across reports.",
+        "args": {
+            "query": "string",
+            "limit_reports": "integer?",
+            "limit_variables": "integer?",
+            "geography": "string?",
+            "public_only": "boolean?",
+            "min_confidence": "number?",
+            "object_types": "string[]?",
+        },
+        "returns": {"ok": "boolean", "data": "auto-selected reports, matched variables, comparison, limitations, metadata"},
+        "risk": "read_only",
+        "demo_safe": True,
+    },
+    {
         "name": "list_available_filters",
         "args": {},
         "returns": {"ok": "boolean", "data": {"object_types": "array", "geographies": "array", "availability": "array", "source_types": "array"}},
