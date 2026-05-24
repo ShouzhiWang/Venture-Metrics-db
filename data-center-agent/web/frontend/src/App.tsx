@@ -7,12 +7,12 @@ import { DetailDrawer, type DrawerItem } from "./components/DetailDrawer";
 import type { ChatResponse, ClarifyingQuestion } from "./types";
 
 const EXAMPLES = [
-  "Startup funding in Singapore",
-  "VC deal count by stage",
-  "R&D expenditure as % of GDP",
-  "SME digital adoption",
-  "Compare startup funding definitions",
-  "Shenzhen startup organizations",
+  "Singapore VC deal count and median round values",
+  "Compare seed vs Series A funding in Southeast Asia",
+  "UK SME use of external finance",
+  "Singapore digital economy share of GDP",
+  "Government VC investment share in funding rounds",
+  "UK small business turnover growth",
 ];
 
 type Turn = {
