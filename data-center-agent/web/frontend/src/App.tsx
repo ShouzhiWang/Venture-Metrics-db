@@ -165,8 +165,14 @@ export function App() {
         {/* Answer area */}
         {(latestResponse || loading) && (
           <div className="result-area">
+            {/* First-search loading state (no previous result yet) */}
+            {loading && !latestResponse && <SearchingState />}
+
             {latestResponse && (
-              <AnswerSummary response={latestResponse} loading={loading} />
+              <>
+                {loading && <SearchingBanner />}
+                <AnswerSummary response={latestResponse} loading={loading} />
+              </>
             )}
 
             {/* Clarification panel (when type === "clarification") */}
@@ -212,6 +218,38 @@ export function App() {
       </main>
 
       <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
+    </div>
+  );
+}
+
+const SEARCH_STEPS = [
+  "Analyzing your query…",
+  "Searching variable database…",
+  "Matching relevant reports…",
+  "Finding organizations…",
+  "Compiling results…",
+];
+
+function SearchingState() {
+  return (
+    <div className="searching-state">
+      <div className="searching-spinner" aria-hidden="true" />
+      <div className="searching-steps">
+        {SEARCH_STEPS.map((step, i) => (
+          <span key={step} className="searching-step" style={{ animationDelay: `${i * 0.55}s` }}>
+            {step}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SearchingBanner() {
+  return (
+    <div className="searching-banner" aria-live="polite">
+      <div className="searching-spinner small" aria-hidden="true" />
+      <span>Searching…</span>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ChatResponse } from "../types";
 
 type Props = {
@@ -18,9 +19,7 @@ export function AnswerSummary({ response, loading }: Props) {
     return av.includes("private") || av.includes("unclear") || av === "";
   }).length;
 
-  const toolName = response.tool_calls?.[0]?.name;
-  const toolStatus = response.tool_calls?.[0]?.status;
-
+  const toolCalls = response.tool_calls ?? [];
   const hasLimitations = (response.limitations?.length ?? 0) > 0;
 
   return (
@@ -28,7 +27,9 @@ export function AnswerSummary({ response, loading }: Props) {
       {loading ? (
         <p className="answer-text answer-loading">Searching the data tools&hellip;</p>
       ) : (
-        <p className="answer-text">{msg}</p>
+        <p className="answer-text">
+          <MarkdownText text={msg} />
+        </p>
       )}
 
       <div className="answer-meta">
@@ -44,9 +45,9 @@ export function AnswerSummary({ response, loading }: Props) {
         {privateCount > 0 && (
           <span>{privateCount} private/unclear</span>
         )}
-        {toolName && (
-          <span className="debug-badge">{toolName} · {toolStatus}</span>
-        )}
+        {toolCalls.map((call, i) => (
+          <span key={i} className="debug-badge">{call.name} · {call.status}</span>
+        ))}
       </div>
 
       {hasLimitations && (
@@ -61,4 +62,24 @@ export function AnswerSummary({ response, loading }: Props) {
       )}
     </div>
   );
+}
+
+function MarkdownText({ text }: { text: string }) {
+  const nodes: ReactNode[] = [];
+  const linkRe = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = linkRe.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    nodes.push(
+      <a key={m.index} href={m[2]} target="_blank" rel="noreferrer">
+        {m[1]}
+      </a>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+
+  return <>{nodes}</>;
 }

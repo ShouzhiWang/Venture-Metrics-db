@@ -615,6 +615,69 @@ a:hover {
   color: var(--text);
 }
 
+/* ── Searching state (first load) ────────────── */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes step-pulse {
+  0%, 60%, 100% { opacity: 0.25; }
+  30%            { opacity: 1; }
+}
+
+.searching-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+  flex-shrink: 0;
+}
+
+.searching-spinner.small {
+  width: 13px;
+  height: 13px;
+}
+
+.searching-state {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 20px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.searching-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.searching-step {
+  font-size: 13px;
+  color: var(--text-muted);
+  opacity: 0.25;
+  animation: step-pulse 2.75s ease-in-out infinite;
+}
+
+.searching-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 6px 0;
+}
+
 /* ── Error notice ─────────────────────────────── */
 
 .notice {
