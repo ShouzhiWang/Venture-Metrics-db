@@ -553,14 +553,14 @@ function TopNav({
 }) {
   return (
     <header className="topbar">
-      <a href="/data" className="site-name" onClick={event => routeClick(event, "/data", onNavigate)}>
+      <a href="/" className="site-name" onClick={event => routeClick(event, "/", onNavigate)}>
         Venture Metrics
       </a>
       <nav className="primary-nav" aria-label="Primary navigation">
+        <NavLink href="/about" path={path} onNavigate={onNavigate}>About</NavLink>
         <NavLink href="/data" path={path} onNavigate={onNavigate}>Data</NavLink>
         <NavLink href="/map" path={path} onNavigate={onNavigate}>Map</NavLink>
         <NavLink href="/projects" path={path} onNavigate={onNavigate}>Projects</NavLink>
-        <NavLink href="/about" path={path} onNavigate={onNavigate}>About</NavLink>
       </nav>
       <div className="auth-nav">
         {user ? (
@@ -592,7 +592,7 @@ function NavLink({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
-  const active = href === "/data" ? path === "/data" || path === "/" : path === href || path.startsWith(`${href}/`);
+  const active = href === "/about" ? path === "/" || path === "/about" : path === href || path.startsWith(`${href}/`);
   return (
     <a
       href={href}
@@ -618,8 +618,8 @@ function routePage(
   authLoading: boolean,
   setUser: (user: User | null) => void,
 ) {
-  if (path === "/about") return <AboutPage onNavigate={navigate} />;
-  if (path === "/data" || path === "/") {
+  if (path === "/about" || path === "/") return <AboutPage onNavigate={navigate} />;
+  if (path === "/data") {
     return (
       <ProtectedPage user={user} authLoading={authLoading} navigate={navigate}>
         <DataDiscoveryPage
@@ -664,109 +664,150 @@ function AboutPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   }
 
   return (
-    <main className="main-content about-content">
-      <div className="about-intro">
-        <h1>Startup &amp; Innovation Data Intelligence</h1>
-        <p>
-          Find structured data on VC funding, startup ecosystems, SME finance, and innovation metrics across Asian markets.
-          Every result includes source evidence, availability labels, and definition context.
-        </p>
-        <div className="about-cta-row">
-          <a
-            href="/data"
-            className="about-cta-btn"
-            onClick={event => routeClick(event, "/data", onNavigate)}
-          >
-            Search the database
-          </a>
+    <main className="about-landing">
+      <section className="about-hero">
+        <div className="about-hero-copy">
+          <p className="about-kicker">AI data intelligence for startup ecosystems</p>
+          <h1>Find the startup, funding, innovation, and ecosystem data you can actually defend.</h1>
+          <p>
+            Venture Metrics turns fragmented reports, government sources, private databases, and organization websites
+            into searchable variables with definitions, source links, availability labels, and evidence.
+          </p>
+          <div className="about-hero-actions">
+            <a href="/data" className="about-cta-btn" onClick={event => routeClick(event, "/data", onNavigate)}>
+              Search the database
+            </a>
+            <a href="/projects" className="about-secondary-btn" onClick={event => routeClick(event, "/projects", onNavigate)}>
+              Build a research project
+            </a>
+          </div>
         </div>
-      </div>
+        <div className="about-demo-panel" aria-label="Example data intelligence result">
+          <div className="demo-window-bar">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="demo-query">startup funding in Singapore</div>
+          <div className="mock-result-card">
+            <div>
+              <strong>VC investment amount</strong>
+              <span className="availability public">Obtainable</span>
+            </div>
+            <p>Total equity venture funding reported by stage and year.</p>
+            <blockquote>“Venture capital investment includes seed, early-stage, and later-stage financing…”</blockquote>
+          </div>
+          <div className="mock-result-grid">
+            <div><span>Geography</span><strong>Singapore</strong></div>
+            <div><span>Coverage</span><strong>2018–2024</strong></div>
+            <div><span>Source</span><strong>Report + table</strong></div>
+          </div>
+        </div>
+      </section>
 
-      <div className="about-capabilities">
-        <div className="capability-card">
-          <h3>Source evidence</h3>
-          <p>Every data point links back to its source report, dataset, or organization. No unattributed claims.</p>
+      <section className="about-section about-problem-section">
+        <div>
+          <h2>The problem</h2>
+          <p>
+            Startup and innovation data is fragmented across reports, government sources, private databases, and
+            organization websites. Similar concepts are often defined differently across reports, public and private
+            data sources are often mixed together, and Asian startup ecosystems need better structured, comparable data.
+          </p>
         </div>
-        <div className="capability-card">
-          <h3>Availability labels</h3>
-          <p>Variables are labeled obtainable, private, unclear, or not obtainable — so you know what you can access.</p>
+        <div className="about-stat-stack">
+          <div><strong>Definitions</strong><span>Compared across reports</span></div>
+          <div><strong>Availability</strong><span>Public, private, unclear, closed</span></div>
+          <div><strong>Evidence</strong><span>Quotes and source URLs preserved</span></div>
         </div>
-        <div className="capability-card">
-          <h3>Definition context</h3>
-          <p>Metrics come with how they're defined and measured, enabling cross-source comparisons.</p>
-        </div>
-        <div className="capability-card">
-          <h3>Research projects</h3>
-          <p>Save searches, variables, and reports into project workspaces for longer-form research.</p>
-        </div>
-      </div>
+      </section>
 
-      <section className="content-section">
-        <h2>Example searches</h2>
-        <p className="section-subtext">Click any query to run it.</p>
-        <div className="example-chips" style={{ marginTop: "8px" }}>
+      <section className="about-section">
+        <div className="section-heading">
+          <h2>What the platform does</h2>
+          <p>It helps researchers move from vague data needs to sourced, reviewable evidence.</p>
+        </div>
+        <div className="about-capabilities">
+          <FeatureCard title="Find data assets" text="Finds relevant variables, reports, datasets, and ecosystem organizations." />
+          <FeatureCard title="Understand definitions" text="Shows definitions, measurement methods, and source context for each metric." />
+          <FeatureCard title="Check availability" text="Labels data as obtainable, private, unclear, or not obtainable before you rely on it." />
+          <FeatureCard title="Compare concepts" text="Compares how reports define and measure similar startup or innovation concepts." />
+        </div>
+      </section>
+
+      <section className="about-section about-query-section">
+        <div className="section-heading">
+          <h2>Ask better data questions</h2>
+          <p>Click a query to open the data assistant.</p>
+        </div>
+        <div className="about-query-grid">
           {ABOUT_EXAMPLES.map(ex => (
-            <button
-              key={ex}
-              type="button"
-              className="chip"
-              onClick={() => runExample(ex)}
-            >
+            <button key={ex} type="button" onClick={() => runExample(ex)}>
               {ex}
             </button>
           ))}
         </div>
       </section>
 
-      <section className="content-section">
-        <h2>Data availability labels</h2>
-        <div className="availability-legend">
-          <div className="availability-legend-item">
-            <span className="availability public">Obtainable</span>
-            <span>Public or downloadable source</span>
-          </div>
-          <div className="availability-legend-item">
-            <span className="availability private">Private</span>
-            <span>Underlying data is proprietary</span>
-          </div>
-          <div className="availability-legend-item">
-            <span className="availability unclear">Unclear</span>
-            <span>Source is not clearly stated</span>
-          </div>
-          <div className="availability-legend-item">
-            <span className="availability none">Not obtainable</span>
-            <span>Estimate, proprietary, or closed source</span>
-          </div>
+      <section className="about-section">
+        <div className="section-heading">
+          <h2>How it works</h2>
+          <p>Sources become structured, searchable, evidence-backed research objects.</p>
         </div>
-      </section>
-
-      <section className="content-section">
-        <h2>How it works</h2>
         <PipelineDiagram />
       </section>
 
-      <section className="content-section">
-        <h2>Current coverage</h2>
-        <div className="about-coverage">
-          <div className="coverage-item">
-            <strong>Focus markets</strong>
-            <span>Singapore, India, Southeast Asia, UK, China</span>
-          </div>
-          <div className="coverage-item">
-            <strong>Data types</strong>
-            <span>VC funding, startup counts, SME finance, innovation indices, ecosystem organizations</span>
-          </div>
-          <div className="coverage-item">
-            <strong>Sources</strong>
-            <span>Government statistics, research reports, industry databases, academic publications</span>
-          </div>
+      <section className="about-section about-labels-section">
+        <div className="section-heading">
+          <h2>Data availability labels</h2>
+          <p>Know whether a metric is accessible before you build analysis around it.</p>
         </div>
-        <p className="about-limitation">
-          The database is still growing. Some regions and sectors are under-covered, and some sources are gated or private.
-          Extracted variables remain reviewable — treat results as a starting point, not a final authority.
-        </p>
+        <div className="availability-legend">
+          <AvailabilityExplainer label="Obtainable" valueClass="public" description="Public or downloadable source" />
+          <AvailabilityExplainer label="Private" valueClass="private" description="Underlying data comes from proprietary databases" />
+          <AvailabilityExplainer label="Unclear" valueClass="unclear" description="Source is not clearly stated" />
+          <AvailabilityExplainer label="Not obtainable" valueClass="none" description="Estimate, proprietary, or closed source" />
+        </div>
+      </section>
+
+      <section className="about-section about-coverage-section">
+        <div className="section-heading">
+          <h2>Current coverage and limitations</h2>
+          <p>Coverage is expanding, and extracted variables remain reviewable rather than automatically authoritative.</p>
+        </div>
+        <div className="about-coverage">
+          <div className="coverage-item"><strong>Focus markets</strong><span>Singapore, India, Southeast Asia, UK, China</span></div>
+          <div className="coverage-item"><strong>Data types</strong><span>VC funding, startup counts, SME finance, innovation indices, ecosystem organizations</span></div>
+          <div className="coverage-item"><strong>Sources</strong><span>Government statistics, research reports, industry databases, academic publications</span></div>
+          <div className="coverage-item"><strong>Limitations</strong><span>The database is still growing; some regions and sectors are under-covered, and some sources are gated or private.</span></div>
+        </div>
       </section>
     </main>
+  );
+}
+
+function FeatureCard({ title, text }: { title: string; text: string }) {
+  return (
+    <article className="capability-card">
+      <h3>{title}</h3>
+      <p>{text}</p>
+    </article>
+  );
+}
+
+function AvailabilityExplainer({
+  label,
+  valueClass,
+  description,
+}: {
+  label: string;
+  valueClass: string;
+  description: string;
+}) {
+  return (
+    <div className="availability-legend-item">
+      <span className={`availability ${valueClass}`}>{label}</span>
+      <span>{description}</span>
+    </div>
   );
 }
 
