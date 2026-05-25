@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type React from "react";
 import { Search } from "lucide-react";
 import {
@@ -28,6 +28,12 @@ import { ResultSections } from "./components/ResultSections";
 import { DetailDrawer, type DrawerItem } from "./components/DetailDrawer";
 import { SaveToProjectButton } from "./components/SaveToProjectButton";
 import type { ChatResponse, ClarifyingQuestion, MapItem, ProjectItem, ResearchProject } from "./types";
+
+declare global {
+  interface Window {
+    L?: any;
+  }
+}
 
 const EXAMPLES = [
   "Singapore VC deal count and median round values",
@@ -1447,11 +1453,43 @@ function MapPage() {
   const [type, setType] = useState("");
   const [availability, setAvailability] = useState("");
   const [error, setError] = useState("");
+  const mapElementRef = useRef<HTMLDivElement | null>(null);
+  const leafletMapRef = useRef<any>(null);
+  const markerLayerRef = useRef<any>(null);
 
   useEffect(() => {
     listMapItems()
       .then(setItems)
       .catch(err => setError(err instanceof Error ? err.message : "Could not load map items."));
+  }, []);
+
+  useEffect(() => {
+    const L = window.L;
+    if (!mapElementRef.current || !L || leafletMapRef.current) return;
+    const map = L.map(mapElementRef.current, {
+      center: [22, 105],
+      zoom: 4,
+      minZoom: 3,
+      maxZoom: 12,
+      zoomControl: true,
+      attributionControl: true,
+    });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      tileSize: 256,
+      zoomOffset: 0,
+      detectRetina: true,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+    leafletMapRef.current = map;
+    markerLayerRef.current = L.layerGroup().addTo(map);
+    window.setTimeout(() => map.invalidateSize(), 0);
+    window.setTimeout(() => map.invalidateSize(), 250);
+    return () => {
+      map.remove();
+      leafletMapRef.current = null;
+      markerLayerRef.current = null;
+    };
   }, []);
 
   const countries = unique(items.map(item => item.country).filter(Boolean) as string[]);
@@ -1461,6 +1499,33 @@ function MapPage() {
     if (availability && (item.availability || "unclear") !== availability) return false;
     return true;
   });
+  const referencePoints = filtered.length === 0 ? MAP_REFERENCE_POINTS : [];
+
+  useEffect(() => {
+    const L = window.L;
+    const layer = markerLayerRef.current;
+    if (!L || !layer) return;
+    layer.clearLayers();
+    const points = filtered.length > 0 ? filtered : referencePoints;
+    points.forEach(item => {
+      const marker = L.marker([item.lat, item.lng], {
+        icon: L.divIcon({
+          className: `leaflet-data-marker ${filtered.length > 0 ? item.type : "reference"}`,
+          html: `<span>${filtered.length > 0 ? item.type[0].toUpperCase() : ""}</span>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        }),
+        interactive: filtered.length > 0,
+      });
+      if (filtered.length > 0) {
+        marker.on("click", () => setSelected(item));
+        marker.bindPopup(`<strong>${escapeHtml(item.title)}</strong><br>${escapeHtml(item.city || item.country || item.type)}`);
+      } else {
+        marker.bindTooltip(item.title, { permanent: true, direction: "top", offset: [0, -10] });
+      }
+      marker.addTo(layer);
+    });
+  }, [filtered, referencePoints]);
 
   return (
     <main className="map-page">
@@ -1485,40 +1550,39 @@ function MapPage() {
         )}
       </section>
       <section className="map-canvas" aria-label="Asia map">
-        {filtered.map(item => {
-          const pos = mapPosition(item);
-          return (
-            <button
-              key={`${item.type}-${item.id}`}
-              type="button"
-              className={`map-marker ${item.type}`}
-              style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-              title={item.title}
-              onClick={() => setSelected(item)}
-            >
-              <span>{item.type[0].toUpperCase()}</span>
-            </button>
-          );
-        })}
-        <div className="map-empty">{filtered.length === 0 ? "No mapped items for these filters." : `${filtered.length} mapped items`}</div>
+        <div ref={mapElementRef} className="leaflet-map" />
+        <div className="map-empty">
+          {filtered.length === 0
+            ? items.length === 0
+              ? "No mappable records yet. Add organizations/reports/variables with city, country, or geography metadata."
+              : "No mapped items match these filters."
+            : `${filtered.length} mapped items`}
+        </div>
       </section>
     </main>
   );
 }
 
+const MAP_REFERENCE_POINTS: MapItem[] = [
+  { id: "ref-singapore", type: "source", title: "Singapore", country: "Singapore", city: "Singapore", lat: 1.3521, lng: 103.8198, metadata: {} },
+  { id: "ref-hong-kong", type: "source", title: "Hong Kong", country: "Hong Kong", city: "Hong Kong", lat: 22.3193, lng: 114.1694, metadata: {} },
+  { id: "ref-shenzhen", type: "source", title: "Shenzhen", country: "China", city: "Shenzhen", lat: 22.5431, lng: 114.0579, metadata: {} },
+  { id: "ref-tokyo", type: "source", title: "Tokyo", country: "Japan", city: "Tokyo", lat: 35.6762, lng: 139.6503, metadata: {} },
+  { id: "ref-jakarta", type: "source", title: "Jakarta", country: "Indonesia", city: "Jakarta", lat: -6.2088, lng: 106.8456, metadata: {} },
+];
+
 function unique(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort();
 }
 
-function mapPosition(item: MapItem) {
-  const minLng = 65;
-  const maxLng = 150;
-  const minLat = -12;
-  const maxLat = 48;
-  return {
-    x: Math.min(96, Math.max(4, ((item.lng - minLng) / (maxLng - minLng)) * 100)),
-    y: Math.min(96, Math.max(4, 100 - ((item.lat - minLat) / (maxLat - minLat)) * 100)),
-  };
+function escapeHtml(value: string | null | undefined) {
+  return String(value || "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#039;",
+  }[char] || char));
 }
 
 function PlaceholderPage({ title, description }: { title: string; description: string }) {

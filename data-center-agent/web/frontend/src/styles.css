@@ -772,6 +772,7 @@ a:hover {
   flex: 1;
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
+  min-height: calc(100vh - 48px);
 }
 
 .map-sidebar {
@@ -822,19 +823,194 @@ a:hover {
 
 .map-canvas {
   position: relative;
+  min-height: calc(100vh - 48px);
   overflow: hidden;
-  background:
-    linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px),
-    #f8fafc;
-  background-size: 48px 48px;
+  background: #dbe6ec;
 }
 
-.map-marker {
+.leaflet-map {
   position: absolute;
-  transform: translate(-50%, -50%);
-  width: 26px;
-  height: 26px;
+  inset: 0;
+  z-index: 0;
+}
+
+/* Required Leaflet layout rules. Keep local so map rendering does not depend on CDN CSS timing. */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  font: inherit;
+  overflow: hidden;
+  background: #dbe6ec;
+  outline-offset: 1px;
+}
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.leaflet-container img,
+.leaflet-container .leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.leaflet-tile {
+  width: 256px;
+  height: 256px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.leaflet-pane {
+  z-index: 400;
+}
+
+.leaflet-tile-pane {
+  z-index: 200;
+}
+
+.leaflet-overlay-pane {
+  z-index: 400;
+}
+
+.leaflet-marker-pane {
+  z-index: 600;
+}
+
+.leaflet-tooltip-pane {
+  z-index: 650;
+}
+
+.leaflet-popup-pane {
+  z-index: 700;
+}
+
+.leaflet-map-pane {
+  z-index: 0;
+}
+
+.leaflet-tile-container {
+  pointer-events: auto;
+}
+
+.leaflet-control-container .leaflet-top,
+.leaflet-control-container .leaflet-bottom {
+  position: absolute;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.leaflet-control-container .leaflet-top {
+  top: 0;
+}
+
+.leaflet-control-container .leaflet-right {
+  right: 0;
+}
+
+.leaflet-control-container .leaflet-bottom {
+  bottom: 0;
+}
+
+.leaflet-control-container .leaflet-left {
+  left: 0;
+}
+
+.leaflet-control {
+  position: relative;
+  z-index: 800;
+  pointer-events: auto;
+  float: left;
+  clear: both;
+}
+
+.leaflet-top .leaflet-control {
+  margin-top: 10px;
+}
+
+.leaflet-left .leaflet-control {
+  margin-left: 10px;
+}
+
+.leaflet-right .leaflet-control {
+  margin-right: 10px;
+}
+
+.leaflet-bottom .leaflet-control {
+  margin-bottom: 10px;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.leaflet-control-zoom a {
+  display: block;
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  text-align: center;
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.leaflet-control-zoom a:last-child {
+  border-bottom: 0;
+}
+
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+.leaflet-tooltip {
+  position: absolute;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 3px 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.leaflet-popup {
+  position: absolute;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.leaflet-popup-tip-container {
+  display: none;
+}
+
+.leaflet-data-marker {
+  width: 24px;
+  height: 24px;
   border: 1px solid var(--border-hover);
   border-radius: 50%;
   background: var(--surface);
@@ -842,14 +1018,21 @@ a:hover {
   font-size: 11px;
   display: grid;
   place-items: center;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
 }
 
-.map-marker.organization { border-color: #0f766e; }
-.map-marker.report       { border-color: #7c3aed; }
-.map-marker.variable     { border-color: #b45309; }
-.map-marker.source       { border-color: #475569; }
+.leaflet-data-marker.organization { border-color: #0f766e; }
+.leaflet-data-marker.report       { border-color: #7c3aed; }
+.leaflet-data-marker.variable     { border-color: #b45309; }
+.leaflet-data-marker.source       { border-color: #475569; }
+.leaflet-data-marker.reference {
+  width: 10px;
+  height: 10px;
+  background: #64748b;
+  border-color: #ffffff;
+}
 
-.map-marker span {
+.leaflet-data-marker span {
   font-weight: 700;
 }
 
@@ -863,6 +1046,7 @@ a:hover {
   color: var(--text-muted);
   padding: 8px 10px;
   font-size: 12px;
+  z-index: 3;
 }
 
 /* ── Main content ─────────────────────────────── */
