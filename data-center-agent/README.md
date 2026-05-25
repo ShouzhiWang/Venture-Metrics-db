@@ -292,6 +292,16 @@ npm run dev
 
 Open `http://127.0.0.1:5173`. Vite proxies `/api` requests to `http://127.0.0.1:8000`.
 
+Frontend routes:
+
+- `/`: redirects to `/data`.
+- `/about`: product methodology, source availability, and limitations.
+- `/data`: main data discovery chat/search page.
+- `/login` and `/register`: placeholder auth pages for the MVP.
+- `/history`: placeholder protected history page.
+- `/projects` and `/projects/:id`: placeholder research project pages.
+- `/map`: placeholder dynamic map page.
+
 Useful API calls:
 
 ```bash
@@ -323,6 +333,15 @@ Environment variables:
 - `DEMO_LLM_MODEL`: demo chat model, default `mimo-v2.5`.
 - `DEMO_LLM_TIMEOUT_SECONDS`: provider timeout, default `30`.
 - `DEMO_LLM_MAX_OUTPUT_TOKENS`: max planner/answer output tokens, default `900`.
+- `AUTH_SESSION_SECRET`: required secret for signed login sessions. Generate a long random value for any shared deployment.
+- `AUTH_COOKIE_SECURE`: set to `true` when serving over HTTPS.
+- `AUTH_SESSION_TTL_SECONDS`: login session lifetime, default `1209600` seconds.
+
+Before using login/register on an existing database, apply migrations:
+
+```bash
+python -m app.db.migrate
+```
 
 Deployment notes for Hermes:
 
