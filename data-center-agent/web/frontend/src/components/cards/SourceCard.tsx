@@ -6,9 +6,11 @@ type Props = {
   source: SourceLink;
   onViewEvidence: () => void;
   onAuthRequired?: () => void;
+  projectId?: string;
+  onSaved?: () => void;
 };
 
-export function SourceCard({ source, onViewEvidence, onAuthRequired }: Props) {
+export function SourceCard({ source, onViewEvidence, onAuthRequired, projectId, onSaved }: Props) {
   const title = source.title || source.source_url || "Source";
   const id = source.id || source.object_id || source.source_id;
 
@@ -39,6 +41,8 @@ export function SourceCard({ source, onViewEvidence, onAuthRequired }: Props) {
         )}
         <SaveToProjectButton
           onAuthRequired={onAuthRequired}
+          onSaved={onSaved}
+          projectId={projectId}
           payload={{
             item_type: "source",
             item_id: id,

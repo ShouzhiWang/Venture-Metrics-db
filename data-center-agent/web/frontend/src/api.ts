@@ -221,6 +221,24 @@ export async function exportProjectMarkdown(id: string): Promise<string> {
   return result.markdown || "";
 }
 
+export async function queryProject(
+  projectId: string,
+  message: string,
+  history: ChatHistoryItem[] = [],
+  conversationId?: string
+): Promise<ChatResponse> {
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, history, conversation_id: conversationId }),
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw new Error(`API error ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function listMapItems(): Promise<MapItem[]> {
   const response = await fetch("/api/map/items", { credentials: "same-origin" });
   if (!response.ok) {

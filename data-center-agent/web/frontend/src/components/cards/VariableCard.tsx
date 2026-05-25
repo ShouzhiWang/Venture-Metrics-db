@@ -6,9 +6,11 @@ type Props = {
   variable: VariableResult;
   onViewEvidence: () => void;
   onAuthRequired?: () => void;
+  projectId?: string;
+  onSaved?: () => void;
 };
 
-export function VariableCard({ variable, onViewEvidence, onAuthRequired }: Props) {
+export function VariableCard({ variable, onViewEvidence, onAuthRequired, projectId, onSaved }: Props) {
   const name = variable.title || variable.raw_variable_name || "Variable";
   const id = variable.id || variable.object_id || variable.variable_id;
 
@@ -55,6 +57,8 @@ export function VariableCard({ variable, onViewEvidence, onAuthRequired }: Props
         )}
         <SaveToProjectButton
           onAuthRequired={onAuthRequired}
+          onSaved={onSaved}
+          projectId={projectId}
           payload={{
             item_type: "variable",
             item_id: id,

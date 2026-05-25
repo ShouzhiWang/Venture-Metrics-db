@@ -5,9 +5,11 @@ type Props = {
   organization: OrganizationResult;
   onViewEvidence: () => void;
   onAuthRequired?: () => void;
+  projectId?: string;
+  onSaved?: () => void;
 };
 
-export function OrganizationCard({ organization, onViewEvidence, onAuthRequired }: Props) {
+export function OrganizationCard({ organization, onViewEvidence, onAuthRequired, projectId, onSaved }: Props) {
   const url = organization.website_url || organization.source_url;
   const title = organization.name || organization.title || "Organization";
   const id = organization.id || organization.object_id || organization.organization_id;
@@ -44,6 +46,8 @@ export function OrganizationCard({ organization, onViewEvidence, onAuthRequired 
         )}
         <SaveToProjectButton
           onAuthRequired={onAuthRequired}
+          onSaved={onSaved}
+          projectId={projectId}
           payload={{
             item_type: "organization",
             item_id: id,

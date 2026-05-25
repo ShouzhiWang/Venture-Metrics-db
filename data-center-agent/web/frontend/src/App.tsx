@@ -13,12 +13,12 @@ import {
   listProjects,
   login,
   logout,
+  queryProject,
   register,
   removeProjectItem,
   sendChat,
   submitFeedback,
   updateProject,
-  updateProjectItemNote,
   type ChatHistoryItem,
   type HistoryItem,
   type User,
@@ -35,7 +35,16 @@ const EXAMPLES = [
   "UK SME use of external finance",
   "Singapore digital economy share of GDP",
   "Government VC investment share in funding rounds",
-  "UK small business turnover growth",
+  "India startup ecosystem funding by stage",
+];
+
+const ABOUT_EXAMPLES = [
+  "Singapore VC deal count 2020–2023",
+  "Southeast Asia fintech ecosystem organizations",
+  "India startup funding by sector",
+  "UK SME bank loan usage rates",
+  "Government innovation fund data, Southeast Asia",
+  "China unicorn company count and valuation",
 ];
 
 type Turn = {
@@ -90,6 +99,7 @@ export function App() {
     <div className="page-shell">
       <TopNav path={path} user={user} onNavigate={navigate} onLogout={() => void handleLogout()} />
       {routePage(path, navigate, user, authLoading, setUser)}
+      <SiteFooter />
     </div>
   );
 
@@ -100,7 +110,21 @@ export function App() {
   }
 }
 
-function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) {
+function SiteFooter() {
+  return (
+    <footer className="site-footer">
+      Prototype database — results are evidence-backed but still under review.
+    </footer>
+  );
+}
+
+function DataDiscoveryPage({
+  onAuthRequired,
+  onNavigate,
+}: {
+  onAuthRequired?: () => void;
+  onNavigate?: (path: string) => void;
+}) {
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(false);
@@ -113,12 +137,25 @@ function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) 
   const [lastQuery, setLastQuery] = useState("");
   const [answerId, setAnswerId] = useState(() => `answer-${Date.now()}`);
   const [conversationId, setConversationId] = useState<string | undefined>();
+  const [projects, setProjects] = useState<ResearchProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [savedResultIds, setSavedResultIds] = useState<Set<string>>(new Set());
 
   const latestAssistant = [...turns].reverse().find(t => t.role === "assistant");
   const hasTurns = turns.length > 0;
 
   useEffect(() => {
     void refreshHistory();
+    void refreshProjects();
+
+    // Check if an example query was passed from the About page
+    const aboutQuery = window.sessionStorage.getItem("aboutExampleQuery");
+    if (aboutQuery) {
+      window.sessionStorage.removeItem("aboutExampleQuery");
+      void runQuery(aboutQuery);
+      return;
+    }
+
     const stored = window.sessionStorage.getItem("projectReopenSearch");
     if (stored) {
       window.sessionStorage.removeItem("projectReopenSearch");
@@ -139,9 +176,10 @@ function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) 
           setSelectedHistoryId(parsed.response.saved_result_id);
         }
       } catch {
-        setError("Could not reopen saved project search.");
+        setError("Could not reopen the saved search.");
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function historyFromTurns(nextTurns = turns): ChatHistoryItem[] {
@@ -184,7 +222,7 @@ function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) 
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: "The demo API request failed before the agent could respond.",
+          content: "The search could not complete. Please try again.",
           response: {
             type: "error",
             message: msg,
@@ -199,7 +237,7 @@ function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) 
               source_links: [],
               comparison: {},
             },
-            limitations: [msg],
+            limitations: [],
           },
         },
       ]);
@@ -222,7 +260,7 @@ function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) 
     try {
       await submitFeedback(answerId, type);
     } catch {
-      setError("Feedback could not be saved.");
+      // Feedback failure is non-critical
     }
   }
 
@@ -238,12 +276,32 @@ function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) 
     }
   }
 
+  async function refreshProjects() {
+    setProjectsLoading(true);
+    try {
+      setProjects(await listProjects());
+    } catch {
+      // Projects section silently fails if not logged in
+    } finally {
+      setProjectsLoading(false);
+    }
+  }
+
+  function handleSaved() {
+    const savedId = latestResponse?.saved_result_id;
+    if (savedId) {
+      setSavedResultIds(prev => new Set([...prev, savedId]));
+    }
+    void refreshProjects();
+    void refreshHistory();
+  }
+
   async function reopenHistory(item: HistoryItem) {
     setError("");
     try {
       const fullItem = await getHistoryItem(item.id);
       if (!fullItem.result_payload) {
-        setError("This history item does not include a saved result payload.");
+        setError("This search doesn't have a saved result. Try running it again.");
         return;
       }
       const userTurn: Turn = {
@@ -263,7 +321,7 @@ function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) 
       setSelectedHistoryId(item.id);
       setDrawerItem(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not reopen history item.");
+      setError(err instanceof Error ? err.message : "Could not load this search.");
     }
   }
 
@@ -282,158 +340,192 @@ function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) 
   const hasResults = latestResponse && latestResponse.type !== "clarification";
   const clarifyingQuestions = latestResponse?.clarifying_questions ?? [];
 
+  // Filter out searches that have been saved to a project this session
+  const visibleHistory = historyItems.filter(item => !savedResultIds.has(item.id));
+
   return (
     <>
       <main className="data-workspace">
-        <aside className="history-sidebar" aria-label="Search history">
-          <div className="history-sidebar-head">
-            <h2>Searches</h2>
-            <button type="button" onClick={startNewSearch}>New</button>
-          </div>
-          {historyLoading && <p className="history-sidebar-note">Loading...</p>}
-          {historyError && <p className="history-sidebar-note error-text">{historyError}</p>}
-          {!historyLoading && historyItems.length === 0 && (
-            <p className="history-sidebar-note">Your saved searches will appear here.</p>
-          )}
-          {!historyLoading && historyItems.length > 0 && (
-            <div className="history-sidebar-list">
-              {historyItems.map(item => {
-                const active = selectedHistoryId === item.id || Boolean(conversationId && item.session_id === conversationId);
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={active ? "active" : undefined}
-                    aria-current={active ? "true" : undefined}
-                    onClick={() => void reopenHistory(item)}
-                  >
-                    <strong>{item.query || item.title}</strong>
-                    <span>{formatDate(item.created_at)}</span>
-                  </button>
-                );
-              })}
+        <aside className="history-sidebar" aria-label="Research sidebar">
+          {/* Projects section at top */}
+          <div className="sidebar-section">
+            <div className="sidebar-section-head">
+              <span className="sidebar-section-label">Projects</span>
+              {onNavigate && (
+                <button type="button" onClick={() => onNavigate("/projects")}>Manage</button>
+              )}
             </div>
-          )}
+            {projectsLoading && <p className="sidebar-note">Loading…</p>}
+            {!projectsLoading && projects.length === 0 && (
+              <p className="sidebar-note">Save a search to start a project.</p>
+            )}
+            {!projectsLoading && projects.length > 0 && (
+              <div className="sidebar-list">
+                {projects.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => onNavigate?.(`/projects/${p.id}`)}
+                  >
+                    <strong>{p.title}</strong>
+                    <span>{p.item_count || 0} item{(p.item_count || 0) !== 1 ? "s" : ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Searches section at bottom */}
+          <div className="sidebar-section sidebar-section-fill">
+            <div className="sidebar-section-head">
+              <span className="sidebar-section-label">Searches</span>
+              <button type="button" onClick={startNewSearch}>New</button>
+            </div>
+            {historyLoading && <p className="sidebar-note">Loading…</p>}
+            {historyError && <p className="sidebar-note error-text">{historyError}</p>}
+            {!historyLoading && visibleHistory.length === 0 && (
+              <p className="sidebar-note">Your recent searches appear here.</p>
+            )}
+            {!historyLoading && visibleHistory.length > 0 && (
+              <div className="sidebar-list">
+                {visibleHistory.map(item => {
+                  const active = selectedHistoryId === item.id || Boolean(conversationId && item.session_id === conversationId);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={active ? "active" : undefined}
+                      aria-current={active ? "true" : undefined}
+                      onClick={() => void reopenHistory(item)}
+                    >
+                      <strong>{item.query || item.title}</strong>
+                      <span>{formatDate(item.created_at)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </aside>
 
         <section className="data-main">
           <PageHeader
-            title="Data That You Want"
-            description="Ask for data availability, source evidence, definitions, reports, and ecosystem organizations."
+            title="Find Startup & Innovation Data"
+            description="Search for metrics, reports, organizations, and source evidence across Asian markets."
           />
 
-        {/* Search input */}
-        <div className="search-area">
-          <form onSubmit={onSubmit}>
-            <div className="search-row">
-              <Search size={17} className="search-icon" aria-hidden="true" />
-              <input
-                value={message}
-                onChange={e => setMessage(e.target.value)}
-                placeholder="Ask about a metric, geography, source, organization, or definition…"
-                autoFocus
-                aria-label="Search query"
-              />
-              <button type="submit" disabled={loading || !message.trim()}>
-                {loading ? "Searching…" : "Search"}
-              </button>
-            </div>
-          </form>
-
-          {!hasTurns && (
-            <div className="example-chips">
-              {EXAMPLES.map(ex => (
-                <button
-                  key={ex}
-                  type="button"
-                  className="chip"
-                  onClick={() => void runQuery(ex)}
-                >
-                  {ex}
+          {/* Search input */}
+          <div className="search-area">
+            <form onSubmit={onSubmit}>
+              <div className="search-row">
+                <Search size={17} className="search-icon" aria-hidden="true" />
+                <input
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  placeholder="Ask about a metric, geography, source, organization, or definition…"
+                  autoFocus
+                  aria-label="Search query"
+                />
+                <button type="submit" disabled={loading || !message.trim()}>
+                  {loading ? "Searching…" : "Search"}
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            </form>
 
-        {/* Error */}
-        {error && <div className="notice error">{error}</div>}
-
-        {/* Answer area */}
-        {(latestResponse || loading) && (
-          <div className="result-area">
-            {/* First-search loading state (no previous result yet) */}
-            {loading && !latestResponse && <SearchingState />}
-
-            {latestResponse && (
-              <>
-                {loading && <SearchingBanner />}
-                <AnswerSummary response={latestResponse} loading={loading} />
-                {hasResults && !loading && (
-                  <div className="answer-actions">
-                    <SaveToProjectButton
-                      label="Save search to project"
-                      onAuthRequired={onAuthRequired}
-                      payload={{
-                        item_type: "search_result",
-                        item_id: latestResponse.saved_result_id,
-                        title: lastQuery || latestResponse.message || "Saved search",
-                        metadata: {
-                          query: lastQuery,
-                          answer_summary: latestResponse.assistant_message || latestResponse.message,
-                          selected_variables: latestResponse.results.closest_variables,
-                          relevant_reports: latestResponse.results.relevant_reports,
-                          organizations: latestResponse.results.relevant_organizations,
-                          source_links: latestResponse.results.source_links,
-                          limitations: latestResponse.limitations,
-                          result_payload: latestResponse,
-                        },
-                      }}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Clarification panel (when type === "clarification") */}
-            {isClarification && clarifyingQuestions.length > 0 && (
-              <ClarificationPanel
-                questions={clarifyingQuestions}
-                onChoose={handleChipClick}
-              />
-            )}
-
-            {/* Narrow chips (when results + clarifying questions) */}
-            {hasResults && clarifyingQuestions.length > 0 && (
-              <NarrowChips
-                questions={clarifyingQuestions}
-                onChoose={handleChipClick}
-              />
-            )}
-
-            {/* Result tabs */}
-            {hasResults && latestResponse && (
-              <ResultSections
-                results={latestResponse.results}
-                limitations={latestResponse.limitations}
-                onViewEvidence={setDrawerItem}
-                onAuthRequired={onAuthRequired}
-              />
-            )}
-
-            {/* Feedback */}
-            {hasResults && !loading && (
-              <div className="feedback-row">
-                <button type="button" onClick={() => void feedback("thumbs_up")}>
-                  Useful
-                </button>
-                <button type="button" onClick={() => void feedback("thumbs_down")}>
-                  Not useful
-                </button>
+            {!hasTurns && (
+              <div className="example-chips">
+                {EXAMPLES.map(ex => (
+                  <button
+                    key={ex}
+                    type="button"
+                    className="chip"
+                    onClick={() => void runQuery(ex)}
+                  >
+                    {ex}
+                  </button>
+                ))}
               </div>
             )}
           </div>
-        )}
+
+          {/* Error */}
+          {error && (
+            <div className="notice error" role="alert">
+              {error}
+            </div>
+          )}
+
+          {/* Answer area */}
+          {(latestResponse || loading) && (
+            <div className="result-area">
+              {loading && !latestResponse && <SearchingState />}
+
+              {latestResponse && (
+                <>
+                  {loading && <SearchingBanner />}
+                  <AnswerSummary response={latestResponse} loading={loading} />
+                  {hasResults && !loading && (
+                    <div className="answer-actions">
+                      <SaveToProjectButton
+                        label="Save to project"
+                        onAuthRequired={onAuthRequired}
+                        onSaved={handleSaved}
+                        payload={{
+                          item_type: "search_result",
+                          item_id: latestResponse.saved_result_id,
+                          title: lastQuery || latestResponse.message || "Saved search",
+                          metadata: {
+                            query: lastQuery,
+                            answer_summary: latestResponse.assistant_message || latestResponse.message,
+                            selected_variables: latestResponse.results.closest_variables,
+                            relevant_reports: latestResponse.results.relevant_reports,
+                            organizations: latestResponse.results.relevant_organizations,
+                            source_links: latestResponse.results.source_links,
+                            limitations: latestResponse.limitations,
+                            result_payload: latestResponse,
+                          },
+                        }}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {isClarification && clarifyingQuestions.length > 0 && (
+                <ClarificationPanel
+                  questions={clarifyingQuestions}
+                  onChoose={handleChipClick}
+                />
+              )}
+
+              {hasResults && clarifyingQuestions.length > 0 && (
+                <NarrowChips
+                  questions={clarifyingQuestions}
+                  onChoose={handleChipClick}
+                />
+              )}
+
+              {hasResults && latestResponse && (
+                <ResultSections
+                  results={latestResponse.results}
+                  limitations={latestResponse.limitations}
+                  onViewEvidence={setDrawerItem}
+                  onAuthRequired={onAuthRequired}
+                />
+              )}
+
+              {hasResults && !loading && (
+                <div className="feedback-row">
+                  <button type="button" onClick={() => void feedback("thumbs_up")}>
+                    Useful
+                  </button>
+                  <button type="button" onClick={() => void feedback("thumbs_down")}>
+                    Not useful
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </main>
 
@@ -456,13 +548,13 @@ function TopNav({
   return (
     <header className="topbar">
       <a href="/data" className="site-name" onClick={event => routeClick(event, "/data", onNavigate)}>
-        Startup Data Intelligence
+        Venture Metrics
       </a>
       <nav className="primary-nav" aria-label="Primary navigation">
-        <NavLink href="/about" path={path} onNavigate={onNavigate}>About</NavLink>
         <NavLink href="/data" path={path} onNavigate={onNavigate}>Data</NavLink>
         <NavLink href="/map" path={path} onNavigate={onNavigate}>Map</NavLink>
         <NavLink href="/projects" path={path} onNavigate={onNavigate}>Projects</NavLink>
+        <NavLink href="/about" path={path} onNavigate={onNavigate}>About</NavLink>
       </nav>
       <div className="auth-nav">
         {user ? (
@@ -520,11 +612,14 @@ function routePage(
   authLoading: boolean,
   setUser: (user: User | null) => void,
 ) {
-  if (path === "/about") return <AboutPage />;
+  if (path === "/about") return <AboutPage onNavigate={navigate} />;
   if (path === "/data" || path === "/") {
     return (
       <ProtectedPage user={user} authLoading={authLoading} navigate={navigate}>
-        <DataDiscoveryPage onAuthRequired={() => navigate("/login")} />
+        <DataDiscoveryPage
+          onAuthRequired={() => navigate("/login")}
+          onNavigate={navigate}
+        />
       </ProtectedPage>
     );
   }
@@ -556,90 +651,125 @@ function PageHeader({ title, description }: { title: string; description: string
   );
 }
 
-function AboutPage() {
+function AboutPage({ onNavigate }: { onNavigate: (path: string) => void }) {
+  function runExample(query: string) {
+    window.sessionStorage.setItem("aboutExampleQuery", query);
+    onNavigate("/data");
+  }
+
   return (
     <main className="main-content about-content">
-      <section className="about-hero">
-        <h1>Startup Data Intelligence for Asian Markets</h1>
-        <p>Find startup, funding, innovation, and ecosystem data with definitions, sources, and evidence.</p>
-      </section>
+      <div className="about-intro">
+        <h1>Startup &amp; Innovation Data Intelligence</h1>
+        <p>
+          Find structured data on VC funding, startup ecosystems, SME finance, and innovation metrics across Asian markets.
+          Every result includes source evidence, availability labels, and definition context.
+        </p>
+        <div className="about-cta-row">
+          <a
+            href="/data"
+            className="about-cta-btn"
+            onClick={event => routeClick(event, "/data", onNavigate)}
+          >
+            Search the database
+          </a>
+        </div>
+      </div>
 
-      <div className="about-grid">
-        <InfoCard
-          title="The Problem"
-          items={[
-            "Startup and innovation data is fragmented across reports, government sources, private databases, and organization websites.",
-            "Similar concepts are often defined differently across reports.",
-            "Public and private data sources are often mixed together.",
-            "Asian startup ecosystems need better structured, comparable data.",
-          ]}
-        />
-        <InfoCard
-          title="What This Platform Does"
-          items={[
-            "Finds relevant variables, reports, datasets, and organizations.",
-            "Shows definitions and measurement methods.",
-            "Labels data availability as obtainable, private, unclear, or not obtainable.",
-            "Provides evidence quotes and source links.",
-            "Helps compare concepts across reports.",
-          ]}
-        />
+      <div className="about-capabilities">
+        <div className="capability-card">
+          <h3>Source evidence</h3>
+          <p>Every data point links back to its source report, dataset, or organization. No unattributed claims.</p>
+        </div>
+        <div className="capability-card">
+          <h3>Availability labels</h3>
+          <p>Variables are labeled obtainable, private, unclear, or not obtainable — so you know what you can access.</p>
+        </div>
+        <div className="capability-card">
+          <h3>Definition context</h3>
+          <p>Metrics come with how they're defined and measured, enabling cross-source comparisons.</p>
+        </div>
+        <div className="capability-card">
+          <h3>Research projects</h3>
+          <p>Save searches, variables, and reports into project workspaces for longer-form research.</p>
+        </div>
       </div>
 
       <section className="content-section">
-        <h2>How It Works</h2>
+        <h2>Example searches</h2>
+        <p className="section-subtext">Click any query to run it.</p>
+        <div className="example-chips" style={{ marginTop: "8px" }}>
+          {ABOUT_EXAMPLES.map(ex => (
+            <button
+              key={ex}
+              type="button"
+              className="chip"
+              onClick={() => runExample(ex)}
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="content-section">
+        <h2>Data availability labels</h2>
+        <div className="availability-legend">
+          <div className="availability-legend-item">
+            <span className="availability public">Obtainable</span>
+            <span>Public or downloadable source</span>
+          </div>
+          <div className="availability-legend-item">
+            <span className="availability private">Private</span>
+            <span>Underlying data is proprietary</span>
+          </div>
+          <div className="availability-legend-item">
+            <span className="availability unclear">Unclear</span>
+            <span>Source is not clearly stated</span>
+          </div>
+          <div className="availability-legend-item">
+            <span className="availability none">Not obtainable</span>
+            <span>Estimate, proprietary, or closed source</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="content-section">
+        <h2>How it works</h2>
         <PipelineDiagram />
       </section>
 
       <section className="content-section">
-        <h2>Data Availability Labels</h2>
-        <div className="availability-list">
-          <AvailabilityExplainer label="Obtainable" description="Public or downloadable source." />
-          <AvailabilityExplainer label="Private" description="Underlying data comes from proprietary databases." />
-          <AvailabilityExplainer label="Unclear" description="Source is not clearly stated." />
-          <AvailabilityExplainer label="Not obtainable" description="Estimate, proprietary, or closed source." />
+        <h2>Current coverage</h2>
+        <div className="about-coverage">
+          <div className="coverage-item">
+            <strong>Focus markets</strong>
+            <span>Singapore, India, Southeast Asia, UK, China</span>
+          </div>
+          <div className="coverage-item">
+            <strong>Data types</strong>
+            <span>VC funding, startup counts, SME finance, innovation indices, ecosystem organizations</span>
+          </div>
+          <div className="coverage-item">
+            <strong>Sources</strong>
+            <span>Government statistics, research reports, industry databases, academic publications</span>
+          </div>
         </div>
+        <p className="about-limitation">
+          The database is still growing. Some regions and sectors are under-covered, and some sources are gated or private.
+          Extracted variables remain reviewable — treat results as a starting point, not a final authority.
+        </p>
       </section>
-
-      <InfoCard
-        title="Current Limitations"
-        items={[
-          "Database is still growing.",
-          "Some regions and sectors are under-covered.",
-          "Some sources are gated or private.",
-          "Extracted variables remain reviewable, not automatically authoritative.",
-        ]}
-      />
     </main>
   );
 }
 
-function InfoCard({ title, items }: { title: string; items: string[] }) {
-  return (
-    <section className="content-section">
-      <h2>{title}</h2>
-      <ul className="about-list">
-        {items.map(item => <li key={item}>{item}</li>)}
-      </ul>
-    </section>
-  );
-}
-
 function PipelineDiagram() {
-  const steps = ["Sources", "Reports", "Codebooks", "Search Index", "Data Discovery Assistant"];
+  const steps = ["Sources", "Reports", "Codebooks", "Search Index", "Data Discovery"];
   return (
     <ol className="pipeline-diagram" aria-label="Data processing pipeline">
       {steps.map(step => <li key={step}>{step}</li>)}
     </ol>
-  );
-}
-
-function AvailabilityExplainer({ label, description }: { label: string; description: string }) {
-  return (
-    <div className="availability-row">
-      <strong>{label}</strong>
-      <p>{description}</p>
-    </div>
   );
 }
 
@@ -661,7 +791,7 @@ function AuthPage({ mode, user, onAuthed }: { mode: "login" | "register"; user: 
         : await register(name, email, password);
       onAuthed(nextUser);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed.");
+      setError(err instanceof Error ? err.message : "Authentication failed. Please check your credentials.");
     } finally {
       setSubmitting(false);
     }
@@ -679,8 +809,8 @@ function AuthPage({ mode, user, onAuthed }: { mode: "login" | "register"; user: 
   return (
     <main className="main-content narrow-content">
       <PageHeader
-        title={isLogin ? "Login" : "Register"}
-        description={isLogin ? "Log in to access query history and research projects." : "Create an account to save history and research projects later."}
+        title={isLogin ? "Login" : "Create account"}
+        description={isLogin ? "Access your query history and research projects." : "Save searches and organize findings into research projects."}
       />
       <form className="auth-form" onSubmit={onSubmit}>
         {!isLogin && (
@@ -718,8 +848,8 @@ function AuthPage({ mode, user, onAuthed }: { mode: "login" | "register"; user: 
             required
           />
         </label>
-        {error && <p className="form-error">{error}</p>}
-        <button type="submit" disabled={submitting}>{submitting ? "Working..." : isLogin ? "Login" : "Register"}</button>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <button type="submit" disabled={submitting}>{submitting ? "Working…" : isLogin ? "Login" : "Create account"}</button>
       </form>
       <p className="muted-copy">
         {isLogin ? "No account yet? Use Register in the navigation bar." : "Already have an account? Use Login in the navigation bar."}
@@ -797,11 +927,11 @@ function ProjectsPage({ onNavigate }: { onNavigate: (path: string) => void }) {
     <main className="main-content">
       <PageHeader
         title="Research Projects"
-        description="Group searches, source notes, and selected variables into project workspaces."
+        description="Organize searches, variables, and source notes into project workspaces."
       />
-      {error && <div className="notice error">{error}</div>}
+      {error && <div className="notice error" role="alert">{error}</div>}
       <section className="content-section">
-        <h2>Create Project</h2>
+        <h2>New project</h2>
         <form className="project-form" onSubmit={submit}>
           <label>Title<input value={title} onChange={event => setTitle(event.target.value)} required /></label>
           <label>Research question<input value={researchQuestion} onChange={event => setResearchQuestion(event.target.value)} /></label>
@@ -810,15 +940,17 @@ function ProjectsPage({ onNavigate }: { onNavigate: (path: string) => void }) {
         </form>
       </section>
       <section className="content-section">
-        <h2>Your Projects</h2>
-        {loading && <p className="muted-copy">Loading projects...</p>}
-        {!loading && projects.length === 0 && <p className="muted-copy">No projects yet.</p>}
+        <h2>Your projects</h2>
+        {loading && <p className="muted-copy">Loading…</p>}
+        {!loading && projects.length === 0 && (
+          <p className="muted-copy">No projects yet. Save a search from the Data page to create one.</p>
+        )}
         <div className="project-list">
           {projects.map(project => (
             <button key={project.id} type="button" onClick={() => onNavigate(`/projects/${project.id}`)}>
               <strong>{project.title}</strong>
               {project.research_question && <span>{project.research_question}</span>}
-              <small>{project.item_count || 0} saved items · updated {formatDate(project.updated_at)}</small>
+              <small>{project.item_count || 0} saved item{(project.item_count || 0) !== 1 ? "s" : ""} · updated {formatDate(project.updated_at)}</small>
             </button>
           ))}
         </div>
@@ -827,207 +959,41 @@ function ProjectsPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   );
 }
 
-function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNavigate: (path: string) => void }) {
-  const [project, setProject] = useState<ResearchProject | null>(null);
-  const [items, setItems] = useState<ProjectItem[]>([]);
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [researchQuestion, setResearchQuestion] = useState("");
-  const [note, setNote] = useState("");
-  const [error, setError] = useState("");
-  const [markdown, setMarkdown] = useState("");
+// ── Project workspace helpers ──────────────────
 
-  useEffect(() => {
-    void loadProject();
-  }, [projectId]);
-
-  async function loadProject() {
-    setError("");
-    try {
-      const result = await getProject(projectId);
-      setProject(result.project);
-      setItems(result.items);
-      setTitle(result.project.title);
-      setDescription(result.project.description || "");
-      setResearchQuestion(result.project.research_question || "");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load project.");
-    }
-  }
-
-  async function saveProject(event: FormEvent) {
-    event.preventDefault();
-    try {
-      const next = await updateProject(projectId, { title, description, research_question: researchQuestion });
-      setProject(next);
-      setEditing(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update project.");
-    }
-  }
-
-  async function addNote(event: FormEvent) {
-    event.preventDefault();
-    if (!note.trim()) return;
-    try {
-      await addProjectItem(projectId, { item_type: "note", title: note.trim().slice(0, 80), note, metadata: {} });
-      setNote("");
-      await loadProject();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add note.");
-    }
-  }
-
-  async function saveItemNote(itemId: string, nextNote: string) {
-    try {
-      await updateProjectItemNote(itemId, nextNote);
-      await loadProject();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update note.");
-    }
-  }
-
-  async function removeItem(itemId: string) {
-    try {
-      await removeProjectItem(itemId);
-      setItems(items.filter(item => item.id !== itemId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove item.");
-    }
-  }
-
-  async function exportMarkdown() {
-    try {
-      setMarkdown(await exportProjectMarkdown(projectId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not export project.");
-    }
-  }
-
-  function reopenSearch(item: ProjectItem) {
-    const payload = item.metadata?.result_payload;
-    if (payload && typeof payload === "object") {
-      window.sessionStorage.setItem("projectReopenSearch", JSON.stringify({ query: item.metadata?.query, response: payload }));
-    }
-    onNavigate("/data");
-  }
-
-  const grouped = groupProjectItems(items);
-
-  return (
-    <main className="main-content">
-      <PageHeader title={project?.title || "Project"} description={project?.research_question || "Research workspace."} />
-      {error && <div className="notice error">{error}</div>}
-      {!project && !error && <p className="muted-copy">Loading project...</p>}
-      {project && (
-        <>
-          <div className="project-toolbar">
-            <button type="button" onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit project"}</button>
-            <button type="button" onClick={() => void exportMarkdown()}>Export markdown</button>
-          </div>
-          {editing && (
-            <section className="content-section">
-              <form className="project-form" onSubmit={saveProject}>
-                <label>Title<input value={title} onChange={event => setTitle(event.target.value)} required /></label>
-                <label>Research question<input value={researchQuestion} onChange={event => setResearchQuestion(event.target.value)} /></label>
-                <label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} /></label>
-                <button type="submit">Save changes</button>
-              </form>
-            </section>
-          )}
-          {project.description && (
-            <section className="content-section">
-              <h2>Description</h2>
-              <p>{project.description}</p>
-            </section>
-          )}
-          <form className="project-note-form" onSubmit={addNote}>
-            <label>
-              Notes
-              <textarea value={note} onChange={event => setNote(event.target.value)} rows={3} placeholder="Add a note to this project" />
-            </label>
-            <button type="submit">Add note</button>
-          </form>
-          {(["search_result", "variable", "report", "source", "organization", "note"] as ProjectItem["item_type"][]).map(type => (
-            <ProjectItemSection
-              key={type}
-              title={projectSectionTitle(type)}
-              items={grouped[type] || []}
-              onRemove={removeItem}
-              onSaveNote={saveItemNote}
-              onReopen={type === "search_result" ? reopenSearch : undefined}
-            />
-          ))}
-          {markdown && (
-            <section className="content-section">
-              <h2>Markdown Export</h2>
-              <textarea className="markdown-export" value={markdown} readOnly rows={12} />
-            </section>
-          )}
-        </>
-      )}
-    </main>
+function generateSuggestedQueries(project: ResearchProject): string[] {
+  const title = (project.title || "").trim();
+  const question = (project.research_question || "").trim();
+  if (!title) return [];
+  const topic = title.replace(/\b(research|project|study|analysis|overview|report)\b/gi, "").trim() || title;
+  const queries: string[] = [];
+  if (question && question.length < 90) queries.push(question);
+  queries.push(
+    `${topic} startup funding by stage`,
+    `${topic} VC deal count trends`,
+    `${topic} innovation and digital economy metrics`,
+    `Startup ecosystem organizations in ${topic}`,
+    `Compare funding definitions for ${topic}`,
   );
+  return [...new Set(queries)].filter(q => q.length > 10 && q.length < 120).slice(0, 5);
 }
 
-function ProjectItemSection({
-  title,
-  items,
-  onRemove,
-  onSaveNote,
-  onReopen,
-}: {
-  title: string;
-  items: ProjectItem[];
-  onRemove: (itemId: string) => void;
-  onSaveNote: (itemId: string, note: string) => void;
-  onReopen?: (item: ProjectItem) => void;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <section className="content-section">
-      <h2>{title}</h2>
-      <div className="project-items">
-        {items.map(item => (
-          <ProjectItemCard key={item.id} item={item} onRemove={onRemove} onSaveNote={onSaveNote} onReopen={onReopen} />
-        ))}
-      </div>
-    </section>
-  );
+function projectItemToDrawerItem(item: ProjectItem): import("./components/DetailDrawer").DrawerItem | null {
+  const meta = item.metadata;
+  if (!meta) return null;
+  if (item.item_type === "variable" && meta.variable) return { kind: "variable", data: meta.variable as never };
+  if (item.item_type === "report" && meta.report) return { kind: "report", data: meta.report as never };
+  if (item.item_type === "organization" && meta.organization) return { kind: "organization", data: meta.organization as never };
+  if (item.item_type === "source" && meta.source) return { kind: "source", data: meta.source as never };
+  return null;
 }
 
-function ProjectItemCard({
-  item,
-  onRemove,
-  onSaveNote,
-  onReopen,
-}: {
-  item: ProjectItem;
-  onRemove: (itemId: string) => void;
-  onSaveNote: (itemId: string, note: string) => void;
-  onReopen?: (item: ProjectItem) => void;
-}) {
-  const [note, setNote] = useState(item.note || "");
-  const sourceUrl = stringFromMetadata(item.metadata, "source_url");
-  return (
-    <article className="project-item-card">
-      <div>
-        <h3>{item.title || item.item_type}</h3>
-        <p>{item.item_type}</p>
-        {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">Open source</a>}
-      </div>
-      <label>
-        Note
-        <textarea value={note} onChange={event => setNote(event.target.value)} rows={2} />
-      </label>
-      <div className="project-item-actions">
-        {onReopen && <button type="button" onClick={() => onReopen(item)}>Reopen</button>}
-        <button type="button" onClick={() => onSaveNote(item.id, note)}>Save note</button>
-        <button type="button" onClick={() => onRemove(item.id)}>Remove</button>
-      </div>
-    </article>
-  );
+function evidenceTypeLabel(type: ProjectItem["item_type"]): string {
+  const map: Record<string, string> = {
+    variable: "Var", report: "Rep", organization: "Org",
+    source: "Src", search_result: "Search", note: "Note",
+  };
+  return map[type] || type;
 }
 
 function groupProjectItems(items: ProjectItem[]) {
@@ -1037,27 +1003,427 @@ function groupProjectItems(items: ProjectItem[]) {
   }, {});
 }
 
-function projectSectionTitle(type: ProjectItem["item_type"]) {
-  const labels: Record<string, string> = {
-    search_result: "Saved Searches",
-    variable: "Saved Variables",
-    report: "Saved Reports",
-    source: "Saved Sources",
-    organization: "Saved Organizations",
-    note: "Notes",
-  };
-  return labels[type] || type;
-}
+// ── Project workspace ─────────────────────────
 
-function stringFromMetadata(metadata: Record<string, unknown>, key: string) {
-  const direct = metadata[key];
-  if (typeof direct === "string") return direct;
-  for (const value of Object.values(metadata)) {
-    if (value && typeof value === "object" && key in value && typeof (value as Record<string, unknown>)[key] === "string") {
-      return String((value as Record<string, unknown>)[key]);
+function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNavigate: (path: string) => void }) {
+  // Project data
+  const [project, setProject] = useState<ResearchProject | null>(null);
+  const [items, setItems] = useState<ProjectItem[]>([]);
+  const [loadError, setLoadError] = useState("");
+
+  // Edit state
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editQuestion, setEditQuestion] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+
+  // Chat state
+  const [message, setMessage] = useState("");
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
+  const [conversationId, setConversationId] = useState<string | undefined>();
+  const [lastQuery, setLastQuery] = useState("");
+  const [answerId, setAnswerId] = useState(() => `answer-${Date.now()}`);
+  const [hasQueried, setHasQueried] = useState(false);
+
+  // UI state
+  const [drawerItem, setDrawerItem] = useState<DrawerItem | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [sidebarTab, setSidebarTab] = useState<"evidence" | "notes">("evidence");
+  const [markdown, setMarkdown] = useState("");
+  const [showMarkdown, setShowMarkdown] = useState(false);
+
+  const latestAssistant = [...turns].reverse().find(t => t.role === "assistant");
+  const latestResponse = latestAssistant?.response;
+  const isClarification = latestResponse?.type === "clarification";
+  const hasResults = latestResponse && latestResponse.type !== "clarification";
+  const clarifyingQuestions = latestResponse?.clarifying_questions ?? [];
+
+  const grouped = groupProjectItems(items);
+  const evidenceItems = items.filter(i => i.item_type !== "note");
+  const noteItems = grouped.note || [];
+  const stats = {
+    searches: (grouped.search_result || []).length,
+    variables: (grouped.variable || []).length,
+    reports: (grouped.report || []).length,
+    sources: (grouped.source || []).length + (grouped.organization || []).length,
+    notes: noteItems.length,
+  };
+
+  useEffect(() => { void loadProject(); }, [projectId]);
+
+  async function loadProject() {
+    setLoadError("");
+    try {
+      const result = await getProject(projectId);
+      setProject(result.project);
+      setItems(result.items);
+      setEditTitle(result.project.title);
+      setEditQuestion(result.project.research_question || "");
+      setEditDescription(result.project.description || "");
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load this project.");
     }
   }
-  return "";
+
+  function historyFromTurns(): ChatHistoryItem[] {
+    return turns.filter(t => t.content.trim()).slice(-10).map(t => ({ role: t.role, content: t.content }));
+  }
+
+  async function runProjectQuery(query: string) {
+    const trimmed = query.trim();
+    if (!trimmed || chatLoading) return;
+    setLastQuery(trimmed);
+    setDrawerItem(null);
+    setChatLoading(true);
+    setChatError("");
+    setHasQueried(true);
+    setAnswerId(`answer-${Date.now()}`);
+    const userTurn: Turn = { id: crypto.randomUUID(), role: "user", content: trimmed };
+    const nextTurns = [...turns, userTurn];
+    setTurns(nextTurns);
+    setMessage("");
+    try {
+      const response = await queryProject(projectId, trimmed, historyFromTurns(), conversationId);
+      if (response.conversation_id) setConversationId(response.conversation_id);
+      setTurns([...nextTurns, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: response.assistant_message || response.message,
+        response,
+      }]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Search failed.";
+      setChatError(msg);
+      setTurns([...nextTurns, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "The search could not complete. Please try again.",
+        response: {
+          type: "error", message: msg, assistant_message: msg,
+          intent: "unknown", clarifying_questions: [], tool_calls: [],
+          results: { closest_variables: [], relevant_reports: [], relevant_organizations: [], source_links: [], comparison: {} },
+          limitations: [],
+        },
+      }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    void runProjectQuery(message);
+  }
+
+  function handleChipClick(option: string) {
+    void runProjectQuery(lastQuery ? `${lastQuery}, ${option}` : option);
+  }
+
+  function handleItemSaved() {
+    void loadProject();
+  }
+
+  async function addNote(event: FormEvent) {
+    event.preventDefault();
+    if (!noteText.trim()) return;
+    try {
+      await addProjectItem(projectId, {
+        item_type: "note",
+        title: noteText.trim().slice(0, 80),
+        note: noteText.trim(),
+        metadata: {},
+      });
+      setNoteText("");
+      void loadProject();
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Could not add note.");
+    }
+  }
+
+  async function removeItem(itemId: string) {
+    try {
+      await removeProjectItem(itemId);
+      setItems(prev => prev.filter(i => i.id !== itemId));
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Could not remove item.");
+    }
+  }
+
+  async function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const next = await updateProject(projectId, {
+        title: editTitle,
+        description: editDescription,
+        research_question: editQuestion,
+      });
+      setProject(next);
+      setEditing(false);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not save changes.");
+    }
+  }
+
+  async function doExport() {
+    try {
+      const md = await exportProjectMarkdown(projectId);
+      setMarkdown(md);
+      setShowMarkdown(true);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not export project.");
+    }
+  }
+
+  async function feedbackFn(type: string) {
+    try { await submitFeedback(answerId, type); } catch { /* non-critical */ }
+  }
+
+  const suggestedQueries = project && !hasQueried ? generateSuggestedQueries(project) : [];
+
+  if (!project && !loadError) {
+    return <PlaceholderPage title="Loading project" description="Fetching your research workspace…" />;
+  }
+
+  return (
+    <div className="project-workspace">
+      {/* ── Header ── */}
+      <div className="project-workspace-header">
+        {loadError && <div className="notice error" role="alert" style={{ marginBottom: 8 }}>{loadError}</div>}
+        <div className="pwh-inner">
+          <div className="pwh-main">
+            <h1 className="pwh-title">{project?.title || "Project"}</h1>
+            {project?.research_question && (
+              <p className="pwh-question">{project.research_question}</p>
+            )}
+            <div className="project-stat-row">
+              {stats.searches > 0 && <span>{stats.searches} search{stats.searches !== 1 ? "es" : ""}</span>}
+              {stats.variables > 0 && <span>{stats.variables} variable{stats.variables !== 1 ? "s" : ""}</span>}
+              {stats.reports > 0 && <span>{stats.reports} report{stats.reports !== 1 ? "s" : ""}</span>}
+              {stats.sources > 0 && <span>{stats.sources} source{stats.sources !== 1 ? "s" : ""}</span>}
+              {stats.notes > 0 && <span>{stats.notes} note{stats.notes !== 1 ? "s" : ""}</span>}
+              {items.length === 0 && <span className="project-stat-empty">No saved evidence yet</span>}
+            </div>
+          </div>
+          <div className="pwh-actions">
+            <button type="button" onClick={() => void doExport()}>Export brief</button>
+            <button type="button" onClick={() => setEditing(!editing)}>
+              {editing ? "Cancel" : "Edit"}
+            </button>
+          </div>
+        </div>
+
+        {/* Edit panel */}
+        {editing && (
+          <form className="project-edit-form" onSubmit={saveEdit}>
+            <label>Title<input value={editTitle} onChange={e => setEditTitle(e.target.value)} required /></label>
+            <label>Research question<input value={editQuestion} onChange={e => setEditQuestion(e.target.value)} /></label>
+            <label>Description<textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={2} /></label>
+            <button type="submit">Save</button>
+          </form>
+        )}
+
+        {/* Markdown export */}
+        {showMarkdown && markdown && (
+          <div className="project-export-area">
+            <div className="project-export-head">
+              <span>Markdown brief</span>
+              <button type="button" onClick={() => setShowMarkdown(false)}>Close</button>
+            </div>
+            <textarea className="markdown-export" value={markdown} readOnly rows={10} />
+          </div>
+        )}
+      </div>
+
+      {/* ── Body ── */}
+      <div className="project-workspace-body">
+        {/* Main column */}
+        <main className="project-workspace-main">
+          {/* Search input */}
+          <div className="search-area">
+            <form onSubmit={onSubmit}>
+              <div className="search-row">
+                <Search size={17} className="search-icon" aria-hidden="true" />
+                <input
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  placeholder="Ask a data question for this project…"
+                  autoFocus
+                  aria-label="Project search query"
+                />
+                <button type="submit" disabled={chatLoading || !message.trim()}>
+                  {chatLoading ? "Searching…" : "Search"}
+                </button>
+              </div>
+            </form>
+
+            {suggestedQueries.length > 0 && (
+              <div className="example-chips">
+                {suggestedQueries.map(q => (
+                  <button key={q} type="button" className="chip" onClick={() => void runProjectQuery(q)}>
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {chatError && <div className="notice error" role="alert">{chatError}</div>}
+
+          {(latestResponse || chatLoading) && (
+            <div className="result-area">
+              {chatLoading && !latestResponse && <SearchingState />}
+              {latestResponse && (
+                <>
+                  {chatLoading && <SearchingBanner />}
+                  <AnswerSummary response={latestResponse} loading={chatLoading} />
+
+                  {isClarification && clarifyingQuestions.length > 0 && (
+                    <ClarificationPanel questions={clarifyingQuestions} onChoose={handleChipClick} />
+                  )}
+                  {hasResults && clarifyingQuestions.length > 0 && (
+                    <NarrowChips questions={clarifyingQuestions} onChoose={handleChipClick} />
+                  )}
+                  {hasResults && !chatLoading && (
+                    <div className="answer-actions">
+                      <SaveToProjectButton
+                        label="Save to project"
+                        projectId={projectId}
+                        onSaved={handleItemSaved}
+                        payload={{
+                          item_type: "search_result",
+                          item_id: latestResponse?.saved_result_id,
+                          title: lastQuery || latestResponse?.message || "Saved search",
+                          metadata: {
+                            query: lastQuery,
+                            answer_summary: latestResponse?.assistant_message || latestResponse?.message,
+                            selected_variables: latestResponse?.results.closest_variables,
+                            relevant_reports: latestResponse?.results.relevant_reports,
+                            organizations: latestResponse?.results.relevant_organizations,
+                            source_links: latestResponse?.results.source_links,
+                            limitations: latestResponse?.limitations,
+                            result_payload: latestResponse,
+                          },
+                        }}
+                      />
+                    </div>
+                  )}
+                  {hasResults && latestResponse && (
+                    <ResultSections
+                      results={latestResponse.results}
+                      limitations={latestResponse.limitations}
+                      onViewEvidence={setDrawerItem}
+                      projectId={projectId}
+                      onItemSaved={handleItemSaved}
+                    />
+                  )}
+                  {hasResults && !chatLoading && (
+                    <div className="feedback-row">
+                      <button type="button" onClick={() => void feedbackFn("thumbs_up")}>Useful</button>
+                      <button type="button" onClick={() => void feedbackFn("thumbs_down")}>Not useful</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </main>
+
+        {/* Right sidebar */}
+        <aside className="project-workspace-sidebar">
+          {/* Quick note */}
+          <div className="pws-section">
+            <form onSubmit={addNote} className="quick-note-form">
+              <textarea
+                value={noteText}
+                onChange={e => setNoteText(e.target.value)}
+                placeholder="Add a research note…"
+                rows={3}
+              />
+              <button type="submit" disabled={!noteText.trim()}>Add note</button>
+            </form>
+          </div>
+
+          {/* Evidence basket */}
+          <div className="pws-section pws-section-grow">
+            <div className="pws-tabs">
+              <button
+                type="button"
+                className={sidebarTab === "evidence" ? "active" : ""}
+                onClick={() => setSidebarTab("evidence")}
+              >
+                Evidence
+                {evidenceItems.length > 0 && <span className="pws-tab-count">{evidenceItems.length}</span>}
+              </button>
+              <button
+                type="button"
+                className={sidebarTab === "notes" ? "active" : ""}
+                onClick={() => setSidebarTab("notes")}
+              >
+                Notes
+                {noteItems.length > 0 && <span className="pws-tab-count">{noteItems.length}</span>}
+              </button>
+            </div>
+
+            <div className="evidence-list">
+              {sidebarTab === "evidence" && (
+                <>
+                  {evidenceItems.length === 0 && (
+                    <p className="sidebar-note">Save variables, reports, and sources from your search results.</p>
+                  )}
+                  {evidenceItems.map(item => {
+                    const drawerData = projectItemToDrawerItem(item);
+                    return (
+                      <div key={item.id} className="evidence-item">
+                        <button
+                          type="button"
+                          className={`evidence-item-content${drawerData ? " clickable" : ""}`}
+                          onClick={drawerData ? () => setDrawerItem(drawerData) : undefined}
+                        >
+                          <span className={`evidence-type-tag et-${item.item_type}`}>
+                            {evidenceTypeLabel(item.item_type)}
+                          </span>
+                          <span className="evidence-item-title">{item.title || item.item_type}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="evidence-item-remove"
+                          aria-label={`Remove ${item.title || item.item_type}`}
+                          onClick={() => void removeItem(item.id)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {sidebarTab === "notes" && (
+                <>
+                  {noteItems.length === 0 && (
+                    <p className="sidebar-note">Your notes will appear here.</p>
+                  )}
+                  {noteItems.map(item => (
+                    <div key={item.id} className="note-item">
+                      <p className="note-item-text">{item.note || item.title}</p>
+                      <div className="note-item-foot">
+                        <span className="note-item-date">{formatDate(item.created_at)}</span>
+                        <button type="button" onClick={() => void removeItem(item.id)}>Remove</button>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
+    </div>
+  );
 }
 
 function MapPage() {
@@ -1085,9 +1451,9 @@ function MapPage() {
   return (
     <main className="map-page">
       <section className="map-sidebar">
-        <h1>Dynamic Map</h1>
+        <h1>Data Map</h1>
         <p>Explore geographies with available reports, variables, sources, and organizations.</p>
-        {error && <div className="notice error">{error}</div>}
+        {error && <div className="notice error" role="alert">{error}</div>}
         <label>Country<select value={country} onChange={event => setCountry(event.target.value)}><option value="">All</option>{countries.map(item => <option key={item}>{item}</option>)}</select></label>
         <label>Type<select value={type} onChange={event => setType(event.target.value)}><option value="">All</option><option value="organization">Organizations</option><option value="report">Reports</option><option value="variable">Variables</option><option value="source">Sources</option></select></label>
         <label>Availability<select value={availability} onChange={event => setAvailability(event.target.value)}><option value="">All</option>{unique(items.map(item => item.availability || "unclear")).map(item => <option key={item}>{item}</option>)}</select></label>
@@ -1145,10 +1511,6 @@ function PlaceholderPage({ title, description }: { title: string; description: s
   return (
     <main className="main-content narrow-content">
       <PageHeader title={title} description={description} />
-      <section className="content-section">
-        <h2>Status</h2>
-        <p>This page is part of the MVP navigation structure. Backend data and protected account features are not connected yet.</p>
-      </section>
     </main>
   );
 }
@@ -1156,7 +1518,7 @@ function PlaceholderPage({ title, description }: { title: string; description: s
 function NotFoundPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   return (
     <main className="main-content narrow-content">
-      <PageHeader title="Page not found" description="The requested page does not exist in the MVP demo." />
+      <PageHeader title="Page not found" description="The requested page does not exist." />
       <button type="button" className="plain-action" onClick={() => onNavigate("/data")}>Go to Data</button>
     </main>
   );

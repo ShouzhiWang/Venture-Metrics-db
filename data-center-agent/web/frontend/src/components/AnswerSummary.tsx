@@ -19,7 +19,6 @@ export function AnswerSummary({ response, loading }: Props) {
     return av.includes("private") || av.includes("unclear") || av === "";
   }).length;
 
-  const toolCalls = response.tool_calls ?? [];
   const hasLimitations = (response.limitations?.length ?? 0) > 0;
 
   return (
@@ -45,9 +44,6 @@ export function AnswerSummary({ response, loading }: Props) {
         {privateCount > 0 && (
           <span>{privateCount} private/unclear</span>
         )}
-        {toolCalls.map((call, i) => (
-          <span key={i} className="debug-badge">{call.name} · {call.status}</span>
-        ))}
       </div>
 
       {hasLimitations && (

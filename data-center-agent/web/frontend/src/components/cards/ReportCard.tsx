@@ -5,9 +5,11 @@ type Props = {
   report: ReportResult;
   onViewEvidence: () => void;
   onAuthRequired?: () => void;
+  projectId?: string;
+  onSaved?: () => void;
 };
 
-export function ReportCard({ report, onViewEvidence, onAuthRequired }: Props) {
+export function ReportCard({ report, onViewEvidence, onAuthRequired, projectId, onSaved }: Props) {
   const geo = report.geography || report.geographic_coverage;
   const title = report.title || "Report";
   const id = report.id || report.object_id || report.report_id;
@@ -46,6 +48,8 @@ export function ReportCard({ report, onViewEvidence, onAuthRequired }: Props) {
         )}
         <SaveToProjectButton
           onAuthRequired={onAuthRequired}
+          onSaved={onSaved}
+          projectId={projectId}
           payload={{
             item_type: "report",
             item_id: id,

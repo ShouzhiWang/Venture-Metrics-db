@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 try:
@@ -38,6 +39,12 @@ class ProjectItemRequest(BaseModel):
 
 class ProjectItemNoteRequest(BaseModel):
     note: str | None = Field(default=None, max_length=3000)
+
+
+class ProjectQueryRequest(BaseModel):
+    message: str
+    conversation_id: str | None = None
+    history: list[dict[str, str]] = Field(default_factory=list)
 
 
 ALLOWED_ITEM_TYPES = {"variable", "report", "source", "organization", "concept", "chat_session", "search_result", "note"}
@@ -262,3 +269,50 @@ if router:
         result = export_project_markdown_for_token(request.cookies.get(SESSION_COOKIE_NAME), project_id)
         _set_error_status(response, result)
         return result
+
+    @router.post("/{project_id}/query")
+    def query_project(request: Request, response: Response, project_id: str, payload: ProjectQueryRequest) -> dict[str, Any]:
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+        user = user_from_session_token(token)
+        if not user:
+            result = _auth_required()
+            _set_error_status(response, result)
+            return result
+
+        project_result = get_project_for_token(token, project_id)
+        if not project_result.get("ok"):
+            _set_error_status(response, project_result)
+            return project_result
+
+        project = project_result["project"]
+        project_title = (project.get("title") or "").strip()
+        research_question = (project.get("research_question") or "").strip()
+
+        user_message = (payload.message or "").strip()
+        context_parts = []
+        if project_title:
+            context_parts.append(f"Project: {project_title}")
+        if research_question:
+            context_parts.append(f"Research question: {research_question}")
+
+        enriched_message = f"[{'; '.join(context_parts)}] {user_message}" if context_parts else user_message
+
+        # Local import to avoid circular imports at module level
+        from web.backend.routes.chat import ChatRequest, handle_chat  # noqa: PLC0415
+
+        chat_request = ChatRequest(
+            message=enriched_message,
+            conversation_id=payload.conversation_id,
+            history=payload.history,
+            context={
+                "project_id": project_id,
+                "project_title": project_title,
+                "research_question": research_question,
+            },
+        )
+        chat_result = handle_chat(chat_request.model_dump())
+        # Assign a stable conversation_id for multi-turn threading without saving
+        # project queries to the general search history.
+        if not chat_result.get("conversation_id"):
+            chat_result["conversation_id"] = payload.conversation_id or str(uuid.uuid4())
+        return chat_result

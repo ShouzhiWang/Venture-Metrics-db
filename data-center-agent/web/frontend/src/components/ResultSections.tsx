@@ -11,12 +11,16 @@ type Props = {
   limitations: string[];
   onViewEvidence: (item: DrawerItem) => void;
   onAuthRequired?: () => void;
+  /** When set, cards save directly to this project without a picker */
+  projectId?: string;
+  /** Called after any card item is saved */
+  onItemSaved?: () => void;
 };
 
 const TABS = ["Variables", "Reports", "Organizations", "Sources", "Comparison"] as const;
 type TabName = typeof TABS[number];
 
-export function ResultSections({ results, limitations, onViewEvidence, onAuthRequired }: Props) {
+export function ResultSections({ results, limitations, onViewEvidence, onAuthRequired, projectId, onItemSaved }: Props) {
   const comparison = results.comparison || {};
   const hasComparison = Object.keys(comparison).length > 0;
 
@@ -74,6 +78,8 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
                 variable={item}
                 onViewEvidence={() => onViewEvidence({ kind: "variable", data: item })}
                 onAuthRequired={onAuthRequired}
+                projectId={projectId}
+                onSaved={onItemSaved}
               />
             ))}
           </div>
@@ -87,6 +93,8 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
                 report={item}
                 onViewEvidence={() => onViewEvidence({ kind: "report", data: item })}
                 onAuthRequired={onAuthRequired}
+                projectId={projectId}
+                onSaved={onItemSaved}
               />
             ))}
           </div>
@@ -100,6 +108,8 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
                 organization={item}
                 onViewEvidence={() => onViewEvidence({ kind: "organization", data: item })}
                 onAuthRequired={onAuthRequired}
+                projectId={projectId}
+                onSaved={onItemSaved}
               />
             ))}
           </div>
@@ -113,6 +123,8 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
                 source={item}
                 onViewEvidence={() => onViewEvidence({ kind: "source", data: item })}
                 onAuthRequired={onAuthRequired}
+                projectId={projectId}
+                onSaved={onItemSaved}
               />
             ))}
           </div>
