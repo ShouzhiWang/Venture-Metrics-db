@@ -93,15 +93,19 @@ def login_user(payload: dict[str, Any], response: Any | None = None) -> dict[str
 
 
 def get_current_user_from_token(token: str | None) -> dict[str, Any]:
+    return {"ok": True, "user": user_from_session_token(token)}
+
+
+def user_from_session_token(token: str | None) -> dict[str, Any] | None:
     if not token:
-        return {"ok": True, "user": None}
+        return None
     try:
         payload = read_session_token(token)
     except (AuthConfigError, InvalidSessionError):
-        return {"ok": True, "user": None}
+        return None
     with get_engine().begin() as connection:
         user = UserRepository(connection).get_public_by_id(str(payload["sub"]))
-    return {"ok": True, "user": public_user(user)}
+    return public_user(user)
 
 
 def logout_user(response: Any | None = None) -> dict[str, Any]:

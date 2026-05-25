@@ -1,11 +1,33 @@
 import { FormEvent, useEffect, useState } from "react";
 import type React from "react";
 import { Search } from "lucide-react";
-import { getCurrentUser, login, logout, register, sendChat, submitFeedback, type ChatHistoryItem, type User } from "./api";
+import {
+  addProjectItem,
+  createProject,
+  exportProjectMarkdown,
+  getCurrentUser,
+  getHistoryItem,
+  getProject,
+  listMapItems,
+  listHistory,
+  listProjects,
+  login,
+  logout,
+  register,
+  removeProjectItem,
+  sendChat,
+  submitFeedback,
+  updateProject,
+  updateProjectItemNote,
+  type ChatHistoryItem,
+  type HistoryItem,
+  type User,
+} from "./api";
 import { AnswerSummary } from "./components/AnswerSummary";
 import { ResultSections } from "./components/ResultSections";
 import { DetailDrawer, type DrawerItem } from "./components/DetailDrawer";
-import type { ChatResponse, ClarifyingQuestion } from "./types";
+import { SaveToProjectButton } from "./components/SaveToProjectButton";
+import type { ChatResponse, ClarifyingQuestion, MapItem, ProjectItem, ResearchProject } from "./types";
 
 const EXAMPLES = [
   "Singapore VC deal count and median round values",
@@ -78,17 +100,49 @@ export function App() {
   }
 }
 
-function DataDiscoveryPage() {
+function DataDiscoveryPage({ onAuthRequired }: { onAuthRequired?: () => void }) {
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | undefined>();
   const [drawerItem, setDrawerItem] = useState<DrawerItem | null>(null);
   const [lastQuery, setLastQuery] = useState("");
   const [answerId, setAnswerId] = useState(() => `answer-${Date.now()}`);
+  const [conversationId, setConversationId] = useState<string | undefined>();
 
   const latestAssistant = [...turns].reverse().find(t => t.role === "assistant");
   const hasTurns = turns.length > 0;
+
+  useEffect(() => {
+    void refreshHistory();
+    const stored = window.sessionStorage.getItem("projectReopenSearch");
+    if (stored) {
+      window.sessionStorage.removeItem("projectReopenSearch");
+      try {
+        const parsed = JSON.parse(stored) as { query?: string; response?: ChatResponse };
+        if (parsed.response) {
+          setTurns([
+            { id: crypto.randomUUID(), role: "user", content: parsed.query || "Saved search" },
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: parsed.response.assistant_message || parsed.response.message,
+              response: parsed.response,
+            },
+          ]);
+          setLastQuery(parsed.query || "");
+          setConversationId(parsed.response.conversation_id);
+          setSelectedHistoryId(parsed.response.saved_result_id);
+        }
+      } catch {
+        setError("Could not reopen saved project search.");
+      }
+    }
+  }, []);
 
   function historyFromTurns(nextTurns = turns): ChatHistoryItem[] {
     return nextTurns
@@ -110,7 +164,10 @@ function DataDiscoveryPage() {
     setError("");
     setAnswerId(`answer-${Date.now()}`);
     try {
-      const response = await sendChat(trimmed, {}, historyFromTurns(nextTurns));
+      const response = await sendChat(trimmed, {}, historyFromTurns(nextTurns), conversationId);
+      if (response.conversation_id) {
+        setConversationId(response.conversation_id);
+      }
       const assistantTurn: Turn = {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -118,6 +175,7 @@ function DataDiscoveryPage() {
         response,
       };
       setTurns([...nextTurns, assistantTurn]);
+      void refreshHistory();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Request failed";
       setError(msg);
@@ -168,6 +226,57 @@ function DataDiscoveryPage() {
     }
   }
 
+  async function refreshHistory() {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      setHistoryItems(await listHistory());
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Could not load history.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function reopenHistory(item: HistoryItem) {
+    setError("");
+    try {
+      const fullItem = await getHistoryItem(item.id);
+      if (!fullItem.result_payload) {
+        setError("This history item does not include a saved result payload.");
+        return;
+      }
+      const userTurn: Turn = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: fullItem.query || fullItem.title,
+      };
+      const assistantTurn: Turn = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: fullItem.result_payload.assistant_message || fullItem.result_payload.message,
+        response: fullItem.result_payload,
+      };
+      setTurns([userTurn, assistantTurn]);
+      setLastQuery(fullItem.query || fullItem.title);
+      setConversationId(fullItem.session_id || fullItem.result_payload.conversation_id);
+      setSelectedHistoryId(item.id);
+      setDrawerItem(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reopen history item.");
+    }
+  }
+
+  function startNewSearch() {
+    setTurns([]);
+    setMessage("");
+    setLastQuery("");
+    setConversationId(undefined);
+    setSelectedHistoryId(undefined);
+    setDrawerItem(null);
+    setError("");
+  }
+
   const latestResponse = latestAssistant?.response;
   const isClarification = latestResponse?.type === "clarification";
   const hasResults = latestResponse && latestResponse.type !== "clarification";
@@ -175,11 +284,43 @@ function DataDiscoveryPage() {
 
   return (
     <>
-      <main className="main-content">
-        <PageHeader
-          title="Data That You Want"
-          description="Ask for data availability, source evidence, definitions, reports, and ecosystem organizations."
-        />
+      <main className="data-workspace">
+        <aside className="history-sidebar" aria-label="Search history">
+          <div className="history-sidebar-head">
+            <h2>Searches</h2>
+            <button type="button" onClick={startNewSearch}>New</button>
+          </div>
+          {historyLoading && <p className="history-sidebar-note">Loading...</p>}
+          {historyError && <p className="history-sidebar-note error-text">{historyError}</p>}
+          {!historyLoading && historyItems.length === 0 && (
+            <p className="history-sidebar-note">Your saved searches will appear here.</p>
+          )}
+          {!historyLoading && historyItems.length > 0 && (
+            <div className="history-sidebar-list">
+              {historyItems.map(item => {
+                const active = selectedHistoryId === item.id || Boolean(conversationId && item.session_id === conversationId);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={active ? "active" : undefined}
+                    aria-current={active ? "true" : undefined}
+                    onClick={() => void reopenHistory(item)}
+                  >
+                    <strong>{item.query || item.title}</strong>
+                    <span>{formatDate(item.created_at)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </aside>
+
+        <section className="data-main">
+          <PageHeader
+            title="Data That You Want"
+            description="Ask for data availability, source evidence, definitions, reports, and ecosystem organizations."
+          />
 
         {/* Search input */}
         <div className="search-area">
@@ -228,6 +369,29 @@ function DataDiscoveryPage() {
               <>
                 {loading && <SearchingBanner />}
                 <AnswerSummary response={latestResponse} loading={loading} />
+                {hasResults && !loading && (
+                  <div className="answer-actions">
+                    <SaveToProjectButton
+                      label="Save search to project"
+                      onAuthRequired={onAuthRequired}
+                      payload={{
+                        item_type: "search_result",
+                        item_id: latestResponse.saved_result_id,
+                        title: lastQuery || latestResponse.message || "Saved search",
+                        metadata: {
+                          query: lastQuery,
+                          answer_summary: latestResponse.assistant_message || latestResponse.message,
+                          selected_variables: latestResponse.results.closest_variables,
+                          relevant_reports: latestResponse.results.relevant_reports,
+                          organizations: latestResponse.results.relevant_organizations,
+                          source_links: latestResponse.results.source_links,
+                          limitations: latestResponse.limitations,
+                          result_payload: latestResponse,
+                        },
+                      }}
+                    />
+                  </div>
+                )}
               </>
             )}
 
@@ -253,6 +417,7 @@ function DataDiscoveryPage() {
                 results={latestResponse.results}
                 limitations={latestResponse.limitations}
                 onViewEvidence={setDrawerItem}
+                onAuthRequired={onAuthRequired}
               />
             )}
 
@@ -269,6 +434,7 @@ function DataDiscoveryPage() {
             )}
           </div>
         )}
+        </section>
       </main>
 
       <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
@@ -297,7 +463,6 @@ function TopNav({
         <NavLink href="/data" path={path} onNavigate={onNavigate}>Data</NavLink>
         <NavLink href="/map" path={path} onNavigate={onNavigate}>Map</NavLink>
         <NavLink href="/projects" path={path} onNavigate={onNavigate}>Projects</NavLink>
-        <NavLink href="/history" path={path} onNavigate={onNavigate}>History</NavLink>
       </nav>
       <div className="auth-nav">
         {user ? (
@@ -356,15 +521,20 @@ function routePage(
   setUser: (user: User | null) => void,
 ) {
   if (path === "/about") return <AboutPage />;
-  if (path === "/data" || path === "/") return <DataDiscoveryPage />;
+  if (path === "/data" || path === "/") {
+    return (
+      <ProtectedPage user={user} authLoading={authLoading} navigate={navigate}>
+        <DataDiscoveryPage onAuthRequired={() => navigate("/login")} />
+      </ProtectedPage>
+    );
+  }
   if (path === "/login") return <AuthPage mode="login" user={user} onAuthed={nextUser => { setUser(nextUser); navigate("/data"); }} />;
   if (path === "/register") return <AuthPage mode="register" user={user} onAuthed={nextUser => { setUser(nextUser); navigate("/data"); }} />;
-  if (path === "/history") return <ProtectedPage user={user} authLoading={authLoading} navigate={navigate}><HistoryPage /></ProtectedPage>;
   if (path === "/projects") return <ProtectedPage user={user} authLoading={authLoading} navigate={navigate}><ProjectsPage onNavigate={navigate} /></ProtectedPage>;
   if (path.startsWith("/projects/")) {
     return (
       <ProtectedPage user={user} authLoading={authLoading} navigate={navigate}>
-        <ProjectDetailPage projectId={decodeURIComponent(path.replace("/projects/", ""))} />
+        <ProjectDetailPage projectId={decodeURIComponent(path.replace("/projects/", ""))} onNavigate={navigate} />
       </ProtectedPage>
     );
   }
@@ -584,54 +754,391 @@ function ProtectedPage({
   return <>{children}</>;
 }
 
-function HistoryPage() {
-  return (
-    <PlaceholderPage
-      title="History"
-      description="Saved query history will appear here after authentication and server-side conversation storage are added."
-    />
-  );
-}
-
 function ProjectsPage({ onNavigate }: { onNavigate: (path: string) => void }) {
+  const [projects, setProjects] = useState<ResearchProject[]>([]);
+  const [title, setTitle] = useState("");
+  const [researchQuestion, setResearchQuestion] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    listProjects()
+      .then(items => {
+        if (active) setProjects(items);
+      })
+      .catch(err => {
+        if (active) setError(err instanceof Error ? err.message : "Could not load projects.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    try {
+      const project = await createProject({ title, description, research_question: researchQuestion });
+      setProjects([project, ...projects]);
+      setTitle("");
+      setResearchQuestion("");
+      setDescription("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create project.");
+    }
+  }
+
   return (
     <main className="main-content">
       <PageHeader
         title="Research Projects"
         description="Group searches, source notes, and selected variables into project workspaces."
       />
-      <div className="list-panel">
-        <button type="button" onClick={() => onNavigate("/projects/demo-project")}>
-          Demo project
-        </button>
-        <p>Project storage is not connected yet. This route shows the intended workspace structure.</p>
-      </div>
-    </main>
-  );
-}
-
-function ProjectDetailPage({ projectId }: { projectId: string }) {
-  return (
-    <main className="main-content narrow-content">
-      <PageHeader
-        title="Project"
-        description={`Project workspace placeholder: ${projectId || "unknown project"}.`}
-      />
+      {error && <div className="notice error">{error}</div>}
       <section className="content-section">
-        <h2>Saved items</h2>
-        <p>Saved variables, reports, organizations, and notes will be listed here once project persistence is available.</p>
+        <h2>Create Project</h2>
+        <form className="project-form" onSubmit={submit}>
+          <label>Title<input value={title} onChange={event => setTitle(event.target.value)} required /></label>
+          <label>Research question<input value={researchQuestion} onChange={event => setResearchQuestion(event.target.value)} /></label>
+          <label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} /></label>
+          <button type="submit">Create project</button>
+        </form>
+      </section>
+      <section className="content-section">
+        <h2>Your Projects</h2>
+        {loading && <p className="muted-copy">Loading projects...</p>}
+        {!loading && projects.length === 0 && <p className="muted-copy">No projects yet.</p>}
+        <div className="project-list">
+          {projects.map(project => (
+            <button key={project.id} type="button" onClick={() => onNavigate(`/projects/${project.id}`)}>
+              <strong>{project.title}</strong>
+              {project.research_question && <span>{project.research_question}</span>}
+              <small>{project.item_count || 0} saved items · updated {formatDate(project.updated_at)}</small>
+            </button>
+          ))}
+        </div>
       </section>
     </main>
   );
 }
 
-function MapPage() {
+function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNavigate: (path: string) => void }) {
+  const [project, setProject] = useState<ResearchProject | null>(null);
+  const [items, setItems] = useState<ProjectItem[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [researchQuestion, setResearchQuestion] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const [markdown, setMarkdown] = useState("");
+
+  useEffect(() => {
+    void loadProject();
+  }, [projectId]);
+
+  async function loadProject() {
+    setError("");
+    try {
+      const result = await getProject(projectId);
+      setProject(result.project);
+      setItems(result.items);
+      setTitle(result.project.title);
+      setDescription(result.project.description || "");
+      setResearchQuestion(result.project.research_question || "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load project.");
+    }
+  }
+
+  async function saveProject(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const next = await updateProject(projectId, { title, description, research_question: researchQuestion });
+      setProject(next);
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update project.");
+    }
+  }
+
+  async function addNote(event: FormEvent) {
+    event.preventDefault();
+    if (!note.trim()) return;
+    try {
+      await addProjectItem(projectId, { item_type: "note", title: note.trim().slice(0, 80), note, metadata: {} });
+      setNote("");
+      await loadProject();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add note.");
+    }
+  }
+
+  async function saveItemNote(itemId: string, nextNote: string) {
+    try {
+      await updateProjectItemNote(itemId, nextNote);
+      await loadProject();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update note.");
+    }
+  }
+
+  async function removeItem(itemId: string) {
+    try {
+      await removeProjectItem(itemId);
+      setItems(items.filter(item => item.id !== itemId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove item.");
+    }
+  }
+
+  async function exportMarkdown() {
+    try {
+      setMarkdown(await exportProjectMarkdown(projectId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not export project.");
+    }
+  }
+
+  function reopenSearch(item: ProjectItem) {
+    const payload = item.metadata?.result_payload;
+    if (payload && typeof payload === "object") {
+      window.sessionStorage.setItem("projectReopenSearch", JSON.stringify({ query: item.metadata?.query, response: payload }));
+    }
+    onNavigate("/data");
+  }
+
+  const grouped = groupProjectItems(items);
+
   return (
-    <PlaceholderPage
-      title="Dynamic Map"
-      description="A geography-first view of variables, sources, and ecosystem organizations will be added after the map data model is ready."
-    />
+    <main className="main-content">
+      <PageHeader title={project?.title || "Project"} description={project?.research_question || "Research workspace."} />
+      {error && <div className="notice error">{error}</div>}
+      {!project && !error && <p className="muted-copy">Loading project...</p>}
+      {project && (
+        <>
+          <div className="project-toolbar">
+            <button type="button" onClick={() => setEditing(!editing)}>{editing ? "Cancel edit" : "Edit project"}</button>
+            <button type="button" onClick={() => void exportMarkdown()}>Export markdown</button>
+          </div>
+          {editing && (
+            <section className="content-section">
+              <form className="project-form" onSubmit={saveProject}>
+                <label>Title<input value={title} onChange={event => setTitle(event.target.value)} required /></label>
+                <label>Research question<input value={researchQuestion} onChange={event => setResearchQuestion(event.target.value)} /></label>
+                <label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} /></label>
+                <button type="submit">Save changes</button>
+              </form>
+            </section>
+          )}
+          {project.description && (
+            <section className="content-section">
+              <h2>Description</h2>
+              <p>{project.description}</p>
+            </section>
+          )}
+          <form className="project-note-form" onSubmit={addNote}>
+            <label>
+              Notes
+              <textarea value={note} onChange={event => setNote(event.target.value)} rows={3} placeholder="Add a note to this project" />
+            </label>
+            <button type="submit">Add note</button>
+          </form>
+          {(["search_result", "variable", "report", "source", "organization", "note"] as ProjectItem["item_type"][]).map(type => (
+            <ProjectItemSection
+              key={type}
+              title={projectSectionTitle(type)}
+              items={grouped[type] || []}
+              onRemove={removeItem}
+              onSaveNote={saveItemNote}
+              onReopen={type === "search_result" ? reopenSearch : undefined}
+            />
+          ))}
+          {markdown && (
+            <section className="content-section">
+              <h2>Markdown Export</h2>
+              <textarea className="markdown-export" value={markdown} readOnly rows={12} />
+            </section>
+          )}
+        </>
+      )}
+    </main>
   );
+}
+
+function ProjectItemSection({
+  title,
+  items,
+  onRemove,
+  onSaveNote,
+  onReopen,
+}: {
+  title: string;
+  items: ProjectItem[];
+  onRemove: (itemId: string) => void;
+  onSaveNote: (itemId: string, note: string) => void;
+  onReopen?: (item: ProjectItem) => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <section className="content-section">
+      <h2>{title}</h2>
+      <div className="project-items">
+        {items.map(item => (
+          <ProjectItemCard key={item.id} item={item} onRemove={onRemove} onSaveNote={onSaveNote} onReopen={onReopen} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProjectItemCard({
+  item,
+  onRemove,
+  onSaveNote,
+  onReopen,
+}: {
+  item: ProjectItem;
+  onRemove: (itemId: string) => void;
+  onSaveNote: (itemId: string, note: string) => void;
+  onReopen?: (item: ProjectItem) => void;
+}) {
+  const [note, setNote] = useState(item.note || "");
+  const sourceUrl = stringFromMetadata(item.metadata, "source_url");
+  return (
+    <article className="project-item-card">
+      <div>
+        <h3>{item.title || item.item_type}</h3>
+        <p>{item.item_type}</p>
+        {sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">Open source</a>}
+      </div>
+      <label>
+        Note
+        <textarea value={note} onChange={event => setNote(event.target.value)} rows={2} />
+      </label>
+      <div className="project-item-actions">
+        {onReopen && <button type="button" onClick={() => onReopen(item)}>Reopen</button>}
+        <button type="button" onClick={() => onSaveNote(item.id, note)}>Save note</button>
+        <button type="button" onClick={() => onRemove(item.id)}>Remove</button>
+      </div>
+    </article>
+  );
+}
+
+function groupProjectItems(items: ProjectItem[]) {
+  return items.reduce<Record<string, ProjectItem[]>>((acc, item) => {
+    acc[item.item_type] = [...(acc[item.item_type] || []), item];
+    return acc;
+  }, {});
+}
+
+function projectSectionTitle(type: ProjectItem["item_type"]) {
+  const labels: Record<string, string> = {
+    search_result: "Saved Searches",
+    variable: "Saved Variables",
+    report: "Saved Reports",
+    source: "Saved Sources",
+    organization: "Saved Organizations",
+    note: "Notes",
+  };
+  return labels[type] || type;
+}
+
+function stringFromMetadata(metadata: Record<string, unknown>, key: string) {
+  const direct = metadata[key];
+  if (typeof direct === "string") return direct;
+  for (const value of Object.values(metadata)) {
+    if (value && typeof value === "object" && key in value && typeof (value as Record<string, unknown>)[key] === "string") {
+      return String((value as Record<string, unknown>)[key]);
+    }
+  }
+  return "";
+}
+
+function MapPage() {
+  const [items, setItems] = useState<MapItem[]>([]);
+  const [selected, setSelected] = useState<MapItem | null>(null);
+  const [country, setCountry] = useState("");
+  const [type, setType] = useState("");
+  const [availability, setAvailability] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    listMapItems()
+      .then(setItems)
+      .catch(err => setError(err instanceof Error ? err.message : "Could not load map items."));
+  }, []);
+
+  const countries = unique(items.map(item => item.country).filter(Boolean) as string[]);
+  const filtered = items.filter(item => {
+    if (country && item.country !== country) return false;
+    if (type && item.type !== type) return false;
+    if (availability && (item.availability || "unclear") !== availability) return false;
+    return true;
+  });
+
+  return (
+    <main className="map-page">
+      <section className="map-sidebar">
+        <h1>Dynamic Map</h1>
+        <p>Explore geographies with available reports, variables, sources, and organizations.</p>
+        {error && <div className="notice error">{error}</div>}
+        <label>Country<select value={country} onChange={event => setCountry(event.target.value)}><option value="">All</option>{countries.map(item => <option key={item}>{item}</option>)}</select></label>
+        <label>Type<select value={type} onChange={event => setType(event.target.value)}><option value="">All</option><option value="organization">Organizations</option><option value="report">Reports</option><option value="variable">Variables</option><option value="source">Sources</option></select></label>
+        <label>Availability<select value={availability} onChange={event => setAvailability(event.target.value)}><option value="">All</option>{unique(items.map(item => item.availability || "unclear")).map(item => <option key={item}>{item}</option>)}</select></label>
+        {selected && (
+          <div className="map-detail">
+            <h2>{selected.city || selected.country || selected.title}</h2>
+            <p>{selected.title}</p>
+            {selected.description && <p>{selected.description}</p>}
+            <dl>
+              <dt>Type</dt><dd>{selected.type}</dd>
+              <dt>Country</dt><dd>{selected.country || "Unknown"}</dd>
+              <dt>Availability</dt><dd>{selected.availability || "unclear"}</dd>
+            </dl>
+          </div>
+        )}
+      </section>
+      <section className="map-canvas" aria-label="Asia map">
+        {filtered.map(item => {
+          const pos = mapPosition(item);
+          return (
+            <button
+              key={`${item.type}-${item.id}`}
+              type="button"
+              className={`map-marker ${item.type}`}
+              style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+              title={item.title}
+              onClick={() => setSelected(item)}
+            >
+              <span>{item.type[0].toUpperCase()}</span>
+            </button>
+          );
+        })}
+        <div className="map-empty">{filtered.length === 0 ? "No mapped items for these filters." : `${filtered.length} mapped items`}</div>
+      </section>
+    </main>
+  );
+}
+
+function unique(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+function mapPosition(item: MapItem) {
+  const minLng = 65;
+  const maxLng = 150;
+  const minLat = -12;
+  const maxLat = 48;
+  return {
+    x: Math.min(96, Math.max(4, ((item.lng - minLng) / (maxLng - minLng)) * 100)),
+    y: Math.min(96, Math.max(4, 100 - ((item.lat - minLat) / (maxLat - minLat)) * 100)),
+  };
 }
 
 function PlaceholderPage({ title, description }: { title: string; description: string }) {
@@ -653,6 +1160,19 @@ function NotFoundPage({ onNavigate }: { onNavigate: (path: string) => void }) {
       <button type="button" className="plain-action" onClick={() => onNavigate("/data")}>Go to Data</button>
     </main>
   );
+}
+
+function formatDate(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 const SEARCH_STEPS = [

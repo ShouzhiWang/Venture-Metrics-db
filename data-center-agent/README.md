@@ -296,11 +296,22 @@ Frontend routes:
 
 - `/`: redirects to `/data`.
 - `/about`: product methodology, source availability, and limitations.
-- `/data`: main data discovery chat/search page.
-- `/login` and `/register`: placeholder auth pages for the MVP.
-- `/history`: placeholder protected history page.
-- `/projects` and `/projects/:id`: placeholder research project pages.
-- `/map`: placeholder dynamic map page.
+- `/data`: main data discovery chat/search page with a saved-search sidebar for logged-in users.
+- `/login` and `/register`: MVP account pages.
+- `/projects` and `/projects/:id`: research project list/detail pages for saved searches, variables, reports, sources, organizations, and notes.
+- `/map`: map-based explorer for mappable organizations, reports, variables, and sources.
+
+When users are logged in, `/data` stores submitted queries, assistant responses, and tool-result payloads in `chat_sessions`, `chat_messages`, and `saved_search_results`. Saved searches appear in the `/data` sidebar and can reopen a prior result.
+
+Research projects use `research_projects` and `project_items`. Users can create projects, save individual result cards, save whole search results, reopen saved searches from a project, add notes, remove saved items, and export a simple markdown summary.
+
+The map uses `GET /api/map/items` and a built-in city/country coordinate dictionary for common Asian startup markets. Items without mappable city/country metadata are skipped for the MVP.
+
+Apply database migrations after pulling these changes:
+
+```bash
+.venv/bin/python -m app.db.migrate
+```
 
 Useful API calls:
 

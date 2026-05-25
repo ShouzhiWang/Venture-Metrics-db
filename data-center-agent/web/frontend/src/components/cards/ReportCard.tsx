@@ -1,16 +1,20 @@
 import type { ReportResult } from "../../types";
+import { SaveToProjectButton } from "../SaveToProjectButton";
 
 type Props = {
   report: ReportResult;
   onViewEvidence: () => void;
+  onAuthRequired?: () => void;
 };
 
-export function ReportCard({ report, onViewEvidence }: Props) {
+export function ReportCard({ report, onViewEvidence, onAuthRequired }: Props) {
   const geo = report.geography || report.geographic_coverage;
+  const title = report.title || "Report";
+  const id = report.id || report.object_id || report.report_id;
 
   return (
     <article className="result-card">
-      <h4>{report.title || "Report"}</h4>
+      <h4>{title}</h4>
 
       <div className="card-meta">
         {report.publisher && <span className="meta-chip">{report.publisher}</span>}
@@ -40,6 +44,15 @@ export function ReportCard({ report, onViewEvidence }: Props) {
             Open source
           </a>
         )}
+        <SaveToProjectButton
+          onAuthRequired={onAuthRequired}
+          payload={{
+            item_type: "report",
+            item_id: id,
+            title,
+            metadata: { report },
+          }}
+        />
       </div>
     </article>
   );

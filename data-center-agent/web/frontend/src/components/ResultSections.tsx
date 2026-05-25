@@ -10,12 +10,13 @@ type Props = {
   results: ChatResponse["results"];
   limitations: string[];
   onViewEvidence: (item: DrawerItem) => void;
+  onAuthRequired?: () => void;
 };
 
 const TABS = ["Variables", "Reports", "Organizations", "Sources", "Comparison"] as const;
 type TabName = typeof TABS[number];
 
-export function ResultSections({ results, limitations, onViewEvidence }: Props) {
+export function ResultSections({ results, limitations, onViewEvidence, onAuthRequired }: Props) {
   const comparison = results.comparison || {};
   const hasComparison = Object.keys(comparison).length > 0;
 
@@ -72,6 +73,7 @@ export function ResultSections({ results, limitations, onViewEvidence }: Props) 
                 key={`${item.title}-${index}`}
                 variable={item}
                 onViewEvidence={() => onViewEvidence({ kind: "variable", data: item })}
+                onAuthRequired={onAuthRequired}
               />
             ))}
           </div>
@@ -84,6 +86,7 @@ export function ResultSections({ results, limitations, onViewEvidence }: Props) 
                 key={`${item.title}-${index}`}
                 report={item}
                 onViewEvidence={() => onViewEvidence({ kind: "report", data: item })}
+                onAuthRequired={onAuthRequired}
               />
             ))}
           </div>
@@ -96,6 +99,7 @@ export function ResultSections({ results, limitations, onViewEvidence }: Props) 
                 key={`${item.name}-${index}`}
                 organization={item}
                 onViewEvidence={() => onViewEvidence({ kind: "organization", data: item })}
+                onAuthRequired={onAuthRequired}
               />
             ))}
           </div>
@@ -108,6 +112,7 @@ export function ResultSections({ results, limitations, onViewEvidence }: Props) 
                 key={`${item.source_url}-${index}`}
                 source={item}
                 onViewEvidence={() => onViewEvidence({ kind: "source", data: item })}
+                onAuthRequired={onAuthRequired}
               />
             ))}
           </div>

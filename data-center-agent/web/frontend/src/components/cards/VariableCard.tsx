@@ -1,13 +1,16 @@
 import type { VariableResult } from "../../types";
+import { SaveToProjectButton } from "../SaveToProjectButton";
 import { AvailabilityBadge } from "./AvailabilityBadge";
 
 type Props = {
   variable: VariableResult;
   onViewEvidence: () => void;
+  onAuthRequired?: () => void;
 };
 
-export function VariableCard({ variable, onViewEvidence }: Props) {
+export function VariableCard({ variable, onViewEvidence, onAuthRequired }: Props) {
   const name = variable.title || variable.raw_variable_name || "Variable";
+  const id = variable.id || variable.object_id || variable.variable_id;
 
   return (
     <article className="result-card">
@@ -50,6 +53,15 @@ export function VariableCard({ variable, onViewEvidence }: Props) {
             Open source
           </a>
         )}
+        <SaveToProjectButton
+          onAuthRequired={onAuthRequired}
+          payload={{
+            item_type: "variable",
+            item_id: id,
+            title: name,
+            metadata: { variable },
+          }}
+        />
       </div>
     </article>
   );

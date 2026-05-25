@@ -12,6 +12,7 @@ RUN apt-get update \
 
 COPY pyproject.toml README.md ./
 COPY app ./app
+COPY migrations ./migrations
 COPY web ./web
 
 RUN pip install --upgrade pip \

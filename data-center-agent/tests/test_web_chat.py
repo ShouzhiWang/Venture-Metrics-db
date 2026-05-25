@@ -1,5 +1,5 @@
 from app.agents.demo_llm import DemoLLMConfigError, DemoLLMResponseError
-from web.backend.routes.chat import handle_chat, handle_chat_deterministic
+from web.backend.routes.chat import _empty_results, handle_chat, handle_chat_deterministic
 from web.backend.services.tool_client import SAFE_WEB_TOOLS, call_demo_tool
 
 
@@ -205,6 +205,23 @@ def test_web_tool_client_blocks_unsafe_tools() -> None:
 
     assert result["ok"] is False
     assert result["error"]["code"] == "tool_not_allowed"
+
+
+def test_chat_api_auth_required_shape() -> None:
+    result = {
+        "type": "error",
+        "message": "Login is required to use data discovery.",
+        "assistant_message": "Login is required to use data discovery.",
+        "intent": "unknown",
+        "clarifying_questions": [],
+        "tool_calls": [],
+        "results": _empty_results(),
+        "limitations": ["auth_required"],
+        "debug": {"error": {"code": "auth_required"}},
+    }
+
+    assert result["type"] == "error"
+    assert result["limitations"] == ["auth_required"]
 
 
 def test_tool_error_returns_clean_json() -> None:

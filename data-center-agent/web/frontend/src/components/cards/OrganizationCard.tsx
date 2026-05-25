@@ -1,16 +1,20 @@
 import type { OrganizationResult } from "../../types";
+import { SaveToProjectButton } from "../SaveToProjectButton";
 
 type Props = {
   organization: OrganizationResult;
   onViewEvidence: () => void;
+  onAuthRequired?: () => void;
 };
 
-export function OrganizationCard({ organization, onViewEvidence }: Props) {
+export function OrganizationCard({ organization, onViewEvidence, onAuthRequired }: Props) {
   const url = organization.website_url || organization.source_url;
+  const title = organization.name || organization.title || "Organization";
+  const id = organization.id || organization.object_id || organization.organization_id;
 
   return (
     <article className="result-card">
-      <h4>{organization.name || organization.title || "Organization"}</h4>
+      <h4>{title}</h4>
 
       <div className="card-meta">
         {organization.organization_type && (
@@ -38,6 +42,15 @@ export function OrganizationCard({ organization, onViewEvidence }: Props) {
             Open website
           </a>
         )}
+        <SaveToProjectButton
+          onAuthRequired={onAuthRequired}
+          payload={{
+            item_type: "organization",
+            item_id: id,
+            title,
+            metadata: { organization },
+          }}
+        />
       </div>
     </article>
   );

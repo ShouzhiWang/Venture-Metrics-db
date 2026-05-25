@@ -3,13 +3,18 @@ from __future__ import annotations
 from typing import Any
 
 try:
-    from fastapi import APIRouter
+    from fastapi import APIRouter, Request
 except ImportError:  # pragma: no cover
     APIRouter = None
+    Request = None
 from pydantic import BaseModel, Field
 
 from app.agents.demo_llm import DemoLLMClient, DemoLLMConfigError, DemoLLMProviderError, DemoLLMResponseError
 from app.agents.query_planner import plan_query
+from app.db.connection import get_engine
+from app.db.repositories.history import ChatHistoryRepository
+from app.services.auth import SESSION_COOKIE_NAME
+from web.backend.routes.auth import user_from_session_token
 from web.backend.services.tool_client import SAFE_WEB_TOOLS, call_demo_tool
 
 
@@ -479,8 +484,23 @@ def _empty_results() -> dict[str, Any]:
 
 if router:
     @router.post("/api/chat")
-    def chat(request: ChatRequest) -> dict[str, Any]:
-        return handle_chat(request.model_dump())
+    def chat(request: Request, payload: ChatRequest) -> dict[str, Any]:
+        user = user_from_session_token(request.cookies.get(SESSION_COOKIE_NAME))
+        if not user:
+            return {
+                "type": "error",
+                "message": "Login is required to use data discovery.",
+                "assistant_message": "Login is required to use data discovery.",
+                "intent": "unknown",
+                "clarifying_questions": [],
+                "tool_calls": [],
+                "results": _empty_results(),
+                "limitations": ["auth_required"],
+                "debug": {"error": {"code": "auth_required"}},
+            }
+        response = handle_chat(payload.model_dump())
+        _save_chat_history(user["id"], payload, response)
+        return response
 
     @router.post("/api/tool/find_data")
     def tool_find_data(args: dict[str, Any]) -> dict[str, Any]:
@@ -509,3 +529,46 @@ if router:
     @router.post("/api/feedback")
     def feedback(request: FeedbackRequest) -> dict[str, Any]:
         return call_demo_tool("submit_feedback", request.model_dump())
+
+
+def _save_chat_history(user_id: str, payload: ChatRequest, response: dict[str, Any]) -> None:
+    query = payload.message.strip()
+    if not query:
+        return
+    title = _history_title(query)
+    with get_engine().begin() as connection:
+        repo = ChatHistoryRepository(connection)
+        session = None
+        if payload.conversation_id:
+            session = repo.get_session_for_user(payload.conversation_id, user_id)
+        if not session:
+            session = repo.create_session(user_id, title)
+        session_id = str(session["id"])
+        repo.add_message(session_id=session_id, role="user", content=query)
+        repo.add_message(session_id=session_id, role="assistant", content=response.get("assistant_message") or response.get("message"))
+        repo.add_message(
+            session_id=session_id,
+            role="tool",
+            content=None,
+            tool_name="demo_tool_chain",
+            tool_payload={
+                "tool_calls": response.get("tool_calls") or [],
+                "results": response.get("results") or {},
+                "limitations": response.get("limitations") or [],
+            },
+        )
+        saved = repo.add_saved_result(
+            user_id=user_id,
+            session_id=session_id,
+            query=query,
+            result_summary=response.get("assistant_message") or response.get("message") or "",
+            result_payload=response,
+        )
+        repo.touch_session(session_id, title)
+    response["conversation_id"] = session_id
+    response["saved_result_id"] = str(saved["id"])
+
+
+def _history_title(query: str) -> str:
+    normalized = " ".join(query.split())
+    return normalized[:120] if normalized else "Untitled search"
