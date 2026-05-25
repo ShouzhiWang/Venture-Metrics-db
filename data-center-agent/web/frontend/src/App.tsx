@@ -67,8 +67,8 @@ export function App() {
 
   useEffect(() => {
     if (window.location.pathname === "/") {
-      window.history.replaceState({}, "", "/data");
-      setPath("/data");
+      window.history.replaceState({}, "", "/about");
+      setPath("/about");
     }
     function onPopState() {
       setPath(normalizePath(window.location.pathname));
