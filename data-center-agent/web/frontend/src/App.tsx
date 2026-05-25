@@ -1093,6 +1093,23 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
         content: response.assistant_message || response.message,
         response,
       }]);
+      // Auto-save every successful search to the project evidence so no conversation is lost.
+      if (response.type === "answer" || response.type === "no_results") {
+        try {
+          await addProjectItem(projectId, {
+            item_type: "search_result",
+            title: trimmed,
+            metadata: {
+              query: trimmed,
+              answer_summary: response.assistant_message || response.message,
+              result_payload: response,
+            },
+          });
+          void loadProject();
+        } catch {
+          // Non-critical — evidence save failure shouldn't disrupt the search UX
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Search failed.";
       setChatError(msg);
@@ -1123,6 +1140,20 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
 
   function handleItemSaved() {
     void loadProject();
+  }
+
+  function reopenSearchFromEvidence(item: ProjectItem) {
+    const meta = item.metadata;
+    const response = meta?.result_payload as ChatResponse | undefined;
+    if (!response) return;
+    const query = (meta?.query as string | undefined) || item.title || "";
+    setTurns([
+      { id: crypto.randomUUID(), role: "user", content: query },
+      { id: crypto.randomUUID(), role: "assistant", content: response.assistant_message || response.message, response },
+    ]);
+    setLastQuery(query);
+    setConversationId(response.conversation_id);
+    setDrawerItem(null);
   }
 
   async function addNote(event: FormEvent) {
@@ -1285,30 +1316,6 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
                   {hasResults && clarifyingQuestions.length > 0 && (
                     <NarrowChips questions={clarifyingQuestions} onChoose={handleChipClick} />
                   )}
-                  {hasResults && !chatLoading && (
-                    <div className="answer-actions">
-                      <SaveToProjectButton
-                        label="Save to project"
-                        projectId={projectId}
-                        onSaved={handleItemSaved}
-                        payload={{
-                          item_type: "search_result",
-                          item_id: latestResponse?.saved_result_id,
-                          title: lastQuery || latestResponse?.message || "Saved search",
-                          metadata: {
-                            query: lastQuery,
-                            answer_summary: latestResponse?.assistant_message || latestResponse?.message,
-                            selected_variables: latestResponse?.results.closest_variables,
-                            relevant_reports: latestResponse?.results.relevant_reports,
-                            organizations: latestResponse?.results.relevant_organizations,
-                            source_links: latestResponse?.results.source_links,
-                            limitations: latestResponse?.limitations,
-                            result_payload: latestResponse,
-                          },
-                        }}
-                      />
-                    </div>
-                  )}
                   {hasResults && latestResponse && (
                     <ResultSections
                       results={latestResponse.results}
@@ -1370,16 +1377,23 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
               {sidebarTab === "evidence" && (
                 <>
                   {evidenceItems.length === 0 && (
-                    <p className="sidebar-note">Save variables, reports, and sources from your search results.</p>
+                    <p className="sidebar-note">Run a search — results are saved here automatically. You can also save individual variables, reports, and sources from each result.</p>
                   )}
                   {evidenceItems.map(item => {
-                    const drawerData = projectItemToDrawerItem(item);
+                    const isSearch = item.item_type === "search_result";
+                    const drawerData = isSearch ? null : projectItemToDrawerItem(item);
+                    const isClickable = isSearch
+                      ? Boolean(item.metadata?.result_payload)
+                      : Boolean(drawerData);
+                    const handleClick = isSearch
+                      ? () => reopenSearchFromEvidence(item)
+                      : drawerData ? () => setDrawerItem(drawerData) : undefined;
                     return (
                       <div key={item.id} className="evidence-item">
                         <button
                           type="button"
-                          className={`evidence-item-content${drawerData ? " clickable" : ""}`}
-                          onClick={drawerData ? () => setDrawerItem(drawerData) : undefined}
+                          className={`evidence-item-content${isClickable ? " clickable" : ""}`}
+                          onClick={handleClick}
                         >
                           <span className={`evidence-type-tag et-${item.item_type}`}>
                             {evidenceTypeLabel(item.item_type)}
