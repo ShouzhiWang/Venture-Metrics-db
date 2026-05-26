@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
+import json
+import queue
+import threading
+from typing import Any, Iterator
 
 try:
     from fastapi import APIRouter, Request
+    from fastapi.responses import StreamingResponse
 except ImportError:  # pragma: no cover
     APIRouter = None
     Request = None
+    StreamingResponse = None
 from pydantic import BaseModel, Field
 
 from app.agents.demo_llm import DemoLLMClient, DemoLLMConfigError, DemoLLMProviderError, DemoLLMResponseError
@@ -15,6 +20,7 @@ from app.db.connection import get_engine
 from app.db.repositories.history import ChatHistoryRepository
 from app.services.auth import SESSION_COOKIE_NAME
 from web.backend.routes.auth import user_from_session_token
+from web.backend.services.agent_trace import AgentTraceCollector, attach_tool_trace, sanitize_trace_detail
 from web.backend.services.tool_client import SAFE_WEB_TOOLS, call_demo_tool
 
 
@@ -54,62 +60,87 @@ def _planning_message_for_focus(message: str, context: dict[str, Any]) -> str:
     return message + hints.get(focus, "")
 
 
-def handle_chat(payload: dict[str, Any], tool_caller=call_demo_tool, llm_client: Any | None = None) -> dict[str, Any]:
+def handle_chat(
+    payload: dict[str, Any],
+    tool_caller=call_demo_tool,
+    llm_client: Any | None = None,
+    trace: AgentTraceCollector | None = None,
+) -> dict[str, Any]:
     message = (payload.get("message") or "").strip()
     context = payload.get("context") or {}
     history = _sanitize_history(payload.get("history") or [])
     plan_message = _planning_message_for_focus(message, context)
+    trace = trace or AgentTraceCollector()
+    trace.planning_started()
     try:
         llm = llm_client or DemoLLMClient()
         plan = _validate_plan(llm.plan(message=plan_message, history=history, safe_tools=CHAT_TOOL_NAMES), message)
     except DemoLLMConfigError as exc:
-        return _llm_error_response("llm_not_configured", str(exc))
+        trace.error_event("Planning failed", str(exc))
+        return attach_tool_trace(_llm_error_response("llm_not_configured", str(exc)), trace)
     except DemoLLMResponseError as exc:
-        return _llm_error_response("llm_invalid_response", str(exc))
+        trace.error_event("Planning failed", str(exc))
+        return attach_tool_trace(_llm_error_response("llm_invalid_response", str(exc)), trace)
     except DemoLLMProviderError as exc:
-        return _llm_error_response("llm_provider_error", str(exc))
+        trace.error_event("Planning failed", str(exc))
+        return attach_tool_trace(_llm_error_response("llm_provider_error", str(exc)), trace)
+
+    tool_names = [str(item.get("name")) for item in plan.get("tool_calls") or [] if item.get("name")]
+    trace.planning_complete(plan["intent"], tool_names)
 
     unsafe_tool = _first_unsafe_tool(plan.get("tool_calls") or [])
     if unsafe_tool:
-        return _llm_error_response("tool_not_allowed", f"Tool is not exposed to the website: {unsafe_tool}")
+        trace.error_event("Tool not allowed", f"Tool is not exposed to the website: {unsafe_tool}")
+        return attach_tool_trace(_llm_error_response("tool_not_allowed", f"Tool is not exposed to the website: {unsafe_tool}"), trace)
 
     if plan.get("clarifying_questions") and not plan.get("tool_calls"):
         assistant_message = plan.get("assistant_message") or "I need one or two details before searching."
-        return {
-            "type": "clarification",
-            "message": assistant_message,
-            "assistant_message": assistant_message,
-            "intent": plan["intent"],
-            "clarifying_questions": plan["clarifying_questions"],
-            "tool_calls": [],
-            "results": _empty_results(),
-            "limitations": [],
-            "debug": {"plan": plan},
-        }
+        return attach_tool_trace(
+            {
+                "type": "clarification",
+                "message": assistant_message,
+                "assistant_message": assistant_message,
+                "intent": plan["intent"],
+                "clarifying_questions": plan["clarifying_questions"],
+                "tool_calls": [],
+                "results": _empty_results(),
+                "limitations": [],
+                "debug": {"plan": plan},
+            },
+            trace,
+        )
 
     if not plan.get("tool_calls"):
         assistant_message = plan.get("assistant_message") or "I need a more specific data question before I can search the safe tools."
-        return {
-            "type": "clarification",
-            "message": assistant_message,
-            "assistant_message": assistant_message,
-            "intent": plan["intent"],
-            "clarifying_questions": plan.get("clarifying_questions") or [
-                {"question": "What metric, geography, or source type should I search for?", "options": []}
-            ],
-            "tool_calls": [],
-            "results": _empty_results(),
-            "limitations": ["no_tool_call_selected"],
-            "debug": {"plan": plan},
-        }
+        return attach_tool_trace(
+            {
+                "type": "clarification",
+                "message": assistant_message,
+                "assistant_message": assistant_message,
+                "intent": plan["intent"],
+                "clarifying_questions": plan.get("clarifying_questions") or [
+                    {"question": "What metric, geography, or source type should I search for?", "options": []}
+                ],
+                "tool_calls": [],
+                "results": _empty_results(),
+                "limitations": ["no_tool_call_selected"],
+                "debug": {"plan": plan},
+            },
+            trace,
+        )
 
-    executed = _execute_tool_calls(plan.get("tool_calls") or [], tool_caller)
+    executed = _execute_tool_calls(plan.get("tool_calls") or [], tool_caller, trace=trace)
     failed = next((item for item in executed if item["status"] != "ok"), None)
     if failed:
-        return _error_response(message, plan, failed["result"], tool_calls=executed)
+        return attach_tool_trace(_error_response(message, plan, failed["result"], tool_calls=executed), trace)
 
     results, limitations, response_type = _normalize_tool_results(executed)
+    trace.rank_results(_aggregate_counts(results))
+    for item in limitations:
+        trace.warning("Search limitation", item)
+
     follow_up_queries: list[dict[str, str]] = []
+    trace.answer_generation_started()
     try:
         if response_type == "no_results":
             synth = llm.synthesize_no_results(
@@ -134,22 +165,27 @@ def handle_chat(payload: dict[str, Any], tool_caller=call_demo_tool, llm_client:
                 limitations=limitations,
             )
     except (DemoLLMResponseError, DemoLLMProviderError) as exc:
-        return _llm_error_response("llm_provider_error", str(exc))
+        trace.error_event("Answer generation failed", str(exc))
+        return attach_tool_trace(_llm_error_response("llm_provider_error", str(exc)), trace)
 
+    trace.answer_generation_complete()
     clarifying_questions = _merge_clarifying_questions(plan.get("clarifying_questions") or [], executed, message)
 
-    return {
-        "type": response_type,
-        "message": assistant_message,
-        "assistant_message": assistant_message,
-        "intent": plan["intent"],
-        "clarifying_questions": clarifying_questions,
-        "follow_up_queries": follow_up_queries,
-        "tool_calls": [{"name": item["name"], "args": item["args"], "status": item["status"]} for item in executed],
-        "results": results,
-        "limitations": limitations,
-        "debug": {"plan": plan},
-    }
+    return attach_tool_trace(
+        {
+            "type": response_type,
+            "message": assistant_message,
+            "assistant_message": assistant_message,
+            "intent": plan["intent"],
+            "clarifying_questions": clarifying_questions,
+            "follow_up_queries": follow_up_queries,
+            "tool_calls": [{"name": item["name"], "args": item["args"], "status": item["status"]} for item in executed],
+            "results": results,
+            "limitations": limitations,
+            "debug": {"plan": plan},
+        },
+        trace,
+    )
 
 
 def handle_chat_deterministic(payload: dict[str, Any], tool_caller=call_demo_tool) -> dict[str, Any]:
@@ -284,19 +320,43 @@ def _first_unsafe_tool(tool_calls: list[dict[str, Any]]) -> str | None:
     return None
 
 
-def _execute_tool_calls(tool_calls: list[dict[str, Any]], tool_caller) -> list[dict[str, Any]]:
+def _execute_tool_calls(
+    tool_calls: list[dict[str, Any]],
+    tool_caller,
+    *,
+    trace: AgentTraceCollector | None = None,
+) -> list[dict[str, Any]]:
     executed = []
     for item in tool_calls:
-        result = tool_caller(item["name"], item.get("args") or {})
+        name = item["name"]
+        if trace:
+            trace.tool_start(name)
+        result = tool_caller(name, item.get("args") or {})
+        status = "ok" if result.get("ok") else "error"
+        if trace:
+            if result.get("ok"):
+                trace.tool_complete(name, result.get("data") or {})
+            else:
+                error = result.get("error") or {}
+                trace.tool_failed(name, str(error.get("message") or "The request could not be completed."))
         executed.append(
             {
-                "name": item["name"],
+                "name": name,
                 "args": item.get("args") or {},
-                "status": "ok" if result.get("ok") else "error",
+                "status": status,
                 "result": result,
             }
         )
     return executed
+
+
+def _aggregate_counts(results: dict[str, Any]) -> dict[str, int]:
+    return {
+        "variable_count": len(results.get("closest_variables") or []),
+        "report_count": len(results.get("relevant_reports") or []),
+        "source_count": len(results.get("source_links") or []),
+        "organization_count": len(results.get("relevant_organizations") or []),
+    }
 
 
 def _normalize_tool_results(executed: list[dict[str, Any]]) -> tuple[dict[str, Any], list[str], str]:
@@ -533,7 +593,7 @@ def _error_response(
     tool_calls: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     error = tool_result.get("error") or {}
-    message_text = error.get("message") or "The request could not be completed."
+    message_text = sanitize_trace_detail(str(error.get("message") or "The request could not be completed."))
     return {
         "type": "error",
         "message": message_text,
@@ -568,25 +628,74 @@ def _empty_results() -> dict[str, Any]:
     return {"closest_variables": [], "relevant_reports": [], "relevant_organizations": [], "source_links": [], "comparison": {}}
 
 
+def _auth_required_response() -> dict[str, Any]:
+    return {
+        "type": "error",
+        "message": "Login is required to use data discovery.",
+        "assistant_message": "Login is required to use data discovery.",
+        "intent": "unknown",
+        "clarifying_questions": [],
+        "tool_calls": [],
+        "results": _empty_results(),
+        "limitations": ["auth_required"],
+        "tool_trace": [],
+        "debug": {"error": {"code": "auth_required"}},
+    }
+
+
+def iter_chat_stream(user_id: str, payload: ChatRequest) -> Iterator[str]:
+    event_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+    holder: dict[str, Any] = {}
+
+    def on_trace_update(events: list[dict[str, Any]]) -> None:
+        event_queue.put(("trace", events))
+
+    def worker() -> None:
+        try:
+            trace = AgentTraceCollector(on_update=on_trace_update)
+            response = handle_chat(payload.model_dump(), trace=trace)
+            _save_chat_history(user_id, payload, response)
+            holder["response"] = response
+        except Exception as exc:  # pragma: no cover
+            holder["error"] = str(exc)
+        finally:
+            event_queue.put(("done", None))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    while True:
+        kind, data = event_queue.get()
+        if kind == "trace":
+            yield json.dumps({"type": "trace", "tool_trace": data}, ensure_ascii=True) + "\n"
+            continue
+        if kind == "done":
+            if holder.get("error"):
+                yield json.dumps({"type": "error", "message": sanitize_trace_detail(str(holder["error"]))}, ensure_ascii=True) + "\n"
+            else:
+                yield json.dumps({"type": "complete", "response": holder["response"]}, ensure_ascii=True, default=str) + "\n"
+            break
+
+
 if router:
     @router.post("/api/chat")
     def chat(request: Request, payload: ChatRequest) -> dict[str, Any]:
         user = user_from_session_token(request.cookies.get(SESSION_COOKIE_NAME))
         if not user:
-            return {
-                "type": "error",
-                "message": "Login is required to use data discovery.",
-                "assistant_message": "Login is required to use data discovery.",
-                "intent": "unknown",
-                "clarifying_questions": [],
-                "tool_calls": [],
-                "results": _empty_results(),
-                "limitations": ["auth_required"],
-                "debug": {"error": {"code": "auth_required"}},
-            }
+            return _auth_required_response()
         response = handle_chat(payload.model_dump())
         _save_chat_history(user["id"], payload, response)
         return response
+
+    @router.post("/api/chat/stream")
+    def chat_stream(request: Request, payload: ChatRequest):
+        user = user_from_session_token(request.cookies.get(SESSION_COOKIE_NAME))
+        if not user:
+            return _auth_required_response()
+        return StreamingResponse(
+            iter_chat_stream(user["id"], payload),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @router.post("/api/tool/find_data")
     def tool_find_data(args: dict[str, Any]) -> dict[str, Any]:
@@ -641,6 +750,7 @@ def _save_chat_history(user_id: str, payload: ChatRequest, response: dict[str, A
                 "tool_calls": response.get("tool_calls") or [],
                 "results": response.get("results") or {},
                 "limitations": response.get("limitations") or [],
+                "tool_trace": response.get("tool_trace") or [],
             },
         )
         saved = repo.add_saved_result(

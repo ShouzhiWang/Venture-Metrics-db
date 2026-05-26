@@ -3006,6 +3006,113 @@ a:hover {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.agent-activity-timeline {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.agent-activity-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-activity-toggle-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.agent-activity-toggle-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.agent-activity-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-activity-step {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding-top: 8px;
+}
+
+.agent-activity-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--text-faint);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.agent-activity-step.status-running .agent-activity-icon,
+.agent-activity-step.status-pending .agent-activity-icon {
+  color: var(--primary);
+  border-color: rgba(15, 118, 110, 0.24);
+}
+
+.agent-activity-step.status-completed .agent-activity-icon {
+  color: #15803d;
+  border-color: rgba(22, 163, 74, 0.24);
+}
+
+.agent-activity-step.status-failed .agent-activity-icon {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.24);
+}
+
+.agent-activity-copy strong {
+  display: block;
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.agent-activity-copy p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.agent-icon-spin {
+  animation: agent-icon-rotate 0.9s linear infinite;
+}
+
+.agent-icon-muted {
+  opacity: 0.55;
+}
+
+@keyframes agent-icon-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* ── Error notice ─────────────────────────────── */
 
 .notice {

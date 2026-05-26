@@ -23,13 +23,14 @@ import {
   type HistoryItem,
   type User,
 } from "./api";
+import { AgentActivityTimeline } from "./components/AgentActivityTimeline";
 import { AnswerSummary } from "./components/AnswerSummary";
 import { ResultSections } from "./components/ResultSections";
 import { CompactResultPreview, pickResultPreviews, type PreviewUnion } from "./components/ResultPreview";
 import { EvidenceWorkspacePanel } from "./components/EvidenceWorkspacePanel";
 import { DetailDrawer, type DrawerItem } from "./components/DetailDrawer";
 import { SaveToProjectButton } from "./components/SaveToProjectButton";
-import type { ChatResponse, ClarifyingQuestion, FollowUpQuery, MapItem, ProjectItem, ResearchProject } from "./types";
+import type { AgentEvent, ChatResponse, ClarifyingQuestion, FollowUpQuery, MapItem, ProjectItem, ResearchProject } from "./types";
 
 declare global {
   interface Window {
@@ -87,6 +88,34 @@ type ResearchThread = {
   items: HistoryItem[];
   local?: boolean;
 };
+
+function emptyStreamingResponse(toolTrace: AgentEvent[] = []): ChatResponse {
+  return {
+    type: "answer",
+    message: "",
+    assistant_message: "",
+    intent: "unknown",
+    clarifying_questions: [],
+    tool_calls: [],
+    results: {
+      closest_variables: [],
+      relevant_reports: [],
+      relevant_organizations: [],
+      source_links: [],
+      comparison: {},
+    },
+    limitations: [],
+    tool_trace: toolTrace,
+  };
+}
+
+function patchTurnToolTrace(turns: Turn[], turnId: string, toolTrace: AgentEvent[]): Turn[] {
+  return turns.map(turn => {
+    if (turn.id !== turnId) return turn;
+    const partial = { ...(turn.response || emptyStreamingResponse()), tool_trace: toolTrace };
+    return { ...turn, response: partial, result_payload: partial };
+  });
+}
 
 export function App() {
   const [path, setPath] = useState(() => normalizePath(window.location.pathname));
@@ -284,7 +313,15 @@ function DataDiscoveryPage({
     if (focusSnapshot) chatContext.search_focus = focusSnapshot;
     if (activeProjectContext?.id) chatContext.project_id = activeProjectContext.id;
     try {
-      const response = await sendChat(trimmed, chatContext, historyFromTurns(nextTurns), conversationId);
+      const response = await sendChat(
+        trimmed,
+        chatContext,
+        historyFromTurns(nextTurns),
+        conversationId,
+        toolTrace => {
+          setTurns(current => patchTurnToolTrace(current, loadingTurnId, toolTrace));
+        },
+      );
       if (response.conversation_id) {
         setConversationId(response.conversation_id);
       }
@@ -955,7 +992,7 @@ function ResearchTurn({
             Side panel
           </button>
         </div>
-        <p className="assistant-loading-bubble">Searching variables, reports, sources, and organizations…</p>
+        <AgentActivityTimeline isLoading defaultCollapsed={false} />
       </article>
     );
   }
@@ -995,14 +1032,14 @@ function ResearchTurn({
         </button>
       </div>
 
-      <AnswerSummary response={response} loading={Boolean(turn.loading)} />
+      <AnswerSummary response={response} loading={Boolean(turn.loading && !(response.assistant_message || response.message))} />
 
-      {!isClarification && (
-        turn.loading ? (
-          <AgentActivity query={turn.query || ""} completed={false} compact />
-        ) : response.tool_calls && response.tool_calls.length > 0 ? (
-          <AgentActivity query={turn.query || ""} toolCalls={response.tool_calls} completed compact />
-        ) : null
+      {(turn.loading || (response.tool_trace && response.tool_trace.length > 0)) && (
+        <AgentActivityTimeline
+          events={response.tool_trace}
+          isLoading={Boolean(turn.loading)}
+          defaultCollapsed={!turn.loading}
+        />
       )}
 
       {!turn.loading && questions.length > 0 && isClarification && (
@@ -1946,15 +1983,14 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
 
           {(latestResponse || chatLoading) && (
             <div className="result-area">
-              {chatLoading && !latestResponse && <AgentActivity query={lastQuery} />}
+              <AgentActivityTimeline
+                events={latestResponse?.tool_trace}
+                isLoading={chatLoading}
+                defaultCollapsed={!chatLoading}
+              />
               {latestResponse && (
                 <>
-                  {chatLoading && <AgentActivity query={lastQuery} compact />}
-                  <AnswerSummary response={latestResponse} loading={chatLoading} />
-                  {!chatLoading && latestResponse.tool_calls && latestResponse.tool_calls.length > 0 && (
-                    <AgentActivity query={lastQuery} toolCalls={latestResponse.tool_calls} completed compact />
-                  )}
-
+                  <AnswerSummary response={latestResponse} loading={false} />
                   {isClarification && clarifyingQuestions.length > 0 && (
                     <ClarificationPanel questions={clarifyingQuestions} onChoose={handleChipClick} />
                   )}
@@ -2291,82 +2327,6 @@ function isAfter(a?: string, b?: string) {
 
 function dateTime(value?: string) {
   return value ? new Date(value).getTime() || 0 : 0;
-}
-
-function AgentActivity({
-  query,
-  toolCalls = [],
-  completed = false,
-  compact = false,
-}: {
-  query: string;
-  toolCalls?: NonNullable<ChatResponse["tool_calls"]>;
-  completed?: boolean;
-  compact?: boolean;
-}) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const planned = inferAgentSteps(query);
-  const calls = toolCalls.length > 0 ? toolCalls.map(call => toolCallLabel(call.name, call.status)) : planned;
-
-  useEffect(() => {
-    setActiveIndex(0);
-    if (completed || calls.length <= 1) return;
-    const interval = window.setInterval(() => {
-      setActiveIndex(current => Math.min(current + 1, calls.length - 1));
-    }, 1150);
-    return () => window.clearInterval(interval);
-  }, [completed, query, calls.length]);
-
-  return (
-    <div className={compact ? "agent-activity compact" : "agent-activity"} aria-live="polite">
-      <div className="agent-activity-head">
-        <span className={completed ? "agent-status-dot done" : "agent-status-dot"} aria-hidden="true" />
-        <strong>{completed ? "Tool run complete" : "Agent is working"}</strong>
-      </div>
-      <ol>
-        {calls.map((step, index) => {
-          const state = completed ? "done" : index < activeIndex ? "done" : index === activeIndex ? "active" : "";
-          const label = completed || index < activeIndex ? "done" : index === activeIndex ? "now" : "next";
-          return (
-            <li key={`${step}-${index}`} className={state}>
-              <span>{label}</span>
-              {step}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
-
-function inferAgentSteps(query: string) {
-  const q = query.toLowerCase();
-  const steps = ["Planning safe tool calls"];
-  if (q.includes("compare") || q.includes("definition") || q.includes("comparable")) {
-    steps.push("Calling compare_concepts_auto");
-    steps.push("Selecting relevant reports and variables");
-  } else if (q.includes("organization") || q.includes("accelerator") || q.includes("association") || q.includes("incubator")) {
-    steps.push("Searching organization records");
-    steps.push("Checking source links and geography");
-  } else {
-    steps.push("Calling find_data");
-    steps.push("Matching variables, reports, and sources");
-  }
-  steps.push("Synthesizing an evidence-backed answer");
-  return steps;
-}
-
-function toolCallLabel(name: string, status: string) {
-  const labels: Record<string, string> = {
-    find_data: "find_data searched variables, reports, sources, and organizations",
-    semantic_search: "semantic_search searched indexed records",
-    compare_concepts_auto: "compare_concepts_auto selected reports and compared definitions",
-    get_variable_detail: "get_variable_detail fetched variable evidence",
-    get_report_detail: "get_report_detail fetched report metadata",
-    get_source_detail: "get_source_detail fetched source metadata",
-    get_organization_detail: "get_organization_detail fetched organization metadata",
-  };
-  return `${labels[name] || name} (${status})`;
 }
 
 function ClarificationPanel({

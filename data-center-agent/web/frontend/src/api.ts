@@ -1,4 +1,4 @@
-import type { ChatResponse, MapItem, ProjectItem, ResearchProject } from "./types";
+import type { AgentEvent, ChatResponse, MapItem, ProjectItem, ResearchProject } from "./types";
 
 export type ChatHistoryItem = {
   role: "user" | "assistant";
@@ -36,18 +36,57 @@ export async function sendChat(
   message: string,
   context: Record<string, unknown> = {},
   history: ChatHistoryItem[] = [],
-  conversationId?: string
+  conversationId?: string,
+  onTrace?: (toolTrace: AgentEvent[]) => void,
 ): Promise<ChatResponse> {
-  const response = await fetch("/api/chat", {
+  const response = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, context, history, conversation_id: conversationId }),
-    credentials: "same-origin"
+    credentials: "same-origin",
   });
   if (!response.ok) {
     throw new Error(`API error ${response.status}`);
   }
-  return response.json();
+  if (!response.body) {
+    throw new Error("Streaming response unavailable");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResponse: ChatResponse | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const payload = JSON.parse(line) as {
+        type: string;
+        tool_trace?: AgentEvent[];
+        response?: ChatResponse;
+        message?: string;
+      };
+      if (payload.type === "trace" && payload.tool_trace) {
+        onTrace?.(payload.tool_trace);
+      }
+      if (payload.type === "complete" && payload.response) {
+        finalResponse = payload.response;
+      }
+      if (payload.type === "error") {
+        throw new Error(payload.message || "Chat stream failed");
+      }
+    }
+  }
+
+  if (!finalResponse) {
+    throw new Error("Chat stream ended without a response");
+  }
+  return finalResponse;
 }
 
 export async function submitFeedback(answerId: string, feedbackType: string, comment = "") {

@@ -68,6 +68,34 @@ export type SourceLink = {
   local_path?: string;
 };
 
+export type AgentEvent = {
+  id: string;
+  timestamp: string;
+  type:
+    | "planning"
+    | "tool_start"
+    | "tool_progress"
+    | "tool_complete"
+    | "fallback"
+    | "answer_generation"
+    | "warning"
+    | "error";
+  status: "pending" | "running" | "completed" | "failed" | "skipped";
+  label: string;
+  detail: string;
+  tool_name?: string;
+  metadata?: {
+    intent?: string;
+    object_types?: string[];
+    variable_count?: number;
+    report_count?: number;
+    source_count?: number;
+    organization_count?: number;
+    comparison_count?: number;
+    duration_ms?: number;
+  };
+};
+
 export type ChatResponse = {
   type: "clarification" | "answer" | "no_results" | "error";
   message: string;
@@ -90,6 +118,7 @@ export type ChatResponse = {
     comparison: Record<string, unknown>;
   };
   limitations: string[];
+  tool_trace?: AgentEvent[];
   debug?: Record<string, unknown>;
 };
 
