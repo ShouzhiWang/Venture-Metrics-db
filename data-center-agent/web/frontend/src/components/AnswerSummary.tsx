@@ -8,47 +8,17 @@ type Props = {
 
 export function AnswerSummary({ response, loading }: Props) {
   const msg = response.assistant_message || response.message;
-  const varCount = response.results?.closest_variables?.length ?? 0;
-  const rptCount = response.results?.relevant_reports?.length ?? 0;
-  const orgCount = response.results?.relevant_organizations?.length ?? 0;
-  const toolName = response.tool_calls?.[0]?.name;
-  const privateCount = [
-    ...(response.results?.closest_variables ?? []),
-    ...(response.results?.source_links ?? []),
-  ].filter(item => {
-    const av = (item.availability ?? "").toLowerCase();
-    return av.includes("private") || av.includes("unclear") || av === "";
-  }).length;
-
   const hasLimitations = (response.limitations?.length ?? 0) > 0;
 
   return (
     <div className="answer-summary">
       {loading ? (
-        <p className="answer-text answer-loading">Searching the data tools&hellip;</p>
+        <p className="answer-text answer-loading">Searching variables, reports, sources, and organizations&hellip;</p>
       ) : (
         <p className="answer-text">
           <MarkdownText text={msg} />
         </p>
       )}
-
-      <div className="answer-meta">
-        {toolName && (
-          <span>Tool: {toolName}</span>
-        )}
-        {varCount > 0 && (
-          <span>{varCount} variable{varCount !== 1 ? "s" : ""}</span>
-        )}
-        {rptCount > 0 && (
-          <span>{rptCount} report{rptCount !== 1 ? "s" : ""}</span>
-        )}
-        {orgCount > 0 && (
-          <span>{orgCount} org{orgCount !== 1 ? "s" : ""}</span>
-        )}
-        {privateCount > 0 && (
-          <span>{privateCount} private/unclear</span>
-        )}
-      </div>
 
       {hasLimitations && (
         <details className="limitations-toggle">
@@ -64,7 +34,7 @@ export function AnswerSummary({ response, loading }: Props) {
   );
 }
 
-function MarkdownText({ text }: { text: string }) {
+export function MarkdownText({ text }: { text: string }) {
   const nodes: ReactNode[] = [];
   const linkRe = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
   let last = 0;

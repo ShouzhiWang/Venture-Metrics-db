@@ -41,13 +41,27 @@ class FeedbackRequest(BaseModel):
 CHAT_TOOL_NAMES = SAFE_WEB_TOOLS - {"submit_feedback"}
 
 
+def _planning_message_for_focus(message: str, context: dict[str, Any]) -> str:
+    """Augment the planner prompt only; user-visible message stays unchanged."""
+    focus = str((context.get("search_focus") or "")).strip().lower()
+    hints = {
+        "variables": "\n\n(System hint: Prioritize structured data variables and definitions.)",
+        "reports": "\n\n(System hint: Prioritize published reports and policy documents.)",
+        "organizations": "\n\n(System hint: Prioritize organizations, programs, and directories.)",
+        "sources": "\n\n(System hint: Prioritize primary sources and data links.)",
+        "compare": "\n\n(System hint: Compare definitions and assess comparability between concepts.)",
+    }
+    return message + hints.get(focus, "")
+
+
 def handle_chat(payload: dict[str, Any], tool_caller=call_demo_tool, llm_client: Any | None = None) -> dict[str, Any]:
     message = (payload.get("message") or "").strip()
     context = payload.get("context") or {}
     history = _sanitize_history(payload.get("history") or [])
+    plan_message = _planning_message_for_focus(message, context)
     try:
         llm = llm_client or DemoLLMClient()
-        plan = _validate_plan(llm.plan(message=message, history=history, safe_tools=CHAT_TOOL_NAMES), message)
+        plan = _validate_plan(llm.plan(message=plan_message, history=history, safe_tools=CHAT_TOOL_NAMES), message)
     except DemoLLMConfigError as exc:
         return _llm_error_response("llm_not_configured", str(exc))
     except DemoLLMResponseError as exc:

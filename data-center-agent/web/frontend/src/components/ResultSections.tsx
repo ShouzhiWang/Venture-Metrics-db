@@ -14,9 +14,21 @@ type Props = {
   projectId?: string;
   /** Called after any card item is saved */
   onItemSaved?: () => void;
+  /** When false, omit the collapsible Limitations section (shown elsewhere). */
+  showLimitationsSection?: boolean;
+  className?: string;
 };
 
-export function ResultSections({ results, limitations, onViewEvidence, onAuthRequired, projectId, onItemSaved }: Props) {
+export function ResultSections({
+  results,
+  limitations,
+  onViewEvidence,
+  onAuthRequired,
+  projectId,
+  onItemSaved,
+  showLimitationsSection = true,
+  className,
+}: Props) {
   const comparison = results.comparison || {};
   const hasComparison = Object.keys(comparison).length > 0;
 
@@ -31,7 +43,7 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
   if (totalResults === 0 && !hasComparison) return null;
 
   return (
-    <div className="result-groups">
+    <div className={`result-groups${className ? ` ${className}` : ""}`}>
       {results.closest_variables.length > 0 && (
         <details className="result-group" open>
           <summary>Closest Variables <span>{results.closest_variables.length}</span></summary>
@@ -127,7 +139,7 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
         </details>
       )}
 
-      {limitations.length > 0 && (
+      {showLimitationsSection && limitations.length > 0 && (
         <details className="result-group limitations-group">
           <summary>Limitations <span>{limitations.length}</span></summary>
           <div className="limitations-inline">

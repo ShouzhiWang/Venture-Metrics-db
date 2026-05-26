@@ -25,6 +25,7 @@ import {
 } from "./api";
 import { AnswerSummary } from "./components/AnswerSummary";
 import { ResultSections } from "./components/ResultSections";
+import { CompactResultPreview, pickResultPreviews, type PreviewUnion } from "./components/ResultPreview";
 import { DetailDrawer, type DrawerItem } from "./components/DetailDrawer";
 import { SaveToProjectButton } from "./components/SaveToProjectButton";
 import type { ChatResponse, ClarifyingQuestion, MapItem, ProjectItem, ResearchProject } from "./types";
@@ -43,6 +44,16 @@ const EXAMPLES = [
   "Government VC investment share in funding rounds",
   "India startup ecosystem funding by stage",
 ];
+
+const DATA_PROJECT_CONTEXT_KEY = "dataProjectContext";
+
+const SEARCH_MODES = [
+  { id: "variables", label: "Data variables" },
+  { id: "reports", label: "Reports" },
+  { id: "organizations", label: "Organizations" },
+  { id: "sources", label: "Sources" },
+  { id: "compare", label: "Compare definitions" },
+] as const;
 
 const ABOUT_EXAMPLES = [
   "Singapore VC deal count 2020–2023",
@@ -154,12 +165,40 @@ function DataDiscoveryPage({
   const [projects, setProjects] = useState<ResearchProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [savedResultIds, setSavedResultIds] = useState<Set<string>>(new Set());
+  const [activeProjectContext, setActiveProjectContext] = useState<{
+    id: string;
+    title: string;
+    question?: string;
+  } | null>(null);
+  const [pendingSearchFocus, setPendingSearchFocus] = useState<string | undefined>(undefined);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const latestAssistant = [...turns].reverse().find(t => t.role === "assistant" && !t.loading);
-  const selectedResultTurn = turns.find(t => t.id === selectedResultTurnId && t.response) || latestAssistant;
+  const selectedResultTurn = turns.find(t => t.id === selectedResultTurnId) || latestAssistant;
   const hasTurns = turns.length > 0;
   const activeTitle = turns.find(t => t.role === "user")?.content || "New research thread";
   const activeResultCount = turns.filter(t => t.role === "assistant" && t.response?.type !== "clarification" && t.response?.type !== "error").length;
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(DATA_PROJECT_CONTEXT_KEY);
+      if (!raw) return;
+      const p = JSON.parse(raw) as { id?: string; title?: string; research_question?: string | null };
+      if (p?.id && p?.title) {
+        setActiveProjectContext({
+          id: p.id,
+          title: p.title,
+          question: p.research_question || undefined,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns, loading]);
 
   useEffect(() => {
     void refreshHistory();
@@ -227,7 +266,7 @@ function DataDiscoveryPage({
     const loadingTurn: Turn = {
       id: loadingTurnId,
       role: "assistant",
-      content: "Searching the data tools...",
+      content: "",
       created_at: createdAt,
       loading: true,
       query: trimmed,
@@ -238,8 +277,13 @@ function DataDiscoveryPage({
     setLoading(true);
     setError("");
     setAnswerId(`answer-${Date.now()}`);
+    const focusSnapshot = pendingSearchFocus;
+    if (focusSnapshot) setPendingSearchFocus(undefined);
+    const chatContext: Record<string, unknown> = {};
+    if (focusSnapshot) chatContext.search_focus = focusSnapshot;
+    if (activeProjectContext?.id) chatContext.project_id = activeProjectContext.id;
     try {
-      const response = await sendChat(trimmed, {}, historyFromTurns(nextTurns), conversationId);
+      const response = await sendChat(trimmed, chatContext, historyFromTurns(nextTurns), conversationId);
       if (response.conversation_id) {
         setConversationId(response.conversation_id);
       }
@@ -297,9 +341,15 @@ function DataDiscoveryPage({
     void runQuery(message);
   }
 
-  function handleChipClick(option: string) {
-    const refined = lastQuery ? `${lastQuery}, ${option}` : option;
-    void runQuery(refined);
+  function handleRefinementChip(option: string) {
+    const t = option.trim();
+    if (!t) return;
+    void runQuery(t);
+  }
+
+  function clearProjectContext() {
+    window.sessionStorage.removeItem(DATA_PROJECT_CONTEXT_KEY);
+    setActiveProjectContext(null);
   }
 
   async function feedback(type: string) {
@@ -464,7 +514,7 @@ function DataDiscoveryPage({
 
           <div className="sidebar-section sidebar-section-fill">
             <div className="sidebar-section-head">
-              <span className="sidebar-section-label">Research Threads</span>
+              <span className="sidebar-section-label">Threads</span>
               <button type="button" onClick={startNewSearch}>New</button>
             </div>
             {historyLoading && <p className="sidebar-note">Loading…</p>}
@@ -481,8 +531,8 @@ function DataDiscoveryPage({
                     aria-current={activeThreadId === currentThread.id ? "true" : undefined}
                     onClick={() => setSelectedHistoryId(currentThread.id)}
                   >
-                    <strong>{currentThread.title}</strong>
-                    <span>{threadSummary(currentThread)}</span>
+                    <strong className="thread-title-clamp">{currentThread.title}</strong>
+                    <span className="thread-meta-line">{threadSummary(currentThread)}</span>
                   </button>
                 )}
                 {allThreads.map(thread => {
@@ -495,8 +545,8 @@ function DataDiscoveryPage({
                       aria-current={active ? "true" : undefined}
                       onClick={() => selectThread(thread)}
                     >
-                      <strong>{thread.title}</strong>
-                      <span>{threadSummary(thread)}</span>
+                      <strong className="thread-title-clamp">{thread.title}</strong>
+                      <span className="thread-meta-line">{threadSummary(thread)}</span>
                     </button>
                   );
                 })}
@@ -511,45 +561,120 @@ function DataDiscoveryPage({
             description="Search for metrics, reports, organizations, and source evidence across Asian markets."
           />
 
+          {activeProjectContext && (
+            <div className="project-context-banner" role="region" aria-label="Active project">
+              <div className="project-context-banner-main">
+                <div className="pcb-row">
+                  <span className="pcb-label">Researching in</span>
+                  <strong className="pcb-title">{activeProjectContext.title}</strong>
+                </div>
+                {activeProjectContext.question && (
+                  <div className="pcb-row">
+                    <span className="pcb-label">Research question</span>
+                    <span className="pcb-question">{activeProjectContext.question}</span>
+                  </div>
+                )}
+              </div>
+              <div className="project-context-banner-actions">
+                {onNavigate && (
+                  <button type="button" className="pcb-btn" onClick={() => onNavigate(`/projects/${activeProjectContext.id}`)}>
+                    View project
+                  </button>
+                )}
+                {latestAssistant?.response &&
+                  latestAssistant.response.type !== "clarification" &&
+                  latestAssistant.response.type !== "error" && (
+                  <SaveToProjectButton
+                    label="Save answer"
+                    onAuthRequired={onAuthRequired}
+                    onSaved={handleSaved}
+                    projectId={activeProjectContext.id}
+                    payload={{
+                      item_type: "search_result",
+                      item_id: latestAssistant.response.saved_result_id,
+                      title: lastQuery || latestAssistant.response.message || "Saved search",
+                      metadata: {
+                        query: lastQuery,
+                        answer_summary: latestAssistant.response.assistant_message || latestAssistant.response.message,
+                        selected_variables: latestAssistant.response.results.closest_variables,
+                        relevant_reports: latestAssistant.response.results.relevant_reports,
+                        organizations: latestAssistant.response.results.relevant_organizations,
+                        source_links: latestAssistant.response.results.source_links,
+                        limitations: latestAssistant.response.limitations,
+                        result_payload: latestAssistant.response,
+                      },
+                    }}
+                  />
+                )}
+                <button type="button" className="pcb-btn pcb-btn-muted" onClick={clearProjectContext}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="thread-shell">
-            {!hasTurns && (
-              <div className="thread-empty">
-                <p>Start a research thread with a metric, geography, source, organization, or definition.</p>
-                <div className="example-chips">
-                  {EXAMPLES.map(ex => (
+            <div className="thread-scroll">
+              {!hasTurns && (
+                <div className="thread-empty">
+                  <p>Start a research thread with a metric, geography, source, organization, or definition.</p>
+                  <div className="example-chips">
+                    {EXAMPLES.map(ex => (
+                      <button
+                        key={ex}
+                        type="button"
+                        className="chip"
+                        onClick={() => void runQuery(ex)}
+                      >
+                        {ex}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="thread-messages" aria-live="polite">
+                {turns.map(turn => (
+                  <ResearchTurn
+                    key={turn.id}
+                    turn={turn}
+                    selected={selectedResultTurn?.id === turn.id}
+                    onSelectResults={() => {
+                      setSelectedResultTurnId(turn.id);
+                      setSelectedEvidenceItem(null);
+                    }}
+                    onChooseClarification={handleRefinementChip}
+                    onViewEvidence={item => {
+                      setSelectedResultTurnId(turn.id);
+                      setSelectedEvidenceItem(item);
+                    }}
+                    projectId={activeProjectContext?.id}
+                    onAuthRequired={onAuthRequired}
+                    onSaved={handleSaved}
+                    onFeedback={feedback}
+                  />
+                ))}
+                {error && <p className="thread-error">{error}</p>}
+                <div ref={messagesEndRef} className="thread-messages-end" aria-hidden="true" />
+              </div>
+            </div>
+
+            <form className="thread-composer" onSubmit={onSubmit}>
+              <div className="search-mode-bar" role="group" aria-label="Next search focus">
+                <span className="search-mode-label">Focus next search</span>
+                <div className="search-mode-chips">
+                  {SEARCH_MODES.map(m => (
                     <button
-                      key={ex}
+                      key={m.id}
                       type="button"
-                      className="chip"
-                      onClick={() => void runQuery(ex)}
+                      className={`search-mode-chip${pendingSearchFocus === m.id ? " active" : ""}`}
+                      onClick={() => setPendingSearchFocus(pendingSearchFocus === m.id ? undefined : m.id)}
                     >
-                      {ex}
+                      {m.label}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
-
-            <div className="thread-messages" aria-live="polite">
-              {turns.map(turn => (
-                <ResearchTurn
-                  key={turn.id}
-                  turn={turn}
-                  selected={selectedResultTurn?.id === turn.id}
-                  onSelectResults={() => {
-                    setSelectedResultTurnId(turn.id);
-                    setSelectedEvidenceItem(null);
-                  }}
-                  onChooseClarification={handleChipClick}
-                  onAuthRequired={onAuthRequired}
-                  onSaved={handleSaved}
-                  onFeedback={feedback}
-                />
-              ))}
-              {error && <p className="thread-error">{error}</p>}
-            </div>
-
-            <form className="thread-composer" onSubmit={onSubmit}>
               <div className="search-row">
                 <Search size={17} className="search-icon" aria-hidden="true" />
                 <input
@@ -574,9 +699,107 @@ function DataDiscoveryPage({
           onClearEvidence={() => setSelectedEvidenceItem(null)}
           onAuthRequired={onAuthRequired}
           onSaved={handleSaved}
+          onPickSuggestedQuery={q => void runQuery(q)}
+          projectId={activeProjectContext?.id}
         />
       </main>
     </>
+  );
+}
+
+function countStructuredResults(results: ChatResponse["results"]) {
+  return (
+    results.closest_variables.length +
+    results.relevant_reports.length +
+    results.relevant_organizations.length +
+    results.source_links.length
+  );
+}
+
+function resultStatusParts(response: ChatResponse, loading: boolean): string {
+  if (loading) return "Running search…";
+  const tc = response.tool_calls?.[0];
+  const toolBit = tc
+    ? `${tc.name} · ${tc.status === "ok" ? "completed" : tc.status}`
+    : `${response.intent || "search"} · completed`;
+  const r = response.results;
+  const nV = r.closest_variables.length;
+  const nR = r.relevant_reports.length;
+  const nO = r.relevant_organizations.length;
+  const nS = r.source_links.length;
+  const bits = [toolBit];
+  if (nV) bits.push(`${nV} variable${nV !== 1 ? "s" : ""}`);
+  if (nR) bits.push(`${nR} report${nR !== 1 ? "s" : ""}`);
+  if (nO) bits.push(`${nO} org${nO !== 1 ? "s" : ""}`);
+  if (nS) bits.push(`${nS} source${nS !== 1 ? "s" : ""}`);
+  if (bits.length === 1) bits.push("0 matches");
+  return bits.join(" · ");
+}
+
+function EmptySearchNextSteps({ baseQuery, onPick }: { baseQuery?: string; onPick: (q: string) => void }) {
+  const topic = (baseQuery || "").trim() || "this topic";
+  const shortTopic = topic.length > 52 ? `${topic.slice(0, 49)}…` : topic;
+  const suggestions = [
+    { label: "Broader overview", query: `Broader overview: ${topic} key metrics and trends` },
+    { label: "Find sources", query: `Sources: official statistics and publications on ${topic}` },
+    { label: "Find organizations", query: `Organizations: agencies and programs for ${topic}` },
+    { label: "Related concepts", query: `Related market: adjacent sectors to ${topic}` },
+  ];
+  return (
+    <div className="empty-results-panel">
+      <p className="empty-results-title">No exact structured variable found.</p>
+      <p className="empty-results-copy">Try broadening the search or looking at related reports and sources for “{shortTopic}”.</p>
+      <div className="narrow-chip-grid">
+        {suggestions.map(s => (
+          <button key={s.label} type="button" className="suggestion-chip" onClick={() => onPick(s.query)}>
+            <span className="suggestion-chip-label">{s.label}</span>
+            <span className="suggestion-chip-detail">{s.query}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NarrowSearchPanel({
+  variant,
+  questions,
+  onChoose,
+}: {
+  variant: "clarify" | "narrow";
+  questions: ClarifyingQuestion[];
+  onChoose: (option: string) => void;
+}) {
+  const title = variant === "clarify" ? "Clarify your request" : "Narrow this search";
+  const subtitle =
+    variant === "clarify"
+      ? "Choose an option — it is sent as a new message in this thread."
+      : "One-tap refinements — each is sent as a new message.";
+  const anyOptions = questions.some(q => (q.options?.length ?? 0) > 0);
+  return (
+    <div className={`narrow-search-panel${variant === "narrow" ? " narrow-search-panel--accent" : ""}`}>
+      <div className="narrow-search-panel-head">
+        <h3 className="narrow-search-panel-title">{title}</h3>
+        <p className="narrow-search-panel-sub">{subtitle}</p>
+      </div>
+      {questions.map(q => (
+        <div className="narrow-search-question" key={q.question}>
+          <p className="narrow-search-qtext">{q.question}</p>
+          {q.options && q.options.length > 0 && (
+            <div className="narrow-chip-grid">
+              {q.options.map(opt => (
+                <button key={opt} type="button" className="suggestion-chip suggestion-chip-compact" onClick={() => onChoose(opt)}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      {!anyOptions && variant === "clarify" && (
+        <p className="narrow-search-hint">Reply in the composer below with your own wording.</p>
+      )}
+    </div>
   );
 }
 
@@ -585,6 +808,8 @@ function ResearchTurn({
   selected,
   onSelectResults,
   onChooseClarification,
+  onViewEvidence,
+  projectId,
   onAuthRequired,
   onSaved,
   onFeedback,
@@ -593,6 +818,8 @@ function ResearchTurn({
   selected: boolean;
   onSelectResults: () => void;
   onChooseClarification: (option: string) => void;
+  onViewEvidence: (item: DrawerItem) => void;
+  projectId?: string;
   onAuthRequired?: () => void;
   onSaved: () => void;
   onFeedback: (type: string) => Promise<void>;
@@ -601,43 +828,294 @@ function ResearchTurn({
     return (
       <article className="thread-turn user-turn">
         <div className="turn-label">You</div>
-        <p>{turn.content}</p>
+        <p className="user-turn-body">{turn.content}</p>
       </article>
     );
   }
 
   const response = turn.response || turn.result_payload;
-  const hasResults = response && response.type !== "clarification" && response.type !== "error";
-  const questions = turn.clarifying_questions || response?.clarifying_questions || [];
+
+  if (turn.loading && !response) {
+    return (
+      <article className={`thread-turn assistant-turn assistant-turn-loading${selected ? " selected-turn" : ""}`}>
+        <div className="assistant-turn-head">
+          <span className="turn-label">Assistant</span>
+          <button type="button" className="thread-panel-context-btn" disabled>
+            Side panel
+          </button>
+        </div>
+        <p className="assistant-loading-bubble">Searching variables, reports, sources, and organizations…</p>
+      </article>
+    );
+  }
+
+  if (!response) {
+    return (
+      <article className="thread-turn assistant-turn">
+        <div className="turn-label">Assistant</div>
+        <p>{turn.content}</p>
+      </article>
+    );
+  }
+
+  const questions = turn.clarifying_questions || response.clarifying_questions || [];
+  const isClarification = response.type === "clarification";
+  const isError = response.type === "error";
+  const total = countStructuredResults(response.results);
+  const hasStructuredPayload = response.type === "answer" || response.type === "no_results";
+  const hasComparison = Object.keys(response.results.comparison || {}).length > 0;
+  const emptyStructured = hasStructuredPayload && total === 0 && !hasComparison;
+  const previews = !turn.loading && total > 0 ? pickResultPreviews(response.results, 3) : [];
+  const summaryText = response.assistant_message || response.message;
 
   return (
     <article
-      className={`thread-turn assistant-turn${response?.type === "error" ? " error-turn" : ""}${selected ? " selected-turn" : ""}`}
+      className={`thread-turn assistant-turn${isError ? " error-turn" : ""}${selected ? " selected-turn" : ""}`}
     >
-      <div className="turn-label">Assistant</div>
-      {response ? (
-        <>
-          <AnswerSummary response={response} loading={Boolean(turn.loading)} />
-          {!turn.loading && response.tool_calls && response.tool_calls.length > 0 && (
-            <AgentActivity query={turn.query || ""} toolCalls={response.tool_calls} completed compact />
+      <div className="assistant-turn-head">
+        <span className="turn-label">Assistant</span>
+        <button
+          type="button"
+          className={`thread-panel-context-btn${selected ? " is-active" : ""}`}
+          onClick={onSelectResults}
+          aria-pressed={selected}
+        >
+          {selected ? "Using for side panel" : "Use for side panel"}
+        </button>
+      </div>
+
+      <AnswerSummary response={response} loading={Boolean(turn.loading)} />
+
+      {!turn.loading && !isClarification && (
+        <div className="result-status-row">{resultStatusParts(response, false)}</div>
+      )}
+
+      {turn.loading && <div className="result-status-row result-status-row-muted">Starting search…</div>}
+
+      {!turn.loading && questions.length > 0 && isClarification && (
+        <NarrowSearchPanel variant="clarify" questions={questions} onChoose={onChooseClarification} />
+      )}
+
+      {!turn.loading && questions.length > 0 && !isClarification && (
+        <NarrowSearchPanel variant="narrow" questions={questions} onChoose={onChooseClarification} />
+      )}
+
+      {!turn.loading && isError && (
+        <div className="error-followup-panel">
+          <p>We could not finish this search. Check your connection, sign in if required, or try a simpler question.</p>
+          {turn.query && (
+            <div className="answer-actions">
+              <button type="button" className="plain-action" onClick={() => onChooseClarification(turn.query!)}>
+                Retry same question
+              </button>
+            </div>
           )}
-          {questions.length > 0 && (
-            response.type === "clarification" ? (
-              <ClarificationPanel questions={questions} onChoose={onChooseClarification} />
-            ) : (
-              <NarrowChips questions={questions} onChoose={onChooseClarification} />
-            )
-          )}
-          {hasResults && (
-            <>
-              <div className="answer-actions">
-                <button type="button" className="plain-action" onClick={onSelectResults}>
-                  Show results
-                </button>
+          <EmptySearchNextSteps baseQuery={turn.query} onPick={onChooseClarification} />
+        </div>
+      )}
+
+      {!turn.loading && !isClarification && !isError && emptyStructured && (
+        <EmptySearchNextSteps baseQuery={turn.query} onPick={onChooseClarification} />
+      )}
+
+      {!turn.loading && previews.length > 0 && (
+        <div className="result-preview-stack">
+          {previews.map((pv, i) => (
+            <CompactResultPreview
+              key={`${pv.kind}-${i}-${previewStableKey(pv)}`}
+              item={pv}
+              answerSummary={summaryText}
+              query={turn.query}
+              response={response}
+              onViewEvidence={onViewEvidence}
+              onAuthRequired={onAuthRequired}
+              projectId={projectId}
+              onSaved={onSaved}
+            />
+          ))}
+        </div>
+      )}
+
+      {!turn.loading && hasStructuredPayload && !isError && total > 0 && (
+        <details className="full-results-details">
+          <summary className="full-results-summary">View all results</summary>
+          <ResultSections
+            results={response.results}
+            limitations={response.limitations}
+            onViewEvidence={onViewEvidence}
+            onAuthRequired={onAuthRequired}
+            projectId={projectId}
+            onItemSaved={onSaved}
+            showLimitationsSection={false}
+          />
+        </details>
+      )}
+
+      {response.limitations.length > 0 && !turn.loading && (
+        <details className="limitations-toggle limitations-thread">
+          <summary>Limitations ({response.limitations.length})</summary>
+          <ul>
+            {response.limitations.map((item, index) => (
+              <li key={index}>{item}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {!turn.loading && hasStructuredPayload && !isClarification && !isError && (
+        <div className="thread-actions-row">
+          <SaveToProjectButton
+            label="Save entire answer"
+            onAuthRequired={onAuthRequired}
+            onSaved={onSaved}
+            projectId={projectId}
+            payload={{
+              item_type: "search_result",
+              item_id: response.saved_result_id,
+              title: turn.query || response.message || "Saved search",
+              metadata: {
+                query: turn.query,
+                answer_summary: response.assistant_message || response.message,
+                selected_variables: response.results.closest_variables,
+                relevant_reports: response.results.relevant_reports,
+                organizations: response.results.relevant_organizations,
+                source_links: response.results.source_links,
+                limitations: response.limitations,
+                result_payload: response,
+              },
+            }}
+          />
+          <div className="feedback-row feedback-row-inline">
+            <button type="button" onClick={() => void onFeedback("thumbs_up")}>Useful</button>
+            <button type="button" onClick={() => void onFeedback("thumbs_down")}>Not useful</button>
+          </div>
+        </div>
+      )}
+
+      {!turn.loading && response.tool_calls && response.tool_calls.length > 0 && (
+        <details className="technical-details">
+          <summary>Technical details</summary>
+          <AgentActivity query={turn.query || ""} toolCalls={response.tool_calls} completed />
+        </details>
+      )}
+    </article>
+  );
+}
+
+function previewStableKey(item: PreviewUnion): string {
+  if (item.kind === "variable") return item.data.title || item.data.raw_variable_name || "";
+  if (item.kind === "report") return item.data.title || "";
+  if (item.kind === "organization") return item.data.name || "";
+  return item.data.source_url || item.data.title || "";
+}
+
+function EvidencePanel({
+  turn,
+  evidenceItem,
+  onViewEvidence,
+  onClearEvidence,
+  onAuthRequired,
+  onSaved,
+  onPickSuggestedQuery,
+  projectId,
+}: {
+  turn?: Turn;
+  evidenceItem: DrawerItem | null;
+  onViewEvidence: (item: DrawerItem) => void;
+  onClearEvidence: () => void;
+  onAuthRequired?: () => void;
+  onSaved: () => void;
+  onPickSuggestedQuery: (q: string) => void;
+  projectId?: string;
+}) {
+  const response = turn?.response || turn?.result_payload;
+  const loading = Boolean(turn?.loading && !response);
+
+  return (
+    <aside className="evidence-panel" aria-label="Results and evidence">
+      <div className="evidence-panel-body">
+        <div className="evidence-panel-head">
+          <h2>{evidenceItem ? "Evidence" : "Results"}</h2>
+          {turn?.query && <span className="evidence-query-pill">{turn.query}</span>}
+        </div>
+
+      {!turn && (
+        <p className="evidence-hint">Select a message in the thread, then choose a result to view evidence here.</p>
+      )}
+
+      {turn && loading && (
+        <p className="evidence-loading-text">Searching variables, reports, sources, and organizations…</p>
+      )}
+
+      {turn && !loading && !response && (
+        <p className="evidence-hint">Waiting for a response…</p>
+      )}
+
+      {turn && !loading && response && response.type === "clarification" && (
+        <div className="evidence-context-block">
+          <p className="evidence-muted-paragraph">{response.assistant_message || response.message}</p>
+          <p className="evidence-hint-inline">Answer in the thread to load structured matches here.</p>
+        </div>
+      )}
+
+      {turn && !loading && response && response.type === "error" && (
+        <div className="evidence-context-block">
+          <p className="evidence-muted-paragraph">{response.assistant_message || response.message}</p>
+          <EmptySearchNextSteps baseQuery={turn.query} onPick={onPickSuggestedQuery} />
+        </div>
+      )}
+
+      {turn && !loading && response && (response.type === "answer" || response.type === "no_results") && (() => {
+        const total = countStructuredResults(response.results);
+        const previews = total > 0 ? pickResultPreviews(response.results, 3) : [];
+
+        if (total === 0 && !evidenceItem) {
+          return (
+            <div className="evidence-context-block">
+              <p className="evidence-no-results-label">No results for this message</p>
+              <EmptySearchNextSteps baseQuery={turn.query} onPick={onPickSuggestedQuery} />
+            </div>
+          );
+        }
+
+        if (total > 0 && evidenceItem) {
+          return (
+            <div className="evidence-detail-wrap">
+              <EvidenceDetail item={evidenceItem} />
+              <button type="button" className="plain-action evidence-back-btn" onClick={onClearEvidence}>
+                Clear selection
+              </button>
+            </div>
+          );
+        }
+
+        if (total > 0 && !evidenceItem) {
+          return (
+            <div className="evidence-context-block">
+              <p className="evidence-count-sentence">{resultStatusParts(response, false)}</p>
+              <p className="evidence-hint-inline">Select a result below to view full evidence.</p>
+              <div className="result-preview-stack result-preview-stack-compact">
+                {previews.map((pv, i) => (
+                  <CompactResultPreview
+                    key={`ev-${pv.kind}-${i}`}
+                    item={pv}
+                    answerSummary={response.assistant_message || response.message}
+                    query={turn.query}
+                    response={response}
+                    onViewEvidence={onViewEvidence}
+                    onAuthRequired={onAuthRequired}
+                    projectId={projectId}
+                    onSaved={onSaved}
+                    hideSaveButton
+                  />
+                ))}
+              </div>
+              <div className="evidence-panel-save">
                 <SaveToProjectButton
-                  label="Save to project"
+                  label="Save result"
                   onAuthRequired={onAuthRequired}
                   onSaved={onSaved}
+                  projectId={projectId}
                   payload={{
                     item_type: "search_result",
                     item_id: response.saved_result_id,
@@ -655,112 +1133,39 @@ function ResearchTurn({
                   }}
                 />
               </div>
-              <div className="feedback-row">
-                <button type="button" onClick={() => void onFeedback("thumbs_up")}>
-                  Useful
-                </button>
-                <button type="button" onClick={() => void onFeedback("thumbs_down")}>
-                  Not useful
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      ) : (
-        <p>{turn.content}</p>
-      )}
-    </article>
-  );
-}
+              <details className="full-results-details evidence-full-results">
+                <summary className="full-results-summary">All categories</summary>
+                <ResultSections
+                  results={response.results}
+                  limitations={response.limitations}
+                  onViewEvidence={onViewEvidence}
+                  onAuthRequired={onAuthRequired}
+                  projectId={projectId}
+                  onItemSaved={onSaved}
+                  showLimitationsSection={false}
+                />
+              </details>
+            </div>
+          );
+        }
 
-function EvidencePanel({
-  turn,
-  evidenceItem,
-  onViewEvidence,
-  onClearEvidence,
-  onAuthRequired,
-  onSaved,
-}: {
-  turn?: Turn;
-  evidenceItem: DrawerItem | null;
-  onViewEvidence: (item: DrawerItem) => void;
-  onClearEvidence: () => void;
-  onAuthRequired?: () => void;
-  onSaved: () => void;
-}) {
-  const response = turn?.response || turn?.result_payload;
-  const hasResults = response && response.type !== "clarification" && response.type !== "error";
-
-  return (
-    <aside className="evidence-panel" aria-label="Structured results and evidence basket">
-      <div className="evidence-panel-head">
-        <h2>Results</h2>
-        {turn?.query && <span>{turn.query}</span>}
+        return null;
+      })()}
       </div>
-
-      {!response && (
-        <div className="evidence-empty">
-          <p>Structured results and viewed evidence will appear here as the thread develops.</p>
-        </div>
-      )}
-
-      {response && !hasResults && (
-        <div className="evidence-empty">
-          <p>{response.type === "clarification" ? "Answer a clarification to populate structured results." : response.message}</p>
-        </div>
-      )}
-
-      {response && hasResults && (
-        <>
-          <div className="evidence-summary">
-            <span>{response.results.closest_variables.length} variables</span>
-            <span>{response.results.relevant_reports.length} reports</span>
-            <span>{response.results.relevant_organizations.length} orgs</span>
-            <span>{response.results.source_links.length} sources</span>
-          </div>
-          <div className="answer-actions">
-            <SaveToProjectButton
-              label="Save result"
-              onAuthRequired={onAuthRequired}
-              onSaved={onSaved}
-              payload={{
-                item_type: "search_result",
-                item_id: response.saved_result_id,
-                title: turn?.query || response.message || "Saved search",
-                metadata: {
-                  query: turn?.query,
-                  answer_summary: response.assistant_message || response.message,
-                  selected_variables: response.results.closest_variables,
-                  relevant_reports: response.results.relevant_reports,
-                  organizations: response.results.relevant_organizations,
-                  source_links: response.results.source_links,
-                  limitations: response.limitations,
-                  result_payload: response,
-                },
-              }}
-            />
-          </div>
-          <ResultSections
-            results={response.results}
-            limitations={response.limitations}
-            onViewEvidence={onViewEvidence}
-            onAuthRequired={onAuthRequired}
-            onItemSaved={onSaved}
-          />
-        </>
-      )}
 
       <div className="evidence-basket">
         <div className="evidence-panel-head compact">
-          <h2>Evidence Basket</h2>
+          <h2>Evidence basket</h2>
           {evidenceItem && (
             <button type="button" onClick={onClearEvidence}>Clear</button>
           )}
         </div>
-        {evidenceItem ? (
+        {evidenceItem && response && countStructuredResults(response.results) > 0 ? (
+          <p className="evidence-empty-text">Selected result is shown in the panel above.</p>
+        ) : evidenceItem ? (
           <EvidenceDetail item={evidenceItem} />
         ) : (
-          <p className="evidence-empty-text">Click View evidence on any result card.</p>
+          <p className="evidence-empty-text">Select a result to view evidence, or use View evidence on a card in the thread.</p>
         )}
       </div>
     </aside>
@@ -1590,6 +1995,24 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
             </div>
           </div>
           <div className="pwh-actions">
+            <button
+              type="button"
+              onClick={() => {
+                if (project) {
+                  window.sessionStorage.setItem(
+                    DATA_PROJECT_CONTEXT_KEY,
+                    JSON.stringify({
+                      id: project.id,
+                      title: project.title,
+                      research_question: project.research_question,
+                    })
+                  );
+                }
+                onNavigate("/data");
+              }}
+            >
+              Research in Data
+            </button>
             <button type="button" onClick={() => void doExport()}>Export brief</button>
             <button type="button" onClick={() => setEditing(!editing)}>
               {editing ? "Cancel" : "Edit"}
