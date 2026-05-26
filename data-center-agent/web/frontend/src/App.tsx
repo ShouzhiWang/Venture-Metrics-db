@@ -121,7 +121,6 @@ export function App() {
     <div className="page-shell">
       <TopNav path={path} user={user} onNavigate={navigate} onLogout={() => void handleLogout()} />
       {routePage(path, navigate, user, authLoading, setUser)}
-      <SiteFooter />
     </div>
   );
 
@@ -130,14 +129,6 @@ export function App() {
     setUser(null);
     navigate("/data");
   }
-}
-
-function SiteFooter() {
-  return (
-    <footer className="site-footer">
-      Prototype database — results are evidence-backed but still under review.
-    </footer>
-  );
 }
 
 function DataDiscoveryPage({
@@ -414,20 +405,30 @@ function DataDiscoveryPage({
 
   // Filter out searches that have been saved to a project this session
   const visibleHistory = historyItems.filter(item => !savedResultIds.has(item.id));
-  const threads = useMemo(
-    () => buildResearchThreads(visibleHistory).filter(thread => !conversationId || thread.id !== conversationId),
-    [visibleHistory, conversationId]
+  const allThreads = useMemo(
+    () => buildResearchThreads(visibleHistory),
+    [visibleHistory]
   );
-  const currentThread: ResearchThread | null = hasTurns
-    ? {
-        id: conversationId || "local-active",
-        title: activeTitle,
-        updated_at: latestAssistant?.created_at,
-        resultCount: activeResultCount,
-        items: [],
-        local: true,
-      }
-    : null;
+  const activeThreadId = conversationId || selectedHistoryId;
+  const currentThread: ResearchThread | null =
+    hasTurns && !allThreads.some(thread => thread.id === conversationId)
+      ? {
+          id: conversationId || "local-active",
+          title: activeTitle,
+          updated_at: latestAssistant?.created_at,
+          resultCount: activeResultCount,
+          items: [],
+          local: true,
+        }
+      : null;
+
+  function selectThread(thread: ResearchThread) {
+    if (hasTurns && conversationId === thread.id) {
+      setSelectedHistoryId(thread.id);
+      return;
+    }
+    void reopenThread(thread);
+  }
 
   return (
     <>
@@ -468,31 +469,31 @@ function DataDiscoveryPage({
             </div>
             {historyLoading && <p className="sidebar-note">Loading…</p>}
             {historyError && <p className="sidebar-note error-text">{historyError}</p>}
-            {!historyLoading && !currentThread && threads.length === 0 && (
+            {!historyLoading && !currentThread && allThreads.length === 0 && (
               <p className="sidebar-note">Your research threads appear here.</p>
             )}
-            {!historyLoading && (currentThread || threads.length > 0) && (
+            {!historyLoading && (currentThread || allThreads.length > 0) && (
               <div className="sidebar-list">
                 {currentThread && (
                   <button
                     type="button"
-                    className={!selectedHistoryId || selectedHistoryId === currentThread.id ? "active" : undefined}
-                    aria-current={!selectedHistoryId || selectedHistoryId === currentThread.id ? "true" : undefined}
+                    className={activeThreadId === currentThread.id ? "active" : undefined}
+                    aria-current={activeThreadId === currentThread.id ? "true" : undefined}
                     onClick={() => setSelectedHistoryId(currentThread.id)}
                   >
                     <strong>{currentThread.title}</strong>
                     <span>{threadSummary(currentThread)}</span>
                   </button>
                 )}
-                {threads.map(thread => {
-                  const active = selectedHistoryId === thread.id || Boolean(conversationId && thread.id === conversationId);
+                {allThreads.map(thread => {
+                  const active = activeThreadId === thread.id;
                   return (
                     <button
                       key={thread.id}
                       type="button"
                       className={active ? "active" : undefined}
                       aria-current={active ? "true" : undefined}
-                      onClick={() => void reopenThread(thread)}
+                      onClick={() => selectThread(thread)}
                     >
                       <strong>{thread.title}</strong>
                       <span>{threadSummary(thread)}</span>

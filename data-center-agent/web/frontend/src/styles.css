@@ -18,6 +18,11 @@
   line-height: 1.5;
 }
 
+html {
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -25,6 +30,7 @@
 body {
   margin: 0;
   background: var(--bg);
+  overscroll-behavior-y: none;
 }
 
 h1, h2, h3, h4, p {
@@ -55,6 +61,7 @@ a:hover {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow-x: clip;
 }
 
 /* ── Site footer ──────────────────────────────── */
@@ -798,6 +805,8 @@ a:hover {
   overflow-y: auto;
   flex-shrink: 1;
   border-bottom: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sidebar-section-head {
@@ -1042,6 +1051,8 @@ a:hover {
   top: 48px;
   height: calc(100vh - 48px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .evidence-panel-head {
@@ -1298,6 +1309,8 @@ a:hover {
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .map-sidebar h1 {
@@ -2301,6 +2314,8 @@ a:hover {
 .drawer-body {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -2508,6 +2523,8 @@ a:hover {
 
 .project-workspace-main {
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 24px 28px 64px;
   display: flex;
   flex-direction: column;
@@ -2637,6 +2654,8 @@ a:hover {
 .evidence-list {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 8px 14px;
   display: flex;
   flex-direction: column;
