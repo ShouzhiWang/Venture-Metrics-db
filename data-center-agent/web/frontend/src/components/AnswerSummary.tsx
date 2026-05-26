@@ -8,7 +8,6 @@ type Props = {
 
 export function AnswerSummary({ response, loading }: Props) {
   const msg = response.assistant_message || response.message;
-  const hasLimitations = (response.limitations?.length ?? 0) > 0;
 
   return (
     <div className="answer-summary">
@@ -18,17 +17,6 @@ export function AnswerSummary({ response, loading }: Props) {
         <p className="answer-text">
           <MarkdownText text={msg} />
         </p>
-      )}
-
-      {hasLimitations && (
-        <details className="limitations-toggle">
-          <summary>Limitations</summary>
-          <ul>
-            {response.limitations.map((item, index) => (
-              <li key={index}>{item}</li>
-            ))}
-          </ul>
-        </details>
       )}
     </div>
   );

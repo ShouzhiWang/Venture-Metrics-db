@@ -718,26 +718,6 @@ function countStructuredResults(results: ChatResponse["results"]) {
   );
 }
 
-function resultStatusParts(response: ChatResponse, loading: boolean): string {
-  if (loading) return "Running search…";
-  const tc = response.tool_calls?.[0];
-  const toolBit = tc
-    ? `${tc.name} · ${tc.status === "ok" ? "completed" : tc.status}`
-    : `${response.intent || "search"} · completed`;
-  const r = response.results;
-  const nV = r.closest_variables.length;
-  const nR = r.relevant_reports.length;
-  const nO = r.relevant_organizations.length;
-  const nS = r.source_links.length;
-  const bits = [toolBit];
-  if (nV) bits.push(`${nV} variable${nV !== 1 ? "s" : ""}`);
-  if (nR) bits.push(`${nR} report${nR !== 1 ? "s" : ""}`);
-  if (nO) bits.push(`${nO} org${nO !== 1 ? "s" : ""}`);
-  if (nS) bits.push(`${nS} source${nS !== 1 ? "s" : ""}`);
-  if (bits.length === 1) bits.push("0 matches");
-  return bits.join(" · ");
-}
-
 function EmptySearchNextSteps({
   baseQuery,
   followUps,
@@ -804,21 +784,76 @@ function EmptySearchNextSteps({
   );
 }
 
+function combineNarrowSelections(
+  baseQuery: string | undefined,
+  picks: { question: string; option: string }[],
+): string {
+  if (picks.length === 0) return "";
+  if (picks.length === 1) return picks[0].option;
+
+  const refinements = picks.map(({ question, option }) => {
+    if (baseQuery) {
+      const prefix = `${baseQuery} — `;
+      if (option.startsWith(prefix)) return option.slice(prefix.length);
+    }
+    const q = question.replace(/\?$/, "").trim();
+    if (option.length <= 48 && q && !option.toLowerCase().includes(q.toLowerCase())) {
+      return `${q}: ${option}`;
+    }
+    return option;
+  });
+
+  if (baseQuery) return `${baseQuery} — ${refinements.join("; ")}`;
+  return refinements.join(". ");
+}
+
 function NarrowSearchPanel({
   variant,
   questions,
+  baseQuery,
   onChoose,
 }: {
   variant: "clarify" | "narrow";
   questions: ClarifyingQuestion[];
+  baseQuery?: string;
   onChoose: (option: string) => void;
 }) {
+  const multiSelect = variant === "narrow" && questions.length > 1;
+  const [selections, setSelections] = useState<Record<string, string>>({});
+
   const title = variant === "clarify" ? "Clarify your request" : "Narrow this search";
-  const subtitle =
-    variant === "clarify"
+  const subtitle = multiSelect
+    ? "Choose one or more refinements, then apply them as a single message."
+    : variant === "clarify"
       ? "Choose an option — it is sent as a new message in this thread."
       : "One-tap refinements — each is sent as a new message.";
   const anyOptions = questions.some(q => (q.options?.length ?? 0) > 0);
+  const selectedCount = Object.keys(selections).length;
+
+  function toggleSelection(question: string, option: string) {
+    setSelections(prev => {
+      if (prev[question] === option) {
+        const next = { ...prev };
+        delete next[question];
+        return next;
+      }
+      return { ...prev, [question]: option };
+    });
+  }
+
+  function applySelections() {
+    const picks = questions
+      .map(q => {
+        const option = selections[q.question];
+        return option ? { question: q.question, option } : null;
+      })
+      .filter((item): item is { question: string; option: string } => Boolean(item));
+    const combined = combineNarrowSelections(baseQuery, picks);
+    if (!combined) return;
+    setSelections({});
+    onChoose(combined);
+  }
+
   return (
     <div className={`narrow-search-panel${variant === "narrow" ? " narrow-search-panel--accent" : ""}`}>
       <div className="narrow-search-panel-head">
@@ -830,15 +865,48 @@ function NarrowSearchPanel({
           <p className="narrow-search-qtext">{q.question}</p>
           {q.options && q.options.length > 0 && (
             <div className="narrow-chip-grid">
-              {q.options.map(opt => (
-                <button key={opt} type="button" className="suggestion-chip suggestion-chip-compact" onClick={() => onChoose(opt)}>
-                  {opt}
-                </button>
-              ))}
+              {q.options.map(opt => {
+                const selected = selections[q.question] === opt;
+                if (multiSelect) {
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`suggestion-chip suggestion-chip-compact${selected ? " suggestion-chip-selected" : ""}`}
+                      aria-pressed={selected}
+                      onClick={() => toggleSelection(q.question, opt)}
+                    >
+                      {opt}
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className="suggestion-chip suggestion-chip-compact"
+                    onClick={() => onChoose(opt)}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       ))}
+      {multiSelect && anyOptions && (
+        <div className="narrow-search-actions">
+          <button
+            type="button"
+            className="narrow-search-apply-btn"
+            disabled={selectedCount === 0}
+            onClick={applySelections}
+          >
+            {selectedCount > 0 ? `Apply ${selectedCount} refinement${selectedCount !== 1 ? "s" : ""}` : "Apply refinements"}
+          </button>
+        </div>
+      )}
       {!anyOptions && variant === "clarify" && (
         <p className="narrow-search-hint">Reply in the composer below with your own wording.</p>
       )}
@@ -929,18 +997,20 @@ function ResearchTurn({
 
       <AnswerSummary response={response} loading={Boolean(turn.loading)} />
 
-      {!turn.loading && !isClarification && (
-        <div className="result-status-row">{resultStatusParts(response, false)}</div>
+      {!isClarification && (
+        turn.loading ? (
+          <AgentActivity query={turn.query || ""} completed={false} compact />
+        ) : response.tool_calls && response.tool_calls.length > 0 ? (
+          <AgentActivity query={turn.query || ""} toolCalls={response.tool_calls} completed compact />
+        ) : null
       )}
 
-      {turn.loading && <div className="result-status-row result-status-row-muted">Starting search…</div>}
-
       {!turn.loading && questions.length > 0 && isClarification && (
-        <NarrowSearchPanel variant="clarify" questions={questions} onChoose={onChooseClarification} />
+        <NarrowSearchPanel variant="clarify" questions={questions} baseQuery={turn.query} onChoose={onChooseClarification} />
       )}
 
       {!turn.loading && questions.length > 0 && !isClarification && !emptyStructured && (
-        <NarrowSearchPanel variant="narrow" questions={questions} onChoose={onChooseClarification} />
+        <NarrowSearchPanel variant="narrow" questions={questions} baseQuery={turn.query} onChoose={onChooseClarification} />
       )}
 
       {!turn.loading && isError && (
@@ -1004,17 +1074,6 @@ function ResearchTurn({
         </details>
       )}
 
-      {response.limitations.length > 0 && !turn.loading && (
-        <details className="limitations-toggle limitations-thread">
-          <summary>Limitations ({response.limitations.length})</summary>
-          <ul>
-            {response.limitations.map((item, index) => (
-              <li key={index}>{item}</li>
-            ))}
-          </ul>
-        </details>
-      )}
-
       {!turn.loading && hasStructuredPayload && !isClarification && !isError && (
         <div className="thread-actions-row">
           <SaveToProjectButton
@@ -1043,13 +1102,6 @@ function ResearchTurn({
             <button type="button" onClick={() => void onFeedback("thumbs_down")}>Not useful</button>
           </div>
         </div>
-      )}
-
-      {!turn.loading && response.tool_calls && response.tool_calls.length > 0 && (
-        <details className="technical-details">
-          <summary>Technical details</summary>
-          <AgentActivity query={turn.query || ""} toolCalls={response.tool_calls} completed />
-        </details>
       )}
     </article>
   );
