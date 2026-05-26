@@ -7,6 +7,7 @@ class FakeLLM:
     def __init__(self, plan):
         self._plan = plan
         self.synthesis_inputs = None
+        self.no_results_inputs = None
 
     def plan(self, **kwargs):
         if isinstance(self._plan, Exception):
@@ -16,6 +17,16 @@ class FakeLLM:
     def synthesize(self, **kwargs):
         self.synthesis_inputs = kwargs
         return "Grounded answer from tool results."
+
+    def synthesize_no_results(self, **kwargs):
+        self.no_results_inputs = kwargs
+        return {
+            "assistant_message": "No strong matches yet. Try a related metric or source search.",
+            "follow_up_queries": [
+                {"label": "Bank lending", "query": "UK SME bank loan usage rates"},
+                {"label": "Equity share", "query": "UK SME equity and venture funding share"},
+            ],
+        }
 
 
 def test_chat_missing_llm_key_returns_config_error() -> None:
@@ -241,6 +252,39 @@ def test_tool_error_returns_clean_json() -> None:
     assert result["type"] == "error"
     assert result["message"] == "Bad query"
     assert result["limitations"] == ["invalid_args"]
+
+
+def test_chat_no_results_uses_synthesis_follow_ups() -> None:
+    def fake_tool(name, args):
+        return {
+            "ok": True,
+            "data": {
+                "closest_variables": [],
+                "relevant_reports": [],
+                "relevant_organizations": [],
+                "source_links": [],
+                "suggested_clarifications": [
+                    {"question": "Official statistics on UK SME finance", "reason": "reports may exist"},
+                ],
+            },
+        }
+
+    llm = FakeLLM(
+        {
+            "intent": "find_data",
+            "clarifying_questions": [{"question": "Which year range?", "options": ["2018-2023"]}],
+            "tool_calls": [{"name": "find_data", "args": {"query": "UK SME external finance"}}],
+            "filters": {},
+        }
+    )
+    result = handle_chat({"message": "UK SME external finance"}, tool_caller=fake_tool, llm_client=llm)
+
+    assert result["type"] == "no_results"
+    assert result["follow_up_queries"]
+    assert result["follow_up_queries"][0]["query"]
+    assert any("Official statistics" in q["question"] for q in result["clarifying_questions"])
+    assert llm.no_results_inputs is not None
+    assert llm.synthesis_inputs is None
 
 
 def test_mimo_extra_body_disables_thinking() -> None:

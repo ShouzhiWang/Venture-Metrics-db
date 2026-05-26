@@ -3,6 +3,11 @@ export type ClarifyingQuestion = {
   options?: string[];
 };
 
+export type FollowUpQuery = {
+  label: string;
+  query: string;
+};
+
 export type VariableResult = {
   id?: string;
   object_id?: string;
@@ -71,6 +76,7 @@ export type ChatResponse = {
   saved_result_id?: string;
   intent: string;
   clarifying_questions: ClarifyingQuestion[];
+  follow_up_queries?: FollowUpQuery[];
   tool_calls?: {
     name: string;
     args: Record<string, unknown>;

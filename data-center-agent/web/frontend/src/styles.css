@@ -1546,6 +1546,130 @@ a:hover {
   color: var(--text);
 }
 
+.evidence-guidance {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.evidence-result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evidence-result-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.evidence-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evidence-result-row {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.evidence-result-row:hover {
+  border-color: var(--border-strong, #cbd5e1);
+  background: var(--surface-2);
+}
+
+.evidence-result-row strong {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.evidence-result-row span {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.evidence-result-row-static {
+  cursor: default;
+}
+
+.evidence-result-row-static:hover {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.evidence-project-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.evidence-project-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.evidence-project-name {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.evidence-panel-chips {
+  margin-top: 4px;
+}
+
+.evidence-detail-full {
+  gap: 10px;
+}
+
+.evidence-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.evidence-detail-head h3 {
+  margin-top: 6px;
+}
+
+.evidence-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.evidence-detail-actions .save-project {
+  position: static;
+}
+
 .evidence-count-sentence {
   margin: 0;
   font-size: 12px;

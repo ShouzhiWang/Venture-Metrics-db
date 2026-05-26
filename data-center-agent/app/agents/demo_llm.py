@@ -70,6 +70,26 @@ class DemoLLMClient:
         )
         return self._text_completion(prompt).strip()
 
+    def synthesize_no_results(
+        self,
+        *,
+        message: str,
+        history: list[dict[str, str]],
+        plan: dict[str, Any],
+        tool_results: list[dict[str, Any]],
+        normalized_results: dict[str, Any],
+        limitations: list[str],
+    ) -> dict[str, Any]:
+        prompt = _no_results_synthesis_prompt(
+            message=message,
+            history=history,
+            plan=plan,
+            tool_results=tool_results,
+            normalized_results=normalized_results,
+            limitations=limitations,
+        )
+        return self._json_completion(prompt)
+
     def _json_completion(self, prompt: str) -> dict[str, Any]:
         last_error: Exception | None = None
         for attempt in range(2):
@@ -210,6 +230,56 @@ Normalized results:
 
 Tool results:
 {json.dumps(tool_results, ensure_ascii=True, default=str)[:16000]}
+
+Limitations:
+{json.dumps(limitations, ensure_ascii=True)}
+""".strip()
+
+
+def _no_results_synthesis_prompt(
+    *,
+    message: str,
+    history: list[dict[str, str]],
+    plan: dict[str, Any],
+    tool_results: list[dict[str, Any]],
+    normalized_results: dict[str, Any],
+    limitations: list[str],
+) -> str:
+    return f"""
+You are writing the final response for a data discovery demo when a search returned no strong structured matches.
+
+Use only the supplied context. Do not invent reports, variables, organizations, URLs, evidence, numbers, or availability.
+
+Return one JSON object only with this shape:
+{{
+  "assistant_message": "2-4 concise sentences explaining what was searched and what to try next",
+  "follow_up_queries": [
+    {{"label": "Short chip label (3-6 words)", "query": "A complete follow-up search the user can run"}},
+    ...
+  ]
+}}
+
+Rules for follow_up_queries:
+- Provide 3 or 4 items.
+- Each query must be a realistic next search in plain English (metric, geography, source type, organization type, or related concept).
+- Do not repeat the exact same wording as the user message unless narrowing it.
+- Labels should be short; queries can be longer and specific.
+- Do not invent dataset names or URLs.
+
+Recent conversation:
+{json.dumps(history[-8:], ensure_ascii=True)}
+
+User message:
+{message}
+
+Planner output:
+{json.dumps(plan, ensure_ascii=True, default=str)}
+
+Normalized results:
+{json.dumps(normalized_results, ensure_ascii=True, default=str)[:8000]}
+
+Tool results:
+{json.dumps(tool_results, ensure_ascii=True, default=str)[:8000]}
 
 Limitations:
 {json.dumps(limitations, ensure_ascii=True)}

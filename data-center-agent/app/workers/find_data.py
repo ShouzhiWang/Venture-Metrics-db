@@ -52,6 +52,7 @@ def find_data(
         filters=filters,
     )
     groups = group_results(search["results"], limit=limit)
+    has_results = any(len(group) > 0 for group in groups.values())
     return {
         "query": query,
         "parsed_intent": intent,
@@ -62,7 +63,9 @@ def find_data(
         "relevant_reports": groups["reports"],
         "source_links": groups["sources"],
         "relevant_organizations": groups["organizations"],
-        "suggested_clarifications": [item.model_dump() for item in suggest_clarifications(query, intent)],
+        "suggested_clarifications": [
+            item.model_dump() for item in suggest_clarifications(query, intent, has_results=has_results)
+        ],
     }
 
 
@@ -157,19 +160,36 @@ def format_find_data_item(row: dict) -> dict:
     }
 
 
-def suggest_clarifications(query: str, intent: dict) -> list[SuggestedClarification]:
-    if not intent.get("broad"):
-        return []
+def suggest_clarifications(query: str, intent: dict, *, has_results: bool = True) -> list[SuggestedClarification]:
     suggestions: list[SuggestedClarification] = []
-    if not intent.get("measure_intent"):
-        suggestions.append(SuggestedClarification(question="Do you need amount, count, rate, share, or a breakdown?", reason="Broad data requests can map to multiple measurement types."))
-    if not intent.get("geography"):
-        suggestions.append(SuggestedClarification(question="Which geography should be prioritized?", reason="Most startup and innovation indicators are geography-specific."))
-    if not intent.get("time_range"):
-        suggestions.append(SuggestedClarification(question="What time range matters?", reason="Reports and datasets often cover different periods."))
-    if "startup" in query.lower() or "vc" in query.lower():
-        suggestions.append(SuggestedClarification(question="Do you need sector, stage, investor type, or exit breakdowns?", reason="Startup datasets are commonly sliced by these dimensions."))
-    suggestions.append(SuggestedClarification(question="Should private or unclear-access sources be included?", reason="Some useful variables may come from private databases or report-only tables."))
+    if intent.get("broad"):
+        if not intent.get("measure_intent"):
+            suggestions.append(SuggestedClarification(question="Do you need amount, count, rate, share, or a breakdown?", reason="Broad data requests can map to multiple measurement types."))
+        if not intent.get("geography"):
+            suggestions.append(SuggestedClarification(question="Which geography should be prioritized?", reason="Most startup and innovation indicators are geography-specific."))
+        if not intent.get("time_range"):
+            suggestions.append(SuggestedClarification(question="What time range matters?", reason="Reports and datasets often cover different periods."))
+        if "startup" in query.lower() or "vc" in query.lower():
+            suggestions.append(SuggestedClarification(question="Do you need sector, stage, investor type, or exit breakdowns?", reason="Startup datasets are commonly sliced by these dimensions."))
+        suggestions.append(SuggestedClarification(question="Should private or unclear-access sources be included?", reason="Some useful variables may come from private databases or report-only tables."))
+    if not has_results:
+        topic = query.strip() or "this topic"
+        suggestions.extend(
+            [
+                SuggestedClarification(
+                    question=f"Broader overview of {topic} key metrics and trends",
+                    reason="No exact variable matched; a wider metric search may surface related indicators.",
+                ),
+                SuggestedClarification(
+                    question=f"Official statistics and publications on {topic}",
+                    reason="Reports and source links may exist even when structured variables do not.",
+                ),
+                SuggestedClarification(
+                    question=f"Organizations and programs related to {topic}",
+                    reason="Agencies, associations, and directories can anchor follow-up research.",
+                ),
+            ]
+        )
     return suggestions[:5]
 
 

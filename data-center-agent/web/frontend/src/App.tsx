@@ -26,9 +26,10 @@ import {
 import { AnswerSummary } from "./components/AnswerSummary";
 import { ResultSections } from "./components/ResultSections";
 import { CompactResultPreview, pickResultPreviews, type PreviewUnion } from "./components/ResultPreview";
+import { EvidenceWorkspacePanel } from "./components/EvidenceWorkspacePanel";
 import { DetailDrawer, type DrawerItem } from "./components/DetailDrawer";
 import { SaveToProjectButton } from "./components/SaveToProjectButton";
-import type { ChatResponse, ClarifyingQuestion, MapItem, ProjectItem, ResearchProject } from "./types";
+import type { ChatResponse, ClarifyingQuestion, FollowUpQuery, MapItem, ProjectItem, ResearchProject } from "./types";
 
 declare global {
   interface Window {
@@ -174,7 +175,7 @@ function DataDiscoveryPage({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const latestAssistant = [...turns].reverse().find(t => t.role === "assistant" && !t.loading);
-  const selectedResultTurn = turns.find(t => t.id === selectedResultTurnId) || latestAssistant;
+  const panelTurn = selectedResultTurnId ? turns.find(t => t.id === selectedResultTurnId) : undefined;
   const hasTurns = turns.length > 0;
   const activeTitle = turns.find(t => t.role === "user")?.content || "New research thread";
   const activeResultCount = turns.filter(t => t.role === "assistant" && t.response?.type !== "clarification" && t.response?.type !== "error").length;
@@ -638,7 +639,7 @@ function DataDiscoveryPage({
                   <ResearchTurn
                     key={turn.id}
                     turn={turn}
-                    selected={selectedResultTurn?.id === turn.id}
+                    selected={panelTurn?.id === turn.id}
                     onSelectResults={() => {
                       setSelectedResultTurnId(turn.id);
                       setSelectedEvidenceItem(null);
@@ -692,14 +693,15 @@ function DataDiscoveryPage({
           </div>
         </section>
 
-        <EvidencePanel
-          turn={selectedResultTurn}
+        <EvidenceWorkspacePanel
+          turn={panelTurn}
           evidenceItem={selectedEvidenceItem}
+          activeProject={activeProjectContext}
           onViewEvidence={setSelectedEvidenceItem}
           onClearEvidence={() => setSelectedEvidenceItem(null)}
           onAuthRequired={onAuthRequired}
           onSaved={handleSaved}
-          onPickSuggestedQuery={q => void runQuery(q)}
+          onNavigateProject={id => onNavigate?.(`/projects/${id}`)}
           projectId={activeProjectContext?.id}
         />
       </main>
@@ -736,22 +738,63 @@ function resultStatusParts(response: ChatResponse, loading: boolean): string {
   return bits.join(" · ");
 }
 
-function EmptySearchNextSteps({ baseQuery, onPick }: { baseQuery?: string; onPick: (q: string) => void }) {
+function EmptySearchNextSteps({
+  baseQuery,
+  followUps,
+  clarifyingQuestions,
+  onPick,
+}: {
+  baseQuery?: string;
+  followUps?: FollowUpQuery[];
+  clarifyingQuestions?: ClarifyingQuestion[];
+  onPick: (q: string) => void;
+}) {
   const topic = (baseQuery || "").trim() || "this topic";
   const shortTopic = topic.length > 52 ? `${topic.slice(0, 49)}…` : topic;
-  const suggestions = [
+
+  const fromFollowUps = (followUps ?? []).map(item => ({
+    label: item.label,
+    query: item.query,
+  }));
+
+  const fromClarifying = (clarifyingQuestions ?? []).flatMap(item => {
+    if (item.options?.length) {
+      return item.options.map(opt => ({
+        label: opt.length > 56 ? `${opt.slice(0, 53)}…` : opt,
+        query: opt,
+      }));
+    }
+    return [{ label: item.question, query: item.question }];
+  });
+
+  const seen = new Set<string>();
+  const suggestions = [...fromFollowUps, ...fromClarifying].filter(item => {
+    const key = item.query.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const fallback = [
     { label: "Broader overview", query: `Broader overview: ${topic} key metrics and trends` },
     { label: "Find sources", query: `Sources: official statistics and publications on ${topic}` },
     { label: "Find organizations", query: `Organizations: agencies and programs for ${topic}` },
     { label: "Related concepts", query: `Related market: adjacent sectors to ${topic}` },
   ];
+
+  const chips = suggestions.length > 0 ? suggestions.slice(0, 4) : fallback;
+
   return (
     <div className="empty-results-panel">
       <p className="empty-results-title">No exact structured variable found.</p>
-      <p className="empty-results-copy">Try broadening the search or looking at related reports and sources for “{shortTopic}”.</p>
+      <p className="empty-results-copy">
+        {suggestions.length > 0
+          ? `Try one of these follow-up searches for “${shortTopic}”.`
+          : `Try broadening the search or looking at related reports and sources for “${shortTopic}”.`}
+      </p>
       <div className="narrow-chip-grid">
-        {suggestions.map(s => (
-          <button key={s.label} type="button" className="suggestion-chip" onClick={() => onPick(s.query)}>
+        {chips.map(s => (
+          <button key={`${s.label}-${s.query}`} type="button" className="suggestion-chip" onClick={() => onPick(s.query)}>
             <span className="suggestion-chip-label">{s.label}</span>
             <span className="suggestion-chip-detail">{s.query}</span>
           </button>
@@ -896,7 +939,7 @@ function ResearchTurn({
         <NarrowSearchPanel variant="clarify" questions={questions} onChoose={onChooseClarification} />
       )}
 
-      {!turn.loading && questions.length > 0 && !isClarification && (
+      {!turn.loading && questions.length > 0 && !isClarification && !emptyStructured && (
         <NarrowSearchPanel variant="narrow" questions={questions} onChoose={onChooseClarification} />
       )}
 
@@ -910,12 +953,22 @@ function ResearchTurn({
               </button>
             </div>
           )}
-          <EmptySearchNextSteps baseQuery={turn.query} onPick={onChooseClarification} />
+          <EmptySearchNextSteps
+            baseQuery={turn.query}
+            followUps={response.follow_up_queries}
+            clarifyingQuestions={questions}
+            onPick={onChooseClarification}
+          />
         </div>
       )}
 
       {!turn.loading && !isClarification && !isError && emptyStructured && (
-        <EmptySearchNextSteps baseQuery={turn.query} onPick={onChooseClarification} />
+        <EmptySearchNextSteps
+          baseQuery={turn.query}
+          followUps={response.follow_up_queries}
+          clarifyingQuestions={response.clarifying_questions}
+          onPick={onChooseClarification}
+        />
       )}
 
       {!turn.loading && previews.length > 0 && (
@@ -1007,244 +1060,6 @@ function previewStableKey(item: PreviewUnion): string {
   if (item.kind === "report") return item.data.title || "";
   if (item.kind === "organization") return item.data.name || "";
   return item.data.source_url || item.data.title || "";
-}
-
-function EvidencePanel({
-  turn,
-  evidenceItem,
-  onViewEvidence,
-  onClearEvidence,
-  onAuthRequired,
-  onSaved,
-  onPickSuggestedQuery,
-  projectId,
-}: {
-  turn?: Turn;
-  evidenceItem: DrawerItem | null;
-  onViewEvidence: (item: DrawerItem) => void;
-  onClearEvidence: () => void;
-  onAuthRequired?: () => void;
-  onSaved: () => void;
-  onPickSuggestedQuery: (q: string) => void;
-  projectId?: string;
-}) {
-  const response = turn?.response || turn?.result_payload;
-  const loading = Boolean(turn?.loading && !response);
-
-  return (
-    <aside className="evidence-panel" aria-label="Results and evidence">
-      <div className="evidence-panel-body">
-        <div className="evidence-panel-head">
-          <h2>{evidenceItem ? "Evidence" : "Results"}</h2>
-          {turn?.query && <span className="evidence-query-pill">{turn.query}</span>}
-        </div>
-
-      {!turn && (
-        <p className="evidence-hint">Select a message in the thread, then choose a result to view evidence here.</p>
-      )}
-
-      {turn && loading && (
-        <p className="evidence-loading-text">Searching variables, reports, sources, and organizations…</p>
-      )}
-
-      {turn && !loading && !response && (
-        <p className="evidence-hint">Waiting for a response…</p>
-      )}
-
-      {turn && !loading && response && response.type === "clarification" && (
-        <div className="evidence-context-block">
-          <p className="evidence-muted-paragraph">{response.assistant_message || response.message}</p>
-          <p className="evidence-hint-inline">Answer in the thread to load structured matches here.</p>
-        </div>
-      )}
-
-      {turn && !loading && response && response.type === "error" && (
-        <div className="evidence-context-block">
-          <p className="evidence-muted-paragraph">{response.assistant_message || response.message}</p>
-          <EmptySearchNextSteps baseQuery={turn.query} onPick={onPickSuggestedQuery} />
-        </div>
-      )}
-
-      {turn && !loading && response && (response.type === "answer" || response.type === "no_results") && (() => {
-        const total = countStructuredResults(response.results);
-        const previews = total > 0 ? pickResultPreviews(response.results, 3) : [];
-
-        if (total === 0 && !evidenceItem) {
-          return (
-            <div className="evidence-context-block">
-              <p className="evidence-no-results-label">No results for this message</p>
-              <EmptySearchNextSteps baseQuery={turn.query} onPick={onPickSuggestedQuery} />
-            </div>
-          );
-        }
-
-        if (total > 0 && evidenceItem) {
-          return (
-            <div className="evidence-detail-wrap">
-              <EvidenceDetail item={evidenceItem} />
-              <button type="button" className="plain-action evidence-back-btn" onClick={onClearEvidence}>
-                Clear selection
-              </button>
-            </div>
-          );
-        }
-
-        if (total > 0 && !evidenceItem) {
-          return (
-            <div className="evidence-context-block">
-              <p className="evidence-count-sentence">{resultStatusParts(response, false)}</p>
-              <p className="evidence-hint-inline">Select a result below to view full evidence.</p>
-              <div className="result-preview-stack result-preview-stack-compact">
-                {previews.map((pv, i) => (
-                  <CompactResultPreview
-                    key={`ev-${pv.kind}-${i}`}
-                    item={pv}
-                    answerSummary={response.assistant_message || response.message}
-                    query={turn.query}
-                    response={response}
-                    onViewEvidence={onViewEvidence}
-                    onAuthRequired={onAuthRequired}
-                    projectId={projectId}
-                    onSaved={onSaved}
-                    hideSaveButton
-                  />
-                ))}
-              </div>
-              <div className="evidence-panel-save">
-                <SaveToProjectButton
-                  label="Save result"
-                  onAuthRequired={onAuthRequired}
-                  onSaved={onSaved}
-                  projectId={projectId}
-                  payload={{
-                    item_type: "search_result",
-                    item_id: response.saved_result_id,
-                    title: turn.query || response.message || "Saved search",
-                    metadata: {
-                      query: turn.query,
-                      answer_summary: response.assistant_message || response.message,
-                      selected_variables: response.results.closest_variables,
-                      relevant_reports: response.results.relevant_reports,
-                      organizations: response.results.relevant_organizations,
-                      source_links: response.results.source_links,
-                      limitations: response.limitations,
-                      result_payload: response,
-                    },
-                  }}
-                />
-              </div>
-              <details className="full-results-details evidence-full-results">
-                <summary className="full-results-summary">All categories</summary>
-                <ResultSections
-                  results={response.results}
-                  limitations={response.limitations}
-                  onViewEvidence={onViewEvidence}
-                  onAuthRequired={onAuthRequired}
-                  projectId={projectId}
-                  onItemSaved={onSaved}
-                  showLimitationsSection={false}
-                />
-              </details>
-            </div>
-          );
-        }
-
-        return null;
-      })()}
-      </div>
-
-      <div className="evidence-basket">
-        <div className="evidence-panel-head compact">
-          <h2>Evidence basket</h2>
-          {evidenceItem && (
-            <button type="button" onClick={onClearEvidence}>Clear</button>
-          )}
-        </div>
-        {evidenceItem && response && countStructuredResults(response.results) > 0 ? (
-          <p className="evidence-empty-text">Selected result is shown in the panel above.</p>
-        ) : evidenceItem ? (
-          <EvidenceDetail item={evidenceItem} />
-        ) : (
-          <p className="evidence-empty-text">Select a result to view evidence, or use View evidence on a card in the thread.</p>
-        )}
-      </div>
-    </aside>
-  );
-}
-
-function EvidenceDetail({ item }: { item: DrawerItem }) {
-  const title = drawerItemTitle(item);
-  const url = drawerItemUrl(item);
-  return (
-    <article className="evidence-detail">
-      <h3>{title}</h3>
-      <span className="meta-chip">{item.kind}</span>
-      {item.kind === "variable" && (
-        <>
-          <EvidenceField label="Definition" value={item.data.definition} />
-          <EvidenceField label="Measurement" value={item.data.measurement_method} />
-          <EvidenceField label="Data source" value={item.data.data_source} />
-          <EvidenceField label="Coverage" value={[item.data.geographic_coverage, item.data.temporal_coverage].filter(Boolean).join(" · ")} />
-          <EvidenceQuote value={item.data.evidence_quote} />
-        </>
-      )}
-      {item.kind === "report" && (
-        <>
-          <EvidenceField label="Publisher" value={item.data.publisher} />
-          <EvidenceField label="Year" value={item.data.report_year} />
-          <EvidenceField label="Geography" value={item.data.geography || item.data.geographic_coverage} />
-          <EvidenceQuote value={item.data.why_it_matched} />
-        </>
-      )}
-      {item.kind === "organization" && (
-        <>
-          <EvidenceField label="Type" value={item.data.organization_type} />
-          <EvidenceField label="Geography" value={item.data.geography} />
-          <EvidenceField label="Description" value={item.data.description} />
-        </>
-      )}
-      {item.kind === "source" && (
-        <>
-          <EvidenceField label="Availability" value={item.data.availability} />
-          <EvidenceField label="Local file" value={item.data.local_path} />
-        </>
-      )}
-      {url && (
-        <a className="card-action-link" href={url} target="_blank" rel="noreferrer">
-          Open source
-        </a>
-      )}
-    </article>
-  );
-}
-
-function EvidenceField({ label, value }: { label: string; value?: string | number | null }) {
-  if (!value) return null;
-  return (
-    <div className="evidence-field">
-      <span>{label}</span>
-      <p>{String(value)}</p>
-    </div>
-  );
-}
-
-function EvidenceQuote({ value }: { value?: string | null }) {
-  if (!value) return null;
-  return <blockquote className="drawer-evidence">{value}</blockquote>;
-}
-
-function drawerItemTitle(item: DrawerItem) {
-  if (item.kind === "variable") return item.data.title || item.data.raw_variable_name || "Variable";
-  if (item.kind === "report") return item.data.title || "Report";
-  if (item.kind === "organization") return item.data.name || item.data.title || "Organization";
-  return item.data.title || item.data.source_url || "Source";
-}
-
-function drawerItemUrl(item: DrawerItem) {
-  if (item.kind === "variable") return item.data.source_url;
-  if (item.kind === "report") return item.data.source_url;
-  if (item.kind === "organization") return item.data.website_url || item.data.source_url;
-  return item.data.source_url;
 }
 
 function TopNav({

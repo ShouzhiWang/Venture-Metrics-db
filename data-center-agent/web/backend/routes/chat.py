@@ -109,24 +109,42 @@ def handle_chat(payload: dict[str, Any], tool_caller=call_demo_tool, llm_client:
         return _error_response(message, plan, failed["result"], tool_calls=executed)
 
     results, limitations, response_type = _normalize_tool_results(executed)
+    follow_up_queries: list[dict[str, str]] = []
     try:
-        assistant_message = llm.synthesize(
-            message=message,
-            history=history,
-            plan=plan,
-            tool_results=[item["result"] for item in executed],
-            normalized_results=results,
-            limitations=limitations,
-        )
+        if response_type == "no_results":
+            synth = llm.synthesize_no_results(
+                message=message,
+                history=history,
+                plan=plan,
+                tool_results=[item["result"] for item in executed],
+                normalized_results=results,
+                limitations=limitations,
+            )
+            assistant_message = (
+                synth.get("assistant_message") if isinstance(synth.get("assistant_message"), str) else ""
+            ).strip() or "I could not find strong matches yet. Try one of the suggested follow-up searches."
+            follow_up_queries = _sanitize_follow_up_queries(synth.get("follow_up_queries"), message)
+        else:
+            assistant_message = llm.synthesize(
+                message=message,
+                history=history,
+                plan=plan,
+                tool_results=[item["result"] for item in executed],
+                normalized_results=results,
+                limitations=limitations,
+            )
     except (DemoLLMResponseError, DemoLLMProviderError) as exc:
         return _llm_error_response("llm_provider_error", str(exc))
+
+    clarifying_questions = _merge_clarifying_questions(plan.get("clarifying_questions") or [], executed, message)
 
     return {
         "type": response_type,
         "message": assistant_message,
         "assistant_message": assistant_message,
         "intent": plan["intent"],
-        "clarifying_questions": plan.get("clarifying_questions") or [],
+        "clarifying_questions": clarifying_questions,
+        "follow_up_queries": follow_up_queries,
         "tool_calls": [{"name": item["name"], "args": item["args"], "status": item["status"]} for item in executed],
         "results": results,
         "limitations": limitations,
@@ -353,7 +371,8 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
         "message": message_text,
         "assistant_message": message_text,
         "intent": plan["intent"],
-        "clarifying_questions": _questions_from_data(data),
+        "clarifying_questions": _questions_from_data(data, message),
+        "follow_up_queries": [],
         "tool_calls": [{"name": "find_data", "args": {}, "status": "ok"}],
         "results": {
             "closest_variables": variables,
@@ -429,8 +448,61 @@ def _format_organization(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _questions_from_data(data: dict[str, Any]) -> list[dict[str, Any]]:
-    return [{"question": item.get("question"), "options": []} for item in data.get("suggested_clarifications", []) if item.get("question")][:3]
+def _questions_from_data(data: dict[str, Any], base_query: str = "") -> list[dict[str, Any]]:
+    cleaned: list[dict[str, Any]] = []
+    for item in data.get("suggested_clarifications", []) or []:
+        if not isinstance(item, dict):
+            continue
+        question = item.get("question")
+        if not isinstance(question, str) or not question.strip():
+            continue
+        text = question.strip()
+        query = text if not base_query or text.lower().startswith(base_query.lower()[:20]) else f"{base_query} — {text}"
+        cleaned.append({"question": text, "options": [query]})
+    return cleaned[:4]
+
+
+def _merge_clarifying_questions(
+    plan_questions: list[dict[str, Any]],
+    executed: list[dict[str, Any]],
+    message: str,
+) -> list[dict[str, Any]]:
+    merged = _sanitize_questions(plan_questions)
+    seen = {item["question"] for item in merged}
+    for item in executed:
+        data = (item.get("result") or {}).get("data") or {}
+        for question in _questions_from_data(data, message):
+            if question["question"] in seen:
+                continue
+            merged.append(question)
+            seen.add(question["question"])
+            if len(merged) >= 5:
+                return merged
+    return merged
+
+
+def _sanitize_follow_up_queries(value: Any, message: str) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    cleaned: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in value[:4]:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label") if isinstance(item.get("label"), str) else ""
+        query = item.get("query") if isinstance(item.get("query"), str) else ""
+        label = label.strip()
+        query = query.strip()
+        if not query:
+            continue
+        if not label:
+            label = query if len(query) <= 48 else f"{query[:45]}…"
+        key = query.lower()
+        if key in seen or key == message.strip().lower():
+            continue
+        seen.add(key)
+        cleaned.append({"label": label, "query": query})
+    return cleaned
 
 
 def _limitations_from_data(data: dict[str, Any], count: int) -> list[str]:
