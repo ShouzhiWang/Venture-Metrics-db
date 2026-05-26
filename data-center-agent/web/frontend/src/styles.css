@@ -1835,62 +1835,100 @@ a:hover {
   color: var(--text);
 }
 
-/* ── Searching state (first load) ────────────── */
+/* ── Agent activity ───────────────────────────── */
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes agent-pulse {
+  0%, 100% { opacity: 0.38; }
+  50%      { opacity: 1; }
 }
 
-@keyframes step-pulse {
-  0%, 60%, 100% { opacity: 0.25; }
-  30%            { opacity: 1; }
-}
-
-.searching-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 700ms linear infinite;
-  flex-shrink: 0;
-}
-
-.searching-spinner.small {
-  width: 12px;
-  height: 12px;
-}
-
-.searching-state {
+.agent-activity {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
-  padding: 20px 16px;
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-.searching-steps {
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
-.searching-step {
-  font-size: 13px;
-  color: var(--text-muted);
-  opacity: 0.25;
-  animation: step-pulse 2.75s ease-in-out infinite;
+.agent-activity.compact {
+  padding: 10px 12px;
 }
 
-.searching-banner {
+.agent-activity-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.agent-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  animation: agent-pulse 1s ease-in-out infinite;
+}
+
+.agent-status-dot.done {
+  animation: none;
+  background: #16a34a;
+}
+
+.agent-activity ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.agent-activity li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
   font-size: 13px;
   color: var(--text-muted);
-  padding: 4px 0;
+}
+
+.agent-activity li.active {
+  color: var(--text);
+}
+
+.agent-activity li.done {
+  color: var(--text-muted);
+}
+
+.agent-activity li > span {
+  width: 42px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text-faint);
+  text-align: center;
+  font-size: 10px;
+  line-height: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.agent-activity li.active > span {
+  border-color: rgba(15, 118, 110, 0.28);
+  background: rgba(15, 118, 110, 0.08);
+  color: var(--primary);
+}
+
+.agent-activity li.done > span {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: rgba(22, 163, 74, 0.08);
+  color: #15803d;
+}
+
+.agent-activity.compact ol {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 /* ── Error notice ─────────────────────────────── */

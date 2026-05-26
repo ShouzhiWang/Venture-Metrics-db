@@ -24,16 +24,20 @@ class DemoLLMClient:
     api_key: str | None = None
     base_url: str | None = None
     model: str | None = None
+    provider: str | None = None
     timeout_seconds: int | None = None
     max_output_tokens: int | None = None
+    thinking: str | None = None
 
     def __post_init__(self) -> None:
         settings = get_settings()
         self.api_key = self.api_key if self.api_key is not None else settings.demo_llm_api_key
         self.base_url = self.base_url or settings.demo_llm_base_url
         self.model = self.model or settings.demo_llm_model
+        self.provider = self.provider or settings.demo_llm_provider
         self.timeout_seconds = self.timeout_seconds or settings.demo_llm_timeout_seconds
         self.max_output_tokens = self.max_output_tokens or settings.demo_llm_max_output_tokens
+        self.thinking = self.thinking if self.thinking is not None else settings.demo_llm_thinking
         if not self.api_key:
             raise DemoLLMConfigError("Demo LLM is not configured. Set DEMO_LLM_API_KEY for the web API.")
         try:
@@ -81,19 +85,59 @@ class DemoLLMClient:
         raise DemoLLMResponseError(f"Demo LLM returned invalid JSON: {last_error}")
 
     def _text_completion(self, prompt: str) -> str:
+        attempts = [
+            (prompt, int(self.max_output_tokens or 900)),
+            (
+                (
+                    "Return the final answer in message.content. Keep any reasoning brief. "
+                    "Do not leave message.content empty.\n\n"
+                    f"{prompt}"
+                ),
+                max(int(self.max_output_tokens or 900) * 3, 2400),
+            ),
+        ]
+        empty_detail = "empty response"
+        for attempt_prompt, token_budget in attempts:
+            content, empty_detail = self._request_text_completion(attempt_prompt, token_budget)
+            if content:
+                return content
+        raise DemoLLMResponseError(f"Demo LLM returned an empty response ({empty_detail}).")
+
+    def _request_text_completion(self, prompt: str, token_budget: int) -> tuple[str | None, str]:
+        request_args: dict[str, Any] = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "max_completion_tokens": token_budget,
+        }
+        extra_body = self._provider_extra_body()
+        if extra_body:
+            request_args["extra_body"] = extra_body
         try:
-            response = self._client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_completion_tokens=self.max_output_tokens,
-            )
+            response = self._client.chat.completions.create(**request_args)
         except Exception as exc:  # pragma: no cover - provider classes vary.
             raise DemoLLMProviderError(f"Demo LLM provider request failed: {type(exc).__name__}") from exc
-        content = response.choices[0].message.content if response.choices else None
-        if not content:
-            raise DemoLLMResponseError("Demo LLM returned an empty response.")
-        return content
+        if not response.choices:
+            return None, "no choices"
+        choice = response.choices[0]
+        content = choice.message.content
+        if content:
+            return content, ""
+        reasoning = getattr(choice.message, "reasoning_content", None)
+        finish_reason = getattr(choice, "finish_reason", None)
+        detail = f"finish_reason={finish_reason or 'unknown'}, reasoning_tokens_or_chars={len(reasoning or '')}"
+        return None, detail
+
+    def _provider_extra_body(self) -> dict[str, Any]:
+        thinking = (self.thinking or "").strip().lower()
+        if not thinking:
+            return {}
+        provider_hint = f"{self.provider or ''} {self.base_url or ''} {self.model or ''}".lower()
+        if not any(token in provider_hint for token in ("mimo", "xiaomi")):
+            return {}
+        if thinking not in {"enabled", "disabled", "auto"}:
+            return {}
+        return {"thinking": {"type": thinking}}
 
 
 def _planner_prompt(*, message: str, history: list[dict[str, str]], safe_tools: set[str]) -> str:

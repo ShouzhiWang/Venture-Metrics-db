@@ -344,6 +344,7 @@ Environment variables:
 - `DEMO_LLM_MODEL`: demo chat model, default `mimo-v2.5`.
 - `DEMO_LLM_TIMEOUT_SECONDS`: provider timeout, default `30`.
 - `DEMO_LLM_MAX_OUTPUT_TOKENS`: max planner/answer output tokens, default `900`.
+- `DEMO_LLM_THINKING`: MiMo/Xiaomi thinking mode, default `disabled` to keep responses in `message.content`.
 - `AUTH_SESSION_SECRET`: required secret for signed login sessions. Generate a long random value for any shared deployment.
 - `AUTH_COOKIE_SECURE`: set to `true` when serving over HTTPS.
 - `AUTH_SESSION_TTL_SECONDS`: login session lifetime, default `1209600` seconds.

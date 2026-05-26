@@ -1,4 +1,4 @@
-from app.agents.demo_llm import DemoLLMConfigError, DemoLLMResponseError
+from app.agents.demo_llm import DemoLLMClient, DemoLLMConfigError, DemoLLMResponseError
 from web.backend.routes.chat import _empty_results, handle_chat, handle_chat_deterministic
 from web.backend.services.tool_client import SAFE_WEB_TOOLS, call_demo_tool
 
@@ -241,3 +241,23 @@ def test_tool_error_returns_clean_json() -> None:
     assert result["type"] == "error"
     assert result["message"] == "Bad query"
     assert result["limitations"] == ["invalid_args"]
+
+
+def test_mimo_extra_body_disables_thinking() -> None:
+    client = object.__new__(DemoLLMClient)
+    client.provider = "xiaomi"
+    client.base_url = "https://api.xiaomimimo.com/v1"
+    client.model = "mimo-v2.5"
+    client.thinking = "disabled"
+
+    assert client._provider_extra_body() == {"thinking": {"type": "disabled"}}
+
+
+def test_openai_extra_body_omits_provider_specific_thinking() -> None:
+    client = object.__new__(DemoLLMClient)
+    client.provider = "openai"
+    client.base_url = "https://api.openai.com/v1"
+    client.model = "gpt-4o-mini"
+    client.thinking = "disabled"
+
+    assert client._provider_extra_body() == {}

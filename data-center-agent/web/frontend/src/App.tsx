@@ -464,12 +464,15 @@ function DataDiscoveryPage({
           {/* Answer area */}
           {(latestResponse || loading) && (
             <div className="result-area">
-              {loading && !latestResponse && <SearchingState />}
+              {loading && !latestResponse && <AgentActivity query={lastQuery} />}
 
               {latestResponse && (
                 <>
-                  {loading && <SearchingBanner />}
+                  {loading && <AgentActivity query={lastQuery} compact />}
                   <AnswerSummary response={latestResponse} loading={loading} />
+                  {!loading && latestResponse.tool_calls && latestResponse.tool_calls.length > 0 && (
+                    <AgentActivity query={lastQuery} toolCalls={latestResponse.tool_calls} completed compact />
+                  )}
                   {hasResults && !loading && (
                     <div className="answer-actions">
                       <SaveToProjectButton
@@ -1351,11 +1354,14 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
 
           {(latestResponse || chatLoading) && (
             <div className="result-area">
-              {chatLoading && !latestResponse && <SearchingState />}
+              {chatLoading && !latestResponse && <AgentActivity query={lastQuery} />}
               {latestResponse && (
                 <>
-                  {chatLoading && <SearchingBanner />}
+                  {chatLoading && <AgentActivity query={lastQuery} compact />}
                   <AnswerSummary response={latestResponse} loading={chatLoading} />
+                  {!chatLoading && latestResponse.tool_calls && latestResponse.tool_calls.length > 0 && (
+                    <AgentActivity query={lastQuery} toolCalls={latestResponse.tool_calls} completed compact />
+                  )}
 
                   {isClarification && clarifyingQuestions.length > 0 && (
                     <ClarificationPanel questions={clarifyingQuestions} onChoose={handleChipClick} />
@@ -1656,36 +1662,80 @@ function formatDate(value?: string) {
   });
 }
 
-const SEARCH_STEPS = [
-  "Analyzing your query…",
-  "Searching variable database…",
-  "Matching relevant reports…",
-  "Finding organizations…",
-  "Compiling results…",
-];
+function AgentActivity({
+  query,
+  toolCalls = [],
+  completed = false,
+  compact = false,
+}: {
+  query: string;
+  toolCalls?: NonNullable<ChatResponse["tool_calls"]>;
+  completed?: boolean;
+  compact?: boolean;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const planned = inferAgentSteps(query);
+  const calls = toolCalls.length > 0 ? toolCalls.map(call => toolCallLabel(call.name, call.status)) : planned;
 
-function SearchingState() {
+  useEffect(() => {
+    setActiveIndex(0);
+    if (completed || calls.length <= 1) return;
+    const interval = window.setInterval(() => {
+      setActiveIndex(current => Math.min(current + 1, calls.length - 1));
+    }, 1150);
+    return () => window.clearInterval(interval);
+  }, [completed, query, calls.length]);
+
   return (
-    <div className="searching-state">
-      <div className="searching-spinner" aria-hidden="true" />
-      <div className="searching-steps">
-        {SEARCH_STEPS.map((step, i) => (
-          <span key={step} className="searching-step" style={{ animationDelay: `${i * 0.55}s` }}>
-            {step}
-          </span>
-        ))}
+    <div className={compact ? "agent-activity compact" : "agent-activity"} aria-live="polite">
+      <div className="agent-activity-head">
+        <span className={completed ? "agent-status-dot done" : "agent-status-dot"} aria-hidden="true" />
+        <strong>{completed ? "Tool run complete" : "Agent is working"}</strong>
       </div>
+      <ol>
+        {calls.map((step, index) => {
+          const state = completed ? "done" : index < activeIndex ? "done" : index === activeIndex ? "active" : "";
+          const label = completed || index < activeIndex ? "done" : index === activeIndex ? "now" : "next";
+          return (
+            <li key={`${step}-${index}`} className={state}>
+              <span>{label}</span>
+              {step}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
 
-function SearchingBanner() {
-  return (
-    <div className="searching-banner" aria-live="polite">
-      <div className="searching-spinner small" aria-hidden="true" />
-      <span>Searching…</span>
-    </div>
-  );
+function inferAgentSteps(query: string) {
+  const q = query.toLowerCase();
+  const steps = ["Planning safe tool calls"];
+  if (q.includes("compare") || q.includes("definition") || q.includes("comparable")) {
+    steps.push("Calling compare_concepts_auto");
+    steps.push("Selecting relevant reports and variables");
+  } else if (q.includes("organization") || q.includes("accelerator") || q.includes("association") || q.includes("incubator")) {
+    steps.push("Searching organization records");
+    steps.push("Checking source links and geography");
+  } else {
+    steps.push("Calling find_data");
+    steps.push("Matching variables, reports, and sources");
+  }
+  steps.push("Synthesizing an evidence-backed answer");
+  return steps;
+}
+
+function toolCallLabel(name: string, status: string) {
+  const labels: Record<string, string> = {
+    find_data: "find_data searched variables, reports, sources, and organizations",
+    semantic_search: "semantic_search searched indexed records",
+    compare_concepts_auto: "compare_concepts_auto selected reports and compared definitions",
+    get_variable_detail: "get_variable_detail fetched variable evidence",
+    get_report_detail: "get_report_detail fetched report metadata",
+    get_source_detail: "get_source_detail fetched source metadata",
+    get_organization_detail: "get_organization_detail fetched organization metadata",
+  };
+  return `${labels[name] || name} (${status})`;
 }
 
 function ClarificationPanel({

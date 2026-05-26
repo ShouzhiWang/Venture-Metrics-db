@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     demo_llm_api_key: str | None = Field(default=None, alias="DEMO_LLM_API_KEY")
     demo_llm_timeout_seconds: int = Field(default=30, alias="DEMO_LLM_TIMEOUT_SECONDS")
     demo_llm_max_output_tokens: int = Field(default=900, alias="DEMO_LLM_MAX_OUTPUT_TOKENS")
+    demo_llm_thinking: str = Field(default="disabled", alias="DEMO_LLM_THINKING")
     auth_session_secret: str | None = Field(default=None, alias="AUTH_SESSION_SECRET")
     auth_cookie_secure: bool = Field(default=False, alias="AUTH_COOKIE_SECURE")
     auth_session_ttl_seconds: int = Field(default=60 * 60 * 24 * 14, alias="AUTH_SESSION_TTL_SECONDS")
