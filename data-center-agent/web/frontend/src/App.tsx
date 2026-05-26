@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { Search } from "lucide-react";
 import {
@@ -55,9 +55,25 @@ const ABOUT_EXAMPLES = [
 
 type Turn = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
+  created_at?: string;
+  tool_name?: string;
+  result_payload?: ChatResponse;
+  clarifying_questions?: ClarifyingQuestion[];
+  limitations?: string[];
   response?: ChatResponse;
+  loading?: boolean;
+  query?: string;
+};
+
+type ResearchThread = {
+  id: string;
+  title: string;
+  updated_at?: string;
+  resultCount: number;
+  items: HistoryItem[];
+  local?: boolean;
 };
 
 export function App() {
@@ -139,7 +155,8 @@ function DataDiscoveryPage({
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | undefined>();
-  const [drawerItem, setDrawerItem] = useState<DrawerItem | null>(null);
+  const [selectedEvidenceItem, setSelectedEvidenceItem] = useState<DrawerItem | null>(null);
+  const [selectedResultTurnId, setSelectedResultTurnId] = useState<string | undefined>();
   const [lastQuery, setLastQuery] = useState("");
   const [answerId, setAnswerId] = useState(() => `answer-${Date.now()}`);
   const [conversationId, setConversationId] = useState<string | undefined>();
@@ -147,8 +164,11 @@ function DataDiscoveryPage({
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [savedResultIds, setSavedResultIds] = useState<Set<string>>(new Set());
 
-  const latestAssistant = [...turns].reverse().find(t => t.role === "assistant");
+  const latestAssistant = [...turns].reverse().find(t => t.role === "assistant" && !t.loading);
+  const selectedResultTurn = turns.find(t => t.id === selectedResultTurnId && t.response) || latestAssistant;
   const hasTurns = turns.length > 0;
+  const activeTitle = turns.find(t => t.role === "user")?.content || "New research thread";
+  const activeResultCount = turns.filter(t => t.role === "assistant" && t.response?.type !== "clarification" && t.response?.type !== "error").length;
 
   useEffect(() => {
     void refreshHistory();
@@ -169,12 +189,22 @@ function DataDiscoveryPage({
         const parsed = JSON.parse(stored) as { query?: string; response?: ChatResponse };
         if (parsed.response) {
           setTurns([
-            { id: crypto.randomUUID(), role: "user", content: parsed.query || "Saved search" },
+            {
+              id: crypto.randomUUID(),
+              role: "user",
+              content: parsed.query || "Saved search",
+              created_at: new Date().toISOString(),
+            },
             {
               id: crypto.randomUUID(),
               role: "assistant",
               content: parsed.response.assistant_message || parsed.response.message,
+              created_at: new Date().toISOString(),
+              result_payload: parsed.response,
+              clarifying_questions: parsed.response.clarifying_questions,
+              limitations: parsed.response.limitations,
               response: parsed.response,
+              query: parsed.query || "Saved search",
             },
           ]);
           setLastQuery(parsed.query || "");
@@ -190,19 +220,29 @@ function DataDiscoveryPage({
 
   function historyFromTurns(nextTurns = turns): ChatHistoryItem[] {
     return nextTurns
-      .filter(t => t.content.trim())
+      .filter(t => (t.role === "user" || t.role === "assistant") && !t.loading && t.content.trim())
       .slice(-10)
-      .map(t => ({ role: t.role, content: t.content }));
+      .map(t => ({ role: t.role as "user" | "assistant", content: t.content }));
   }
 
   async function runQuery(query: string) {
     const trimmed = query.trim();
     if (!trimmed || loading) return;
     setLastQuery(trimmed);
-    setDrawerItem(null);
-    const userTurn: Turn = { id: crypto.randomUUID(), role: "user", content: trimmed };
+    setSelectedEvidenceItem(null);
+    const createdAt = new Date().toISOString();
+    const userTurn: Turn = { id: crypto.randomUUID(), role: "user", content: trimmed, created_at: createdAt };
+    const loadingTurnId = crypto.randomUUID();
+    const loadingTurn: Turn = {
+      id: loadingTurnId,
+      role: "assistant",
+      content: "Searching the data tools...",
+      created_at: createdAt,
+      loading: true,
+      query: trimmed,
+    };
     const nextTurns = [...turns, userTurn];
-    setTurns(nextTurns);
+    setTurns([...nextTurns, loadingTurn]);
     setMessage("");
     setLoading(true);
     setError("");
@@ -213,22 +253,30 @@ function DataDiscoveryPage({
         setConversationId(response.conversation_id);
       }
       const assistantTurn: Turn = {
-        id: crypto.randomUUID(),
+        id: loadingTurnId,
         role: "assistant",
         content: response.assistant_message || response.message,
+        created_at: new Date().toISOString(),
+        tool_name: response.tool_calls?.[0]?.name,
+        result_payload: response,
+        clarifying_questions: response.clarifying_questions,
+        limitations: response.limitations,
         response,
+        query: trimmed,
       };
+      setSelectedResultTurnId(loadingTurnId);
       setTurns([...nextTurns, assistantTurn]);
       void refreshHistory();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Request failed";
-      setError(msg);
       setTurns([
         ...nextTurns,
         {
-          id: crypto.randomUUID(),
+          id: loadingTurnId,
           role: "assistant",
           content: "The search could not complete. Please try again.",
+          created_at: new Date().toISOString(),
+          limitations: [msg],
           response: {
             type: "error",
             message: msg,
@@ -245,6 +293,7 @@ function DataDiscoveryPage({
             },
             limitations: [],
           },
+          query: trimmed,
         },
       ]);
     } finally {
@@ -294,7 +343,7 @@ function DataDiscoveryPage({
   }
 
   function handleSaved() {
-    const savedId = latestResponse?.saved_result_id;
+    const savedId = latestAssistant?.response?.saved_result_id;
     if (savedId) {
       setSavedResultIds(prev => new Set([...prev, savedId]));
     }
@@ -302,32 +351,53 @@ function DataDiscoveryPage({
     void refreshHistory();
   }
 
-  async function reopenHistory(item: HistoryItem) {
+  async function reopenThread(thread: ResearchThread) {
     setError("");
     try {
-      const fullItem = await getHistoryItem(item.id);
-      if (!fullItem.result_payload) {
-        setError("This search doesn't have a saved result. Try running it again.");
+      const fullItems = await Promise.all(
+        [...thread.items].reverse().map(item => getHistoryItem(item.id))
+      );
+      const restoredTurns = fullItems.flatMap(fullItem => {
+        if (!fullItem.result_payload) return [];
+        const createdAt = fullItem.created_at || new Date().toISOString();
+        const query = fullItem.query || fullItem.title;
+        return [
+          {
+            id: crypto.randomUUID(),
+            role: "user" as const,
+            content: query,
+            created_at: createdAt,
+          },
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: fullItem.result_payload.assistant_message || fullItem.result_payload.message,
+            created_at: createdAt,
+            tool_name: fullItem.result_payload.tool_calls?.[0]?.name,
+            result_payload: fullItem.result_payload,
+            clarifying_questions: fullItem.result_payload.clarifying_questions,
+            limitations: fullItem.result_payload.limitations,
+            response: fullItem.result_payload,
+            query,
+          },
+        ];
+      });
+      if (restoredTurns.length === 0) {
+        setError("This thread doesn't have saved messages. Try running it again.");
         return;
       }
-      const userTurn: Turn = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: fullItem.query || fullItem.title,
-      };
-      const assistantTurn: Turn = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: fullItem.result_payload.assistant_message || fullItem.result_payload.message,
-        response: fullItem.result_payload,
-      };
-      setTurns([userTurn, assistantTurn]);
-      setLastQuery(fullItem.query || fullItem.title);
-      setConversationId(fullItem.session_id || fullItem.result_payload.conversation_id);
-      setSelectedHistoryId(item.id);
-      setDrawerItem(null);
+      const restoredUserTurns = restoredTurns.filter(t => t.role === "user");
+      const lastRestored = restoredUserTurns[restoredUserTurns.length - 1];
+      const firstPayload = fullItems.find(item => item.result_payload)?.result_payload;
+      setTurns(restoredTurns);
+      setLastQuery(lastRestored?.content || thread.title);
+      setConversationId(thread.id || firstPayload?.conversation_id);
+      setSelectedHistoryId(thread.id);
+      setSelectedEvidenceItem(null);
+      const lastAssistantTurn = restoredTurns.filter(t => t.role === "assistant" && t.response).slice(-1)[0];
+      setSelectedResultTurnId(lastAssistantTurn?.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load this search.");
+      setError(err instanceof Error ? err.message : "Could not load this thread.");
     }
   }
 
@@ -337,17 +407,27 @@ function DataDiscoveryPage({
     setLastQuery("");
     setConversationId(undefined);
     setSelectedHistoryId(undefined);
-    setDrawerItem(null);
+    setSelectedEvidenceItem(null);
+    setSelectedResultTurnId(undefined);
     setError("");
   }
 
-  const latestResponse = latestAssistant?.response;
-  const isClarification = latestResponse?.type === "clarification";
-  const hasResults = latestResponse && latestResponse.type !== "clarification";
-  const clarifyingQuestions = latestResponse?.clarifying_questions ?? [];
-
   // Filter out searches that have been saved to a project this session
   const visibleHistory = historyItems.filter(item => !savedResultIds.has(item.id));
+  const threads = useMemo(
+    () => buildResearchThreads(visibleHistory).filter(thread => !conversationId || thread.id !== conversationId),
+    [visibleHistory, conversationId]
+  );
+  const currentThread: ResearchThread | null = hasTurns
+    ? {
+        id: conversationId || "local-active",
+        title: activeTitle,
+        updated_at: latestAssistant?.created_at,
+        resultCount: activeResultCount,
+        items: [],
+        local: true,
+      }
+    : null;
 
   return (
     <>
@@ -381,31 +461,41 @@ function DataDiscoveryPage({
             )}
           </div>
 
-          {/* Searches section at bottom */}
           <div className="sidebar-section sidebar-section-fill">
             <div className="sidebar-section-head">
-              <span className="sidebar-section-label">Searches</span>
+              <span className="sidebar-section-label">Research Threads</span>
               <button type="button" onClick={startNewSearch}>New</button>
             </div>
             {historyLoading && <p className="sidebar-note">Loading…</p>}
             {historyError && <p className="sidebar-note error-text">{historyError}</p>}
-            {!historyLoading && visibleHistory.length === 0 && (
-              <p className="sidebar-note">Your recent searches appear here.</p>
+            {!historyLoading && !currentThread && threads.length === 0 && (
+              <p className="sidebar-note">Your research threads appear here.</p>
             )}
-            {!historyLoading && visibleHistory.length > 0 && (
+            {!historyLoading && (currentThread || threads.length > 0) && (
               <div className="sidebar-list">
-                {visibleHistory.map(item => {
-                  const active = selectedHistoryId === item.id || Boolean(conversationId && item.session_id === conversationId);
+                {currentThread && (
+                  <button
+                    type="button"
+                    className={!selectedHistoryId || selectedHistoryId === currentThread.id ? "active" : undefined}
+                    aria-current={!selectedHistoryId || selectedHistoryId === currentThread.id ? "true" : undefined}
+                    onClick={() => setSelectedHistoryId(currentThread.id)}
+                  >
+                    <strong>{currentThread.title}</strong>
+                    <span>{threadSummary(currentThread)}</span>
+                  </button>
+                )}
+                {threads.map(thread => {
+                  const active = selectedHistoryId === thread.id || Boolean(conversationId && thread.id === conversationId);
                   return (
                     <button
-                      key={item.id}
+                      key={thread.id}
                       type="button"
                       className={active ? "active" : undefined}
                       aria-current={active ? "true" : undefined}
-                      onClick={() => void reopenHistory(item)}
+                      onClick={() => void reopenThread(thread)}
                     >
-                      <strong>{item.query || item.title}</strong>
-                      <span>{formatDate(item.created_at)}</span>
+                      <strong>{thread.title}</strong>
+                      <span>{threadSummary(thread)}</span>
                     </button>
                   );
                 })}
@@ -420,127 +510,335 @@ function DataDiscoveryPage({
             description="Search for metrics, reports, organizations, and source evidence across Asian markets."
           />
 
-          {/* Search input */}
-          <div className="search-area">
-            <form onSubmit={onSubmit}>
+          <div className="thread-shell">
+            {!hasTurns && (
+              <div className="thread-empty">
+                <p>Start a research thread with a metric, geography, source, organization, or definition.</p>
+                <div className="example-chips">
+                  {EXAMPLES.map(ex => (
+                    <button
+                      key={ex}
+                      type="button"
+                      className="chip"
+                      onClick={() => void runQuery(ex)}
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="thread-messages" aria-live="polite">
+              {turns.map(turn => (
+                <ResearchTurn
+                  key={turn.id}
+                  turn={turn}
+                  selected={selectedResultTurn?.id === turn.id}
+                  onSelectResults={() => {
+                    setSelectedResultTurnId(turn.id);
+                    setSelectedEvidenceItem(null);
+                  }}
+                  onChooseClarification={handleChipClick}
+                  onAuthRequired={onAuthRequired}
+                  onSaved={handleSaved}
+                  onFeedback={feedback}
+                />
+              ))}
+              {error && <p className="thread-error">{error}</p>}
+            </div>
+
+            <form className="thread-composer" onSubmit={onSubmit}>
               <div className="search-row">
                 <Search size={17} className="search-icon" aria-hidden="true" />
                 <input
                   value={message}
                   onChange={e => setMessage(e.target.value)}
-                  placeholder="Ask about a metric, geography, source, organization, or definition…"
+                  placeholder="Ask a follow-up about a metric, geography, source, organization, or definition..."
                   autoFocus
-                  aria-label="Search query"
+                  aria-label="Research message"
                 />
                 <button type="submit" disabled={loading || !message.trim()}>
-                  {loading ? "Searching…" : "Search"}
+                  {loading ? "Searching..." : "Send"}
                 </button>
               </div>
             </form>
-
-            {!hasTurns && (
-              <div className="example-chips">
-                {EXAMPLES.map(ex => (
-                  <button
-                    key={ex}
-                    type="button"
-                    className="chip"
-                    onClick={() => void runQuery(ex)}
-                  >
-                    {ex}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
-
-          {/* Error */}
-          {error && (
-            <div className="notice error" role="alert">
-              {error}
-            </div>
-          )}
-
-          {/* Answer area */}
-          {(latestResponse || loading) && (
-            <div className="result-area">
-              {loading && !latestResponse && <AgentActivity query={lastQuery} />}
-
-              {latestResponse && (
-                <>
-                  {loading && <AgentActivity query={lastQuery} compact />}
-                  <AnswerSummary response={latestResponse} loading={loading} />
-                  {!loading && latestResponse.tool_calls && latestResponse.tool_calls.length > 0 && (
-                    <AgentActivity query={lastQuery} toolCalls={latestResponse.tool_calls} completed compact />
-                  )}
-                  {hasResults && !loading && (
-                    <div className="answer-actions">
-                      <SaveToProjectButton
-                        label="Save to project"
-                        onAuthRequired={onAuthRequired}
-                        onSaved={handleSaved}
-                        payload={{
-                          item_type: "search_result",
-                          item_id: latestResponse.saved_result_id,
-                          title: lastQuery || latestResponse.message || "Saved search",
-                          metadata: {
-                            query: lastQuery,
-                            answer_summary: latestResponse.assistant_message || latestResponse.message,
-                            selected_variables: latestResponse.results.closest_variables,
-                            relevant_reports: latestResponse.results.relevant_reports,
-                            organizations: latestResponse.results.relevant_organizations,
-                            source_links: latestResponse.results.source_links,
-                            limitations: latestResponse.limitations,
-                            result_payload: latestResponse,
-                          },
-                        }}
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-
-              {isClarification && clarifyingQuestions.length > 0 && (
-                <ClarificationPanel
-                  questions={clarifyingQuestions}
-                  onChoose={handleChipClick}
-                />
-              )}
-
-              {hasResults && clarifyingQuestions.length > 0 && (
-                <NarrowChips
-                  questions={clarifyingQuestions}
-                  onChoose={handleChipClick}
-                />
-              )}
-
-              {hasResults && latestResponse && (
-                <ResultSections
-                  results={latestResponse.results}
-                  limitations={latestResponse.limitations}
-                  onViewEvidence={setDrawerItem}
-                  onAuthRequired={onAuthRequired}
-                />
-              )}
-
-              {hasResults && !loading && (
-                <div className="feedback-row">
-                  <button type="button" onClick={() => void feedback("thumbs_up")}>
-                    Useful
-                  </button>
-                  <button type="button" onClick={() => void feedback("thumbs_down")}>
-                    Not useful
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </section>
-      </main>
 
-      <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
+        <EvidencePanel
+          turn={selectedResultTurn}
+          evidenceItem={selectedEvidenceItem}
+          onViewEvidence={setSelectedEvidenceItem}
+          onClearEvidence={() => setSelectedEvidenceItem(null)}
+          onAuthRequired={onAuthRequired}
+          onSaved={handleSaved}
+        />
+      </main>
     </>
   );
+}
+
+function ResearchTurn({
+  turn,
+  selected,
+  onSelectResults,
+  onChooseClarification,
+  onAuthRequired,
+  onSaved,
+  onFeedback,
+}: {
+  turn: Turn;
+  selected: boolean;
+  onSelectResults: () => void;
+  onChooseClarification: (option: string) => void;
+  onAuthRequired?: () => void;
+  onSaved: () => void;
+  onFeedback: (type: string) => Promise<void>;
+}) {
+  if (turn.role === "user") {
+    return (
+      <article className="thread-turn user-turn">
+        <div className="turn-label">You</div>
+        <p>{turn.content}</p>
+      </article>
+    );
+  }
+
+  const response = turn.response || turn.result_payload;
+  const hasResults = response && response.type !== "clarification" && response.type !== "error";
+  const questions = turn.clarifying_questions || response?.clarifying_questions || [];
+
+  return (
+    <article
+      className={`thread-turn assistant-turn${response?.type === "error" ? " error-turn" : ""}${selected ? " selected-turn" : ""}`}
+    >
+      <div className="turn-label">Assistant</div>
+      {response ? (
+        <>
+          <AnswerSummary response={response} loading={Boolean(turn.loading)} />
+          {!turn.loading && response.tool_calls && response.tool_calls.length > 0 && (
+            <AgentActivity query={turn.query || ""} toolCalls={response.tool_calls} completed compact />
+          )}
+          {questions.length > 0 && (
+            response.type === "clarification" ? (
+              <ClarificationPanel questions={questions} onChoose={onChooseClarification} />
+            ) : (
+              <NarrowChips questions={questions} onChoose={onChooseClarification} />
+            )
+          )}
+          {hasResults && (
+            <>
+              <div className="answer-actions">
+                <button type="button" className="plain-action" onClick={onSelectResults}>
+                  Show results
+                </button>
+                <SaveToProjectButton
+                  label="Save to project"
+                  onAuthRequired={onAuthRequired}
+                  onSaved={onSaved}
+                  payload={{
+                    item_type: "search_result",
+                    item_id: response.saved_result_id,
+                    title: turn.query || response.message || "Saved search",
+                    metadata: {
+                      query: turn.query,
+                      answer_summary: response.assistant_message || response.message,
+                      selected_variables: response.results.closest_variables,
+                      relevant_reports: response.results.relevant_reports,
+                      organizations: response.results.relevant_organizations,
+                      source_links: response.results.source_links,
+                      limitations: response.limitations,
+                      result_payload: response,
+                    },
+                  }}
+                />
+              </div>
+              <div className="feedback-row">
+                <button type="button" onClick={() => void onFeedback("thumbs_up")}>
+                  Useful
+                </button>
+                <button type="button" onClick={() => void onFeedback("thumbs_down")}>
+                  Not useful
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <p>{turn.content}</p>
+      )}
+    </article>
+  );
+}
+
+function EvidencePanel({
+  turn,
+  evidenceItem,
+  onViewEvidence,
+  onClearEvidence,
+  onAuthRequired,
+  onSaved,
+}: {
+  turn?: Turn;
+  evidenceItem: DrawerItem | null;
+  onViewEvidence: (item: DrawerItem) => void;
+  onClearEvidence: () => void;
+  onAuthRequired?: () => void;
+  onSaved: () => void;
+}) {
+  const response = turn?.response || turn?.result_payload;
+  const hasResults = response && response.type !== "clarification" && response.type !== "error";
+
+  return (
+    <aside className="evidence-panel" aria-label="Structured results and evidence basket">
+      <div className="evidence-panel-head">
+        <h2>Results</h2>
+        {turn?.query && <span>{turn.query}</span>}
+      </div>
+
+      {!response && (
+        <div className="evidence-empty">
+          <p>Structured results and viewed evidence will appear here as the thread develops.</p>
+        </div>
+      )}
+
+      {response && !hasResults && (
+        <div className="evidence-empty">
+          <p>{response.type === "clarification" ? "Answer a clarification to populate structured results." : response.message}</p>
+        </div>
+      )}
+
+      {response && hasResults && (
+        <>
+          <div className="evidence-summary">
+            <span>{response.results.closest_variables.length} variables</span>
+            <span>{response.results.relevant_reports.length} reports</span>
+            <span>{response.results.relevant_organizations.length} orgs</span>
+            <span>{response.results.source_links.length} sources</span>
+          </div>
+          <div className="answer-actions">
+            <SaveToProjectButton
+              label="Save result"
+              onAuthRequired={onAuthRequired}
+              onSaved={onSaved}
+              payload={{
+                item_type: "search_result",
+                item_id: response.saved_result_id,
+                title: turn?.query || response.message || "Saved search",
+                metadata: {
+                  query: turn?.query,
+                  answer_summary: response.assistant_message || response.message,
+                  selected_variables: response.results.closest_variables,
+                  relevant_reports: response.results.relevant_reports,
+                  organizations: response.results.relevant_organizations,
+                  source_links: response.results.source_links,
+                  limitations: response.limitations,
+                  result_payload: response,
+                },
+              }}
+            />
+          </div>
+          <ResultSections
+            results={response.results}
+            limitations={response.limitations}
+            onViewEvidence={onViewEvidence}
+            onAuthRequired={onAuthRequired}
+            onItemSaved={onSaved}
+          />
+        </>
+      )}
+
+      <div className="evidence-basket">
+        <div className="evidence-panel-head compact">
+          <h2>Evidence Basket</h2>
+          {evidenceItem && (
+            <button type="button" onClick={onClearEvidence}>Clear</button>
+          )}
+        </div>
+        {evidenceItem ? (
+          <EvidenceDetail item={evidenceItem} />
+        ) : (
+          <p className="evidence-empty-text">Click View evidence on any result card.</p>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function EvidenceDetail({ item }: { item: DrawerItem }) {
+  const title = drawerItemTitle(item);
+  const url = drawerItemUrl(item);
+  return (
+    <article className="evidence-detail">
+      <h3>{title}</h3>
+      <span className="meta-chip">{item.kind}</span>
+      {item.kind === "variable" && (
+        <>
+          <EvidenceField label="Definition" value={item.data.definition} />
+          <EvidenceField label="Measurement" value={item.data.measurement_method} />
+          <EvidenceField label="Data source" value={item.data.data_source} />
+          <EvidenceField label="Coverage" value={[item.data.geographic_coverage, item.data.temporal_coverage].filter(Boolean).join(" · ")} />
+          <EvidenceQuote value={item.data.evidence_quote} />
+        </>
+      )}
+      {item.kind === "report" && (
+        <>
+          <EvidenceField label="Publisher" value={item.data.publisher} />
+          <EvidenceField label="Year" value={item.data.report_year} />
+          <EvidenceField label="Geography" value={item.data.geography || item.data.geographic_coverage} />
+          <EvidenceQuote value={item.data.why_it_matched} />
+        </>
+      )}
+      {item.kind === "organization" && (
+        <>
+          <EvidenceField label="Type" value={item.data.organization_type} />
+          <EvidenceField label="Geography" value={item.data.geography} />
+          <EvidenceField label="Description" value={item.data.description} />
+        </>
+      )}
+      {item.kind === "source" && (
+        <>
+          <EvidenceField label="Availability" value={item.data.availability} />
+          <EvidenceField label="Local file" value={item.data.local_path} />
+        </>
+      )}
+      {url && (
+        <a className="card-action-link" href={url} target="_blank" rel="noreferrer">
+          Open source
+        </a>
+      )}
+    </article>
+  );
+}
+
+function EvidenceField({ label, value }: { label: string; value?: string | number | null }) {
+  if (!value) return null;
+  return (
+    <div className="evidence-field">
+      <span>{label}</span>
+      <p>{String(value)}</p>
+    </div>
+  );
+}
+
+function EvidenceQuote({ value }: { value?: string | null }) {
+  if (!value) return null;
+  return <blockquote className="drawer-evidence">{value}</blockquote>;
+}
+
+function drawerItemTitle(item: DrawerItem) {
+  if (item.kind === "variable") return item.data.title || item.data.raw_variable_name || "Variable";
+  if (item.kind === "report") return item.data.title || "Report";
+  if (item.kind === "organization") return item.data.name || item.data.title || "Organization";
+  return item.data.title || item.data.source_url || "Source";
+}
+
+function drawerItemUrl(item: DrawerItem) {
+  if (item.kind === "variable") return item.data.source_url;
+  if (item.kind === "report") return item.data.source_url;
+  if (item.kind === "organization") return item.data.website_url || item.data.source_url;
+  return item.data.source_url;
 }
 
 function TopNav({
@@ -1118,7 +1416,10 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
   }
 
   function historyFromTurns(): ChatHistoryItem[] {
-    return turns.filter(t => t.content.trim()).slice(-10).map(t => ({ role: t.role, content: t.content }));
+    return turns
+      .filter(t => (t.role === "user" || t.role === "assistant") && t.content.trim())
+      .slice(-10)
+      .map(t => ({ role: t.role as "user" | "assistant", content: t.content }));
   }
 
   async function runProjectQuery(query: string) {
@@ -1660,6 +1961,45 @@ function formatDate(value?: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function buildResearchThreads(items: HistoryItem[]): ResearchThread[] {
+  const grouped = new Map<string, ResearchThread>();
+  for (const item of items) {
+    const id = item.session_id || item.id;
+    const existing = grouped.get(id);
+    if (existing) {
+      existing.items.push(item);
+      existing.resultCount += 1;
+      if (isAfter(item.created_at, existing.updated_at)) {
+        existing.updated_at = item.created_at;
+      }
+      continue;
+    }
+    grouped.set(id, {
+      id,
+      title: item.title || item.query || "Untitled thread",
+      updated_at: item.created_at,
+      resultCount: 1,
+      items: [item],
+    });
+  }
+  return [...grouped.values()].sort((a, b) => dateTime(b.updated_at) - dateTime(a.updated_at));
+}
+
+function threadSummary(thread: ResearchThread) {
+  const count = thread.resultCount > 0 ? `${thread.resultCount} result${thread.resultCount !== 1 ? "s" : ""}` : "";
+  const when = formatDate(thread.updated_at);
+  if (when && count) return `${when} · ${count}`;
+  return when || count || "New thread";
+}
+
+function isAfter(a?: string, b?: string) {
+  return dateTime(a) > dateTime(b);
+}
+
+function dateTime(value?: string) {
+  return value ? new Date(value).getTime() || 0 : 0;
 }
 
 function AgentActivity({

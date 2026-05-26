@@ -37,7 +37,7 @@ export function OrganizationCard({ organization, onViewEvidence, onAuthRequired,
           className="card-action-btn"
           onClick={onViewEvidence}
         >
-          View details
+          View evidence
         </button>
         {url && (
           <a href={url} target="_blank" rel="noreferrer" className="card-action-link">

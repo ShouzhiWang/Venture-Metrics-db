@@ -34,7 +34,7 @@ export function ReportCard({ report, onViewEvidence, onAuthRequired, projectId, 
           className="card-action-btn"
           onClick={onViewEvidence}
         >
-          View details
+          View evidence
         </button>
         {report.source_url && (
           <a

@@ -27,7 +27,7 @@ export function SourceCard({ source, onViewEvidence, onAuthRequired, projectId, 
           className="card-action-btn"
           onClick={onViewEvidence}
         >
-          View details
+          View evidence
         </button>
         {source.source_url && (
           <a

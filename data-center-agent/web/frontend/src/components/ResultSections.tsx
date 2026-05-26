@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import type { ChatResponse } from "../types";
 import type { DrawerItem } from "./DetailDrawer";
 import { OrganizationCard } from "./cards/OrganizationCard";
@@ -17,60 +16,25 @@ type Props = {
   onItemSaved?: () => void;
 };
 
-const TABS = ["Variables", "Reports", "Organizations", "Sources", "Comparison"] as const;
-type TabName = typeof TABS[number];
-
 export function ResultSections({ results, limitations, onViewEvidence, onAuthRequired, projectId, onItemSaved }: Props) {
   const comparison = results.comparison || {};
   const hasComparison = Object.keys(comparison).length > 0;
-
-  const counts: Record<TabName, number> = {
-    Variables: results.closest_variables.length,
-    Reports: results.relevant_reports.length,
-    Organizations: results.relevant_organizations.length,
-    Sources: results.source_links.length,
-    Comparison: hasComparison ? 1 : 0,
-  };
-
-  const firstWithData = TABS.find(t => counts[t] > 0) ?? "Variables";
-  const [active, setActive] = useState<TabName>(firstWithData);
-
-  useEffect(() => {
-    setActive(TABS.find(t => counts[t] > 0) ?? "Variables");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results]);
 
   const definitionDifferences = Array.isArray(comparison.definition_differences)
     ? (comparison.definition_differences as { raw_variable_name?: string; definition?: string }[])
     : [];
 
-  const totalResults = counts.Variables + counts.Reports + counts.Organizations + counts.Sources;
+  const totalResults = results.closest_variables.length
+    + results.relevant_reports.length
+    + results.relevant_organizations.length
+    + results.source_links.length;
   if (totalResults === 0 && !hasComparison) return null;
 
   return (
-    <div className="result-tabs">
-      <div className="tab-bar" role="tablist">
-        {TABS.map(tab => {
-          const count = counts[tab];
-          const isDisabled = count === 0;
-          return (
-            <button
-              key={tab}
-              role="tab"
-              aria-selected={active === tab}
-              className={`tab-btn${active === tab ? " active" : ""}${isDisabled ? " empty" : ""}`}
-              onClick={() => !isDisabled && setActive(tab)}
-              disabled={isDisabled}
-            >
-              {tab}
-              {count > 0 && <span className="tab-count">{count}</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="tab-content" role="tabpanel">
-        {active === "Variables" && results.closest_variables.length > 0 && (
+    <div className="result-groups">
+      {results.closest_variables.length > 0 && (
+        <details className="result-group" open>
+          <summary>Closest Variables <span>{results.closest_variables.length}</span></summary>
           <div className="card-grid">
             {results.closest_variables.map((item, index) => (
               <VariableCard
@@ -83,9 +47,12 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
               />
             ))}
           </div>
-        )}
+        </details>
+      )}
 
-        {active === "Reports" && results.relevant_reports.length > 0 && (
+      {results.relevant_reports.length > 0 && (
+        <details className="result-group">
+          <summary>Relevant Reports <span>{results.relevant_reports.length}</span></summary>
           <div className="card-grid">
             {results.relevant_reports.map((item, index) => (
               <ReportCard
@@ -98,9 +65,12 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
               />
             ))}
           </div>
-        )}
+        </details>
+      )}
 
-        {active === "Organizations" && results.relevant_organizations.length > 0 && (
+      {results.relevant_organizations.length > 0 && (
+        <details className="result-group">
+          <summary>Organizations <span>{results.relevant_organizations.length}</span></summary>
           <div className="card-grid">
             {results.relevant_organizations.map((item, index) => (
               <OrganizationCard
@@ -113,9 +83,12 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
               />
             ))}
           </div>
-        )}
+        </details>
+      )}
 
-        {active === "Sources" && results.source_links.length > 0 && (
+      {results.source_links.length > 0 && (
+        <details className="result-group">
+          <summary>Source Links <span>{results.source_links.length}</span></summary>
           <div className="card-grid compact">
             {results.source_links.map((item, index) => (
               <SourceCard
@@ -128,9 +101,12 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
               />
             ))}
           </div>
-        )}
+        </details>
+      )}
 
-        {active === "Comparison" && hasComparison && (
+      {hasComparison && (
+        <details className="result-group">
+          <summary>Comparison <span>1</span></summary>
           <div className="comparison-block">
             <p>{String(comparison.summary ?? "Comparison available.")}</p>
             <dl>
@@ -148,16 +124,19 @@ export function ResultSections({ results, limitations, onViewEvidence, onAuthReq
               </ul>
             )}
           </div>
-        )}
+        </details>
+      )}
 
-        {limitations.length > 0 && (
+      {limitations.length > 0 && (
+        <details className="result-group limitations-group">
+          <summary>Limitations <span>{limitations.length}</span></summary>
           <div className="limitations-inline">
             <ul>
               {limitations.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           </div>
-        )}
-      </div>
+        </details>
+      )}
     </div>
   );
 }

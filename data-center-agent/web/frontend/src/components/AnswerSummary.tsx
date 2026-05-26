@@ -11,6 +11,7 @@ export function AnswerSummary({ response, loading }: Props) {
   const varCount = response.results?.closest_variables?.length ?? 0;
   const rptCount = response.results?.relevant_reports?.length ?? 0;
   const orgCount = response.results?.relevant_organizations?.length ?? 0;
+  const toolName = response.tool_calls?.[0]?.name;
   const privateCount = [
     ...(response.results?.closest_variables ?? []),
     ...(response.results?.source_links ?? []),
@@ -32,6 +33,9 @@ export function AnswerSummary({ response, loading }: Props) {
       )}
 
       <div className="answer-meta">
+        {toolName && (
+          <span>Tool: {toolName}</span>
+        )}
         {varCount > 0 && (
           <span>{varCount} variable{varCount !== 1 ? "s" : ""}</span>
         )}
