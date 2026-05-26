@@ -92,19 +92,16 @@ describe("AgentActivityTimeline", () => {
     expect(screen.queryByText("Calling data tools")).toBeNull();
   });
 
-  it("shows all backend events immediately after completion", () => {
-    const manyEvents: AgentEvent[] = Array.from({ length: 4 }, (_, index) => ({
-      id: `step-${index}`,
-      timestamp: "2026-01-01T00:00:00Z",
-      type: "planning",
-      status: "completed",
-      label: `Step ${index + 1}`,
-      detail: `Detail ${index + 1}`,
-    }));
+  it("auto-collapses when loading finishes", () => {
+    const { rerender } = render(
+      <AgentActivityTimeline events={completedEvents} isLoading defaultCollapsed={false} />,
+    );
+    expect(screen.getByText("Query planned")).toBeTruthy();
 
-    render(<AgentActivityTimeline events={manyEvents} defaultCollapsed={false} isLoading={false} />);
-    expect(screen.getByText("Step 1")).toBeTruthy();
-    expect(screen.getByText("Step 4")).toBeTruthy();
+    rerender(<AgentActivityTimeline events={completedEvents} isLoading={false} defaultCollapsed />);
+    expect(screen.queryByText("Query planned")).toBeNull();
+    expect(screen.getByText(/Agent activity · find_data completed/)).toBeTruthy();
+    expect(screen.getByText("Show")).toBeTruthy();
   });
 });
 

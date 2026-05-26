@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import type { AgentEvent } from "../types";
 import {
@@ -16,6 +16,17 @@ type Props = {
 
 export function AgentActivityTimeline({ events = [], defaultCollapsed = true, isLoading = false }: Props) {
   const [expanded, setExpanded] = useState(!defaultCollapsed);
+  const wasLoading = useRef(isLoading);
+
+  useEffect(() => {
+    if (isLoading) {
+      setExpanded(true);
+    } else if (wasLoading.current) {
+      setExpanded(false);
+    }
+    wasLoading.current = isLoading;
+  }, [isLoading]);
+
   const hasLiveEvents = events.length > 0;
   const usingPlaceholders = isLoading && !hasLiveEvents;
   const sourceEvents = hasLiveEvents ? events : usingPlaceholders ? loadingPlaceholderSequence() : [];

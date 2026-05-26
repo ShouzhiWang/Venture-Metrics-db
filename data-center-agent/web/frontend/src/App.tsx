@@ -988,9 +988,6 @@ function ResearchTurn({
       <article className={`thread-turn assistant-turn assistant-turn-loading${selected ? " selected-turn" : ""}`}>
         <div className="assistant-turn-head">
           <span className="turn-label">Assistant</span>
-          <button type="button" className="thread-panel-context-btn" disabled>
-            Side panel
-          </button>
         </div>
         <AgentActivityTimeline isLoading defaultCollapsed={false} />
       </article>
@@ -1022,19 +1019,16 @@ function ResearchTurn({
     >
       <div className="assistant-turn-head">
         <span className="turn-label">Assistant</span>
-        <button
-          type="button"
-          className={`thread-panel-context-btn${selected ? " is-active" : ""}`}
-          onClick={onSelectResults}
-          aria-pressed={selected}
-        >
-          {selected ? "Using for side panel" : "Use for side panel"}
-        </button>
+        {!selected && (
+          <button type="button" className="thread-panel-context-btn" onClick={onSelectResults}>
+            Use for side panel
+          </button>
+        )}
       </div>
 
       <AnswerSummary response={response} loading={Boolean(turn.loading && !(response.assistant_message || response.message))} />
 
-      {(turn.loading || (response.tool_trace && response.tool_trace.length > 0)) && (
+      {((turn.loading || (response.tool_trace && response.tool_trace.length > 0))) && (
         <AgentActivityTimeline
           events={response.tool_trace}
           isLoading={Boolean(turn.loading)}
@@ -1983,11 +1977,13 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
 
           {(latestResponse || chatLoading) && (
             <div className="result-area">
-              <AgentActivityTimeline
-                events={latestResponse?.tool_trace}
-                isLoading={chatLoading}
-                defaultCollapsed={!chatLoading}
-              />
+              {(chatLoading || (latestResponse?.tool_trace && latestResponse.tool_trace.length > 0)) && (
+                <AgentActivityTimeline
+                  events={latestResponse?.tool_trace}
+                  isLoading={chatLoading}
+                  defaultCollapsed={!chatLoading}
+                />
+              )}
               {latestResponse && (
                 <>
                   <AnswerSummary response={latestResponse} loading={false} />
