@@ -62,7 +62,7 @@ class PaddleOCREngine(OCREngine):
 
         self.language = language
         self.dpi = dpi
-        self._ocr = PaddleOCR(use_angle_cls=True, lang=language, show_log=False)
+        self._ocr = PaddleOCR(lang=language)
 
     def extract_pages(self, pdf_path: Path) -> list[ParsedPage]:
         pages: list[ParsedPage] = []
