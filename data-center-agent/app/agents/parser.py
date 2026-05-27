@@ -75,7 +75,11 @@ class PaddleOCREngine(OCREngine):
                 image_path = temp_root / f"page-{index}.png"
                 pixmap = page.get_pixmap(matrix=matrix, alpha=False)
                 pixmap.save(image_path)
-                ocr_result = self._ocr.ocr(str(image_path), cls=True)
+                try:
+                    ocr_result = self._ocr.ocr(str(image_path), cls=True)
+                except TypeError:
+                    # New PaddleOCR API — use predict() instead
+                    ocr_result = list(self._ocr.predict(str(image_path)))
                 text, confidence = _parse_paddleocr_result(ocr_result)
                 pages.append(
                     ParsedPage(
@@ -86,6 +90,58 @@ class PaddleOCREngine(OCREngine):
                         metadata={
                             "ocr_engine": "paddleocr",
                             "confidence": confidence,
+                            "is_scanned_pdf": True,
+                            "dpi": self.dpi,
+                            "language": self.language,
+                        },
+                    )
+                )
+        return pages
+
+
+class TesseractOCREngine(OCREngine):
+    """OCR engine using Tesseract (tesseract-ocr system package)."""
+
+    LANG_MAP = {
+        "en": "eng",
+        "ch": "chi_sim",
+        "zh": "chi_sim",
+        "chinese_cht": "chi_tra",
+    }
+
+    def __init__(self, language: str = "en", dpi: int = 200):
+        try:
+            import pytesseract  # noqa: F401
+        except ImportError as exc:
+            raise OCRDependencyError(
+                "pytesseract is not installed. Install with: pip install pytesseract"
+            ) from exc
+
+        self.language = language
+        self.dpi = dpi
+        self._tess_lang = self.LANG_MAP.get(language, language)
+
+    def extract_pages(self, pdf_path: Path) -> list[ParsedPage]:
+        import pytesseract
+        pages: list[ParsedPage] = []
+        zoom = self.dpi / 72
+        matrix = fitz.Matrix(zoom, zoom)
+
+        with fitz.open(pdf_path) as document, tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            for index, page in enumerate(document, start=1):
+                image_path = temp_root / f"page-{index}.png"
+                pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+                pixmap.save(image_path)
+                text = pytesseract.image_to_string(str(image_path), lang=self._tess_lang)
+                pages.append(
+                    ParsedPage(
+                        page_number=index,
+                        text=normalize_whitespace(text),
+                        extraction_method="ocr",
+                        tables=detect_table_placeholders(text),
+                        metadata={
+                            "ocr_engine": "tesseract",
                             "is_scanned_pdf": True,
                             "dpi": self.dpi,
                             "language": self.language,
@@ -165,8 +221,55 @@ def extract_text_from_pdf(path: Path, ocr_engine: OCREngine | None = None) -> Pa
             best_quality = pymupdf_quality
 
         if best_quality.ocr_recommended:
-            engine = ocr_engine or PaddleOCREngine()
-            ocr_pages = engine.extract_pages(path)
+            engine = ocr_engine
+            if engine is None:
+                try:
+                    engine = PaddleOCREngine()
+                except Exception:
+                    try:
+                        engine = TesseractOCREngine()
+                    except Exception:
+                        pass
+            if engine is None:
+                # No OCR engine available — return best text-based result
+                return ParsedDocument(
+                    text=best_text,
+                    pages=best_text_pages,
+                    metadata={
+                        "parser": best_text_parser,
+                        "ocr_attempted": False,
+                        "ocr_error": "No OCR engine available (PaddleOCR and Tesseract both failed)",
+                        "is_scanned_pdf": True,
+                        "pymupdf_quality": _quality_metadata(pymupdf_quality),
+                        "pdfplumber_quality": _quality_metadata(pdfplumber_quality),
+                    },
+                )
+            ocr_pages = None
+            ocr_engine_name = "custom" if ocr_engine else "paddleocr"
+            try:
+                ocr_pages = engine.extract_pages(path)
+            except Exception:
+                # PaddleOCR failed — try Tesseract fallback
+                if not isinstance(engine, TesseractOCREngine):
+                    try:
+                        tess = TesseractOCREngine(language=engine.language if hasattr(engine, 'language') else "en")
+                        ocr_pages = tess.extract_pages(path)
+                        ocr_engine_name = "tesseract"
+                    except Exception:
+                        pass
+            if ocr_pages is None:
+                return ParsedDocument(
+                    text=best_text,
+                    pages=best_text_pages,
+                    metadata={
+                        "parser": best_text_parser,
+                        "ocr_attempted": True,
+                        "ocr_error": "All OCR engines failed",
+                        "is_scanned_pdf": True,
+                        "pymupdf_quality": _quality_metadata(pymupdf_quality),
+                        "pdfplumber_quality": _quality_metadata(pdfplumber_quality),
+                    },
+                )
             ocr_text = _join_page_text(ocr_pages)
             ocr_quality = assess_pdf_text_quality(ocr_pages)
             return ParsedDocument(
@@ -174,7 +277,7 @@ def extract_text_from_pdf(path: Path, ocr_engine: OCREngine | None = None) -> Pa
                 pages=ocr_pages,
                 metadata={
                     "parser": "ocr",
-                    "ocr_engine": "custom" if ocr_engine else "paddleocr",
+                    "ocr_engine": ocr_engine_name if not ocr_engine else "custom",
                     "fallback_from": best_text_parser,
                     "fallback_reason": best_quality.reason,
                     "is_scanned_pdf": True,
