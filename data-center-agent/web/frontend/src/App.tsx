@@ -13,9 +13,7 @@ import {
   listProjects,
   login,
   logout,
-  queryProject,
   register,
-  removeProjectItem,
   sendChat,
   submitFeedback,
   updateProject,
@@ -28,7 +26,7 @@ import { AnswerSummary } from "./components/AnswerSummary";
 import { ResultSections } from "./components/ResultSections";
 import { CompactResultPreview, pickResultPreviews, type PreviewUnion } from "./components/ResultPreview";
 import { EvidenceWorkspacePanel } from "./components/EvidenceWorkspacePanel";
-import { DetailDrawer, type DrawerItem } from "./components/DetailDrawer";
+import { type DrawerItem } from "./components/DetailDrawer";
 import { SaveToProjectButton } from "./components/SaveToProjectButton";
 import type { AgentEvent, ChatResponse, ClarifyingQuestion, FollowUpQuery, MapItem, ProjectItem, ResearchProject } from "./types";
 
@@ -311,7 +309,11 @@ function DataDiscoveryPage({
     if (focusSnapshot) setPendingSearchFocus(undefined);
     const chatContext: Record<string, unknown> = {};
     if (focusSnapshot) chatContext.search_focus = focusSnapshot;
-    if (activeProjectContext?.id) chatContext.project_id = activeProjectContext.id;
+    if (activeProjectContext?.id) {
+      chatContext.project_id = activeProjectContext.id;
+      chatContext.project_title = activeProjectContext.title;
+      if (activeProjectContext.question) chatContext.research_question = activeProjectContext.question;
+    }
     try {
       const response = await sendChat(
         trimmed,
@@ -770,18 +772,22 @@ function EmptySearchNextSteps({
   const shortTopic = topic.length > 52 ? `${topic.slice(0, 49)}…` : topic;
 
   const fromFollowUps = (followUps ?? []).map(item => ({
-    label: item.label,
-    query: item.query,
+    label: stripProjectContextPrefix(item.label),
+    query: stripProjectContextPrefix(item.query),
   }));
 
   const fromClarifying = (clarifyingQuestions ?? []).flatMap(item => {
     if (item.options?.length) {
-      return item.options.map(opt => ({
-        label: opt.length > 56 ? `${opt.slice(0, 53)}…` : opt,
-        query: opt,
-      }));
+      return item.options.map(opt => {
+        const clean = stripProjectContextPrefix(opt);
+        return {
+          label: clean.length > 56 ? `${clean.slice(0, 53)}…` : clean,
+          query: clean,
+        };
+      });
     }
-    return [{ label: item.question, query: item.question }];
+    const clean = stripProjectContextPrefix(item.question);
+    return [{ label: clean, query: clean }];
   });
 
   const seen = new Set<string>();
@@ -826,21 +832,23 @@ function combineNarrowSelections(
   picks: { question: string; option: string }[],
 ): string {
   if (picks.length === 0) return "";
-  if (picks.length === 1) return picks[0].option;
+  const cleanBase = baseQuery ? stripProjectContextPrefix(baseQuery) : undefined;
+  if (picks.length === 1) return stripProjectContextPrefix(picks[0].option);
 
   const refinements = picks.map(({ question, option }) => {
-    if (baseQuery) {
-      const prefix = `${baseQuery} — `;
-      if (option.startsWith(prefix)) return option.slice(prefix.length);
+    const cleanOption = stripProjectContextPrefix(option);
+    if (cleanBase) {
+      const prefix = `${cleanBase} — `;
+      if (cleanOption.startsWith(prefix)) return cleanOption.slice(prefix.length);
     }
-    const q = question.replace(/\?$/, "").trim();
-    if (option.length <= 48 && q && !option.toLowerCase().includes(q.toLowerCase())) {
-      return `${q}: ${option}`;
+    const q = stripProjectContextPrefix(question).replace(/\?$/, "").trim();
+    if (cleanOption.length <= 48 && q && !cleanOption.toLowerCase().includes(q.toLowerCase())) {
+      return `${q}: ${cleanOption}`;
     }
-    return option;
+    return cleanOption;
   });
 
-  if (baseQuery) return `${baseQuery} — ${refinements.join("; ")}`;
+  if (cleanBase) return `${cleanBase} — ${refinements.join("; ")}`;
   return refinements.join(". ");
 }
 
@@ -903,6 +911,7 @@ function NarrowSearchPanel({
           {q.options && q.options.length > 0 && (
             <div className="narrow-chip-grid">
               {q.options.map(opt => {
+                const label = stripProjectContextPrefix(opt);
                 const selected = selections[q.question] === opt;
                 if (multiSelect) {
                   return (
@@ -913,7 +922,7 @@ function NarrowSearchPanel({
                       aria-pressed={selected}
                       onClick={() => toggleSelection(q.question, opt)}
                     >
-                      {opt}
+                      {label}
                     </button>
                   );
                 }
@@ -922,9 +931,9 @@ function NarrowSearchPanel({
                     key={opt}
                     type="button"
                     className="suggestion-chip suggestion-chip-compact"
-                    onClick={() => onChoose(opt)}
+                    onClick={() => onChoose(label)}
                   >
-                    {opt}
+                    {label}
                   </button>
                 );
               })}
@@ -976,7 +985,7 @@ function ResearchTurn({
     return (
       <article className="thread-turn user-turn">
         <div className="turn-label">You</div>
-        <p className="user-turn-body">{turn.content}</p>
+        <p className="user-turn-body">{stripProjectContextPrefix(turn.content)}</p>
       </article>
     );
   }
@@ -1003,7 +1012,7 @@ function ResearchTurn({
     );
   }
 
-  const questions = turn.clarifying_questions || response.clarifying_questions || [];
+  const questions = sanitizeClarifyingQuestions(turn.clarifying_questions || response.clarifying_questions || []);
   const isClarification = response.type === "clarification";
   const isError = response.type === "error";
   const total = countStructuredResults(response.results);
@@ -1067,7 +1076,7 @@ function ResearchTurn({
         <EmptySearchNextSteps
           baseQuery={turn.query}
           followUps={response.follow_up_queries}
-          clarifyingQuestions={response.clarifying_questions}
+          clarifyingQuestions={questions}
           onPick={onChooseClarification}
         />
       )}
@@ -1611,7 +1620,97 @@ function ProjectsPage({ onNavigate }: { onNavigate: (path: string) => void }) {
   );
 }
 
-// ── Project workspace helpers ──────────────────
+type ProjectResearchThread = {
+  id: string;
+  title: string;
+  updated_at?: string;
+  resultCount: number;
+  searches: ProjectItem[];
+  local?: boolean;
+};
+
+function stripProjectContextPrefix(text: string): string {
+  let out = text.trim();
+  if (!out) return out;
+  out = out.replace(/^\[(?:Project:[^;\]]*(?:;\s*Research question:[^\]]+)?)\]\s*/i, "");
+  return out.trim();
+}
+
+function sanitizeClarifyingQuestions(questions: ClarifyingQuestion[]): ClarifyingQuestion[] {
+  return questions.map(q => ({
+    ...q,
+    question: stripProjectContextPrefix(q.question),
+    options: q.options?.map(opt => stripProjectContextPrefix(opt)),
+  }));
+}
+
+function buildProjectThreads(items: ProjectItem[]): ProjectResearchThread[] {
+  const grouped = new Map<string, ProjectResearchThread>();
+  for (const item of items) {
+    if (item.item_type !== "search_result") continue;
+    const payload = item.metadata?.result_payload as ChatResponse | undefined;
+    const convId = String(payload?.conversation_id || item.metadata?.conversation_id || item.id);
+    const query = stripProjectContextPrefix(String(item.metadata?.query || item.title || "Search"));
+    const existing = grouped.get(convId);
+    if (existing) {
+      existing.searches.push(item);
+      existing.resultCount += 1;
+      if (isAfter(item.created_at, existing.updated_at)) {
+        existing.updated_at = item.created_at;
+      }
+      continue;
+    }
+    grouped.set(convId, {
+      id: convId,
+      title: query,
+      updated_at: item.created_at,
+      resultCount: 1,
+      searches: [item],
+    });
+  }
+  for (const thread of grouped.values()) {
+    thread.searches.sort((a, b) => dateTime(a.created_at) - dateTime(b.created_at));
+    const first = thread.searches[0];
+    thread.title = stripProjectContextPrefix(String(first.metadata?.query || first.title || thread.title));
+  }
+  return [...grouped.values()].sort((a, b) => dateTime(b.updated_at) - dateTime(a.updated_at));
+}
+
+function turnsFromProjectThread(searches: ProjectItem[]): Turn[] {
+  return searches.flatMap(item => {
+    const response = item.metadata?.result_payload as ChatResponse | undefined;
+    if (!response) return [];
+    const query = stripProjectContextPrefix(String(item.metadata?.query || item.title || "Search"));
+    const createdAt = item.created_at || new Date().toISOString();
+    return [
+      {
+        id: crypto.randomUUID(),
+        role: "user" as const,
+        content: query,
+        created_at: createdAt,
+      },
+      {
+        id: crypto.randomUUID(),
+        role: "assistant" as const,
+        content: response.assistant_message || response.message,
+        created_at: createdAt,
+        tool_name: response.tool_calls?.[0]?.name,
+        result_payload: response,
+        clarifying_questions: response.clarifying_questions,
+        limitations: response.limitations,
+        response,
+        query,
+      },
+    ];
+  });
+}
+
+function projectThreadSummary(thread: ProjectResearchThread) {
+  const count = thread.resultCount > 0 ? `${thread.resultCount} message${thread.resultCount !== 1 ? "s" : ""}` : "";
+  const when = formatDate(thread.updated_at);
+  if (when && count) return `${when} · ${count}`;
+  return when || count || "Thread";
+}
 
 function generateSuggestedQueries(project: ResearchProject): string[] {
   const title = (project.title || "").trim();
@@ -1630,24 +1729,6 @@ function generateSuggestedQueries(project: ResearchProject): string[] {
   return [...new Set(queries)].filter(q => q.length > 10 && q.length < 120).slice(0, 5);
 }
 
-function projectItemToDrawerItem(item: ProjectItem): import("./components/DetailDrawer").DrawerItem | null {
-  const meta = item.metadata;
-  if (!meta) return null;
-  if (item.item_type === "variable" && meta.variable) return { kind: "variable", data: meta.variable as never };
-  if (item.item_type === "report" && meta.report) return { kind: "report", data: meta.report as never };
-  if (item.item_type === "organization" && meta.organization) return { kind: "organization", data: meta.organization as never };
-  if (item.item_type === "source" && meta.source) return { kind: "source", data: meta.source as never };
-  return null;
-}
-
-function evidenceTypeLabel(type: ProjectItem["item_type"]): string {
-  const map: Record<string, string> = {
-    variable: "Var", report: "Rep", organization: "Org",
-    source: "Src", search_result: "Search", note: "Note",
-  };
-  return map[type] || type;
-}
-
 function groupProjectItems(items: ProjectItem[]) {
   return items.reduce<Record<string, ProjectItem[]>>((acc, item) => {
     acc[item.item_type] = [...(acc[item.item_type] || []), item];
@@ -1658,42 +1739,34 @@ function groupProjectItems(items: ProjectItem[]) {
 // ── Project workspace ─────────────────────────
 
 function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNavigate: (path: string) => void }) {
-  // Project data
   const [project, setProject] = useState<ResearchProject | null>(null);
   const [items, setItems] = useState<ProjectItem[]>([]);
   const [loadError, setLoadError] = useState("");
 
-  // Edit state
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editQuestion, setEditQuestion] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
-  // Chat state
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatError, setChatError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [conversationId, setConversationId] = useState<string | undefined>();
-  const [lastQuery, setLastQuery] = useState("");
   const [answerId, setAnswerId] = useState(() => `answer-${Date.now()}`);
-  const [hasQueried, setHasQueried] = useState(false);
-
-  // UI state
-  const [drawerItem, setDrawerItem] = useState<DrawerItem | null>(null);
+  const [selectedEvidenceItem, setSelectedEvidenceItem] = useState<DrawerItem | null>(null);
+  const [selectedResultTurnId, setSelectedResultTurnId] = useState<string | undefined>();
   const [noteText, setNoteText] = useState("");
-  const [sidebarTab, setSidebarTab] = useState<"evidence" | "notes">("evidence");
   const [markdown, setMarkdown] = useState("");
   const [showMarkdown, setShowMarkdown] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const latestAssistant = [...turns].reverse().find(t => t.role === "assistant");
-  const latestResponse = latestAssistant?.response;
-  const isClarification = latestResponse?.type === "clarification";
-  const hasResults = latestResponse && latestResponse.type !== "clarification";
-  const clarifyingQuestions = latestResponse?.clarifying_questions ?? [];
+  const panelTurn = selectedResultTurnId ? turns.find(t => t.id === selectedResultTurnId) : undefined;
+  const hasTurns = turns.length > 0;
+  const activeTitle = turns.find(t => t.role === "user")?.content || project?.research_question || project?.title || "New thread";
+  const activeResultCount = turns.filter(t => t.role === "assistant" && t.response?.type !== "clarification" && t.response?.type !== "error").length;
 
   const grouped = groupProjectItems(items);
-  const evidenceItems = items.filter(i => i.item_type !== "note");
   const noteItems = grouped.note || [];
   const stats = {
     searches: (grouped.search_result || []).length,
@@ -1703,7 +1776,30 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
     notes: noteItems.length,
   };
 
+  const projectThreads = useMemo(() => buildProjectThreads(items), [items]);
+  const activeThreadId = conversationId;
+  const currentThread: ProjectResearchThread | null =
+    hasTurns && conversationId && !projectThreads.some(thread => thread.id === conversationId)
+      ? {
+          id: conversationId || "local-active",
+          title: stripProjectContextPrefix(activeTitle),
+          updated_at: turns[turns.length - 1]?.created_at,
+          resultCount: activeResultCount,
+          searches: [],
+          local: true,
+        }
+      : null;
+
+  const suggestedQueries = project && !hasTurns ? generateSuggestedQueries(project) : [];
+  const activeProjectContext = project
+    ? { id: project.id, title: project.title, question: project.research_question || undefined }
+    : null;
+
   useEffect(() => { void loadProject(); }, [projectId]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns, loading]);
 
   async function loadProject() {
     setLoadError("");
@@ -1719,36 +1815,67 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
     }
   }
 
-  function historyFromTurns(): ChatHistoryItem[] {
-    return turns
-      .filter(t => (t.role === "user" || t.role === "assistant") && t.content.trim())
+  function historyFromTurns(nextTurns = turns): ChatHistoryItem[] {
+    return nextTurns
+      .filter(t => (t.role === "user" || t.role === "assistant") && !t.loading && t.content.trim())
       .slice(-10)
       .map(t => ({ role: t.role as "user" | "assistant", content: t.content }));
   }
 
   async function runProjectQuery(query: string) {
-    const trimmed = query.trim();
-    if (!trimmed || chatLoading) return;
-    setLastQuery(trimmed);
-    setDrawerItem(null);
-    setChatLoading(true);
-    setChatError("");
-    setHasQueried(true);
-    setAnswerId(`answer-${Date.now()}`);
-    const userTurn: Turn = { id: crypto.randomUUID(), role: "user", content: trimmed };
+    const trimmed = stripProjectContextPrefix(query);
+    if (!trimmed || loading || !project) return;
+    setSelectedEvidenceItem(null);
+    const createdAt = new Date().toISOString();
+    const userTurn: Turn = { id: crypto.randomUUID(), role: "user", content: trimmed, created_at: createdAt };
+    const loadingTurnId = crypto.randomUUID();
+    const loadingTurn: Turn = {
+      id: loadingTurnId,
+      role: "assistant",
+      content: "",
+      created_at: createdAt,
+      loading: true,
+      query: trimmed,
+    };
     const nextTurns = [...turns, userTurn];
-    setTurns(nextTurns);
+    setTurns([...nextTurns, loadingTurn]);
     setMessage("");
+    setLoading(true);
+    setError("");
+    setAnswerId(`answer-${Date.now()}`);
+
+    const chatContext: Record<string, unknown> = {
+      project_id: projectId,
+      project_title: project.title,
+      research_question: project.research_question || "",
+    };
+
     try {
-      const response = await queryProject(projectId, trimmed, historyFromTurns(), conversationId);
+      const response = await sendChat(
+        trimmed,
+        chatContext,
+        historyFromTurns(nextTurns),
+        conversationId,
+        toolTrace => {
+          setTurns(current => patchTurnToolTrace(current, loadingTurnId, toolTrace));
+        },
+      );
       if (response.conversation_id) setConversationId(response.conversation_id);
-      setTurns([...nextTurns, {
-        id: crypto.randomUUID(),
+      const assistantTurn: Turn = {
+        id: loadingTurnId,
         role: "assistant",
         content: response.assistant_message || response.message,
+        created_at: new Date().toISOString(),
+        tool_name: response.tool_calls?.[0]?.name,
+        result_payload: response,
+        clarifying_questions: response.clarifying_questions,
+        limitations: response.limitations,
         response,
-      }]);
-      // Auto-save every successful search to the project evidence so no conversation is lost.
+        query: trimmed,
+      };
+      setSelectedResultTurnId(loadingTurnId);
+      setTurns([...nextTurns, assistantTurn]);
+
       if (response.type === "answer" || response.type === "no_results") {
         try {
           await addProjectItem(projectId, {
@@ -1756,31 +1883,48 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
             title: trimmed,
             metadata: {
               query: trimmed,
+              conversation_id: response.conversation_id,
               answer_summary: response.assistant_message || response.message,
               result_payload: response,
             },
           });
           void loadProject();
         } catch {
-          // Non-critical — evidence save failure shouldn't disrupt the search UX
+          // Non-critical
         }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Search failed.";
-      setChatError(msg);
-      setTurns([...nextTurns, {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "The search could not complete. Please try again.",
-        response: {
-          type: "error", message: msg, assistant_message: msg,
-          intent: "unknown", clarifying_questions: [], tool_calls: [],
-          results: { closest_variables: [], relevant_reports: [], relevant_organizations: [], source_links: [], comparison: {} },
-          limitations: [],
+      setError(msg);
+      setTurns([
+        ...nextTurns,
+        {
+          id: loadingTurnId,
+          role: "assistant",
+          content: "The search could not complete. Please try again.",
+          created_at: new Date().toISOString(),
+          limitations: [msg],
+          response: {
+            type: "error",
+            message: msg,
+            assistant_message: msg,
+            intent: "unknown",
+            clarifying_questions: [],
+            tool_calls: [],
+            results: {
+              closest_variables: [],
+              relevant_reports: [],
+              relevant_organizations: [],
+              source_links: [],
+              comparison: {},
+            },
+            limitations: [],
+          },
+          query: trimmed,
         },
-      }]);
+      ]);
     } finally {
-      setChatLoading(false);
+      setLoading(false);
     }
   }
 
@@ -1789,26 +1933,38 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
     void runProjectQuery(message);
   }
 
-  function handleChipClick(option: string) {
-    void runProjectQuery(lastQuery ? `${lastQuery}, ${option}` : option);
+  function handleRefinementChip(option: string) {
+    const t = stripProjectContextPrefix(option);
+    if (!t) return;
+    void runProjectQuery(t);
   }
 
-  function handleItemSaved() {
+  function handleSaved() {
     void loadProject();
   }
 
-  function reopenSearchFromEvidence(item: ProjectItem) {
-    const meta = item.metadata;
-    const response = meta?.result_payload as ChatResponse | undefined;
-    if (!response) return;
-    const query = (meta?.query as string | undefined) || item.title || "";
-    setTurns([
-      { id: crypto.randomUUID(), role: "user", content: query },
-      { id: crypto.randomUUID(), role: "assistant", content: response.assistant_message || response.message, response },
-    ]);
-    setLastQuery(query);
-    setConversationId(response.conversation_id);
-    setDrawerItem(null);
+  function startNewThread() {
+    setTurns([]);
+    setMessage("");
+    setConversationId(undefined);
+    setSelectedEvidenceItem(null);
+    setSelectedResultTurnId(undefined);
+    setError("");
+  }
+
+  function selectProjectThread(thread: ProjectResearchThread) {
+    if (hasTurns && conversationId === thread.id) return;
+    const restored = turnsFromProjectThread(thread.searches);
+    if (restored.length === 0) {
+      setError("This thread has no saved messages.");
+      return;
+    }
+    setTurns(restored);
+    setConversationId(thread.id);
+    setSelectedEvidenceItem(null);
+    setError("");
+    const lastAssistant = restored.filter(t => t.role === "assistant" && t.response).slice(-1)[0];
+    setSelectedResultTurnId(lastAssistant?.id);
   }
 
   async function addNote(event: FormEvent) {
@@ -1824,16 +1980,7 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
       setNoteText("");
       void loadProject();
     } catch (err) {
-      setChatError(err instanceof Error ? err.message : "Could not add note.");
-    }
-  }
-
-  async function removeItem(itemId: string) {
-    try {
-      await removeProjectItem(itemId);
-      setItems(prev => prev.filter(i => i.id !== itemId));
-    } catch (err) {
-      setChatError(err instanceof Error ? err.message : "Could not remove item.");
+      setError(err instanceof Error ? err.message : "Could not add note.");
     }
   }
 
@@ -1862,258 +2009,210 @@ function ProjectDetailPage({ projectId, onNavigate }: { projectId: string; onNav
     }
   }
 
-  async function feedbackFn(type: string) {
+  async function feedback(type: string) {
     try { await submitFeedback(answerId, type); } catch { /* non-critical */ }
   }
-
-  const suggestedQueries = project && !hasQueried ? generateSuggestedQueries(project) : [];
 
   if (!project && !loadError) {
     return <PlaceholderPage title="Loading project" description="Fetching your research workspace…" />;
   }
 
   return (
-    <div className="project-workspace">
-      {/* ── Header ── */}
-      <div className="project-workspace-header">
-        {loadError && <div className="notice error" role="alert" style={{ marginBottom: 8 }}>{loadError}</div>}
-        <div className="pwh-inner">
-          <div className="pwh-main">
-            <h1 className="pwh-title">{project?.title || "Project"}</h1>
-            {project?.research_question && (
-              <p className="pwh-question">{project.research_question}</p>
-            )}
-            <div className="project-stat-row">
-              {stats.searches > 0 && <span>{stats.searches} search{stats.searches !== 1 ? "es" : ""}</span>}
-              {stats.variables > 0 && <span>{stats.variables} variable{stats.variables !== 1 ? "s" : ""}</span>}
-              {stats.reports > 0 && <span>{stats.reports} report{stats.reports !== 1 ? "s" : ""}</span>}
-              {stats.sources > 0 && <span>{stats.sources} source{stats.sources !== 1 ? "s" : ""}</span>}
-              {stats.notes > 0 && <span>{stats.notes} note{stats.notes !== 1 ? "s" : ""}</span>}
-              {items.length === 0 && <span className="project-stat-empty">No saved evidence yet</span>}
+    <>
+      <main className="data-workspace">
+        <aside className="history-sidebar" aria-label="Project sidebar">
+          <div className="sidebar-section">
+            <div className="sidebar-section-head">
+              <span className="sidebar-section-label">Project</span>
+              <button type="button" onClick={() => onNavigate("/projects")}>All projects</button>
             </div>
-          </div>
-          <div className="pwh-actions">
-            <button
-              type="button"
-              onClick={() => {
-                if (project) {
-                  window.sessionStorage.setItem(
-                    DATA_PROJECT_CONTEXT_KEY,
-                    JSON.stringify({
-                      id: project.id,
-                      title: project.title,
-                      research_question: project.research_question,
-                    })
-                  );
-                }
-                onNavigate("/data");
-              }}
-            >
-              Research in Data
-            </button>
-            <button type="button" onClick={() => void doExport()}>Export brief</button>
-            <button type="button" onClick={() => setEditing(!editing)}>
-              {editing ? "Cancel" : "Edit"}
-            </button>
-          </div>
-        </div>
-
-        {/* Edit panel */}
-        {editing && (
-          <form className="project-edit-form" onSubmit={saveEdit}>
-            <label>Title<input value={editTitle} onChange={e => setEditTitle(e.target.value)} required /></label>
-            <label>Research question<input value={editQuestion} onChange={e => setEditQuestion(e.target.value)} /></label>
-            <label>Description<textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={2} /></label>
-            <button type="submit">Save</button>
-          </form>
-        )}
-
-        {/* Markdown export */}
-        {showMarkdown && markdown && (
-          <div className="project-export-area">
-            <div className="project-export-head">
-              <span>Markdown brief</span>
-              <button type="button" onClick={() => setShowMarkdown(false)}>Close</button>
-            </div>
-            <textarea className="markdown-export" value={markdown} readOnly rows={10} />
-          </div>
-        )}
-      </div>
-
-      {/* ── Body ── */}
-      <div className="project-workspace-body">
-        {/* Main column */}
-        <main className="project-workspace-main">
-          {/* Search input */}
-          <div className="search-area">
-            <form onSubmit={onSubmit}>
-              <div className="search-row">
-                <Search size={17} className="search-icon" aria-hidden="true" />
-                <input
-                  value={message}
-                  onChange={e => setMessage(e.target.value)}
-                  placeholder="Ask a data question for this project…"
-                  autoFocus
-                  aria-label="Project search query"
-                />
-                <button type="submit" disabled={chatLoading || !message.trim()}>
-                  {chatLoading ? "Searching…" : "Search"}
+            <div className="sidebar-project-summary">
+              <strong className="thread-title-clamp">{project?.title || "Project"}</strong>
+              {project?.research_question && (
+                <span className="sidebar-note">{project.research_question}</span>
+              )}
+              <div className="project-stat-row">
+                {stats.searches > 0 && <span>{stats.searches} search{stats.searches !== 1 ? "es" : ""}</span>}
+                {stats.variables > 0 && <span>{stats.variables} variable{stats.variables !== 1 ? "s" : ""}</span>}
+                {stats.reports > 0 && <span>{stats.reports} report{stats.reports !== 1 ? "s" : ""}</span>}
+                {stats.sources > 0 && <span>{stats.sources} source{stats.sources !== 1 ? "s" : ""}</span>}
+                {stats.notes > 0 && <span>{stats.notes} note{stats.notes !== 1 ? "s" : ""}</span>}
+                {items.length === 0 && <span className="project-stat-empty">No saved evidence yet</span>}
+              </div>
+              <div className="sidebar-project-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (project) {
+                      window.sessionStorage.setItem(
+                        DATA_PROJECT_CONTEXT_KEY,
+                        JSON.stringify({
+                          id: project.id,
+                          title: project.title,
+                          research_question: project.research_question,
+                        })
+                      );
+                    }
+                    onNavigate("/data");
+                  }}
+                >
+                  Research in Data
                 </button>
+                <button type="button" onClick={() => void doExport()}>Export</button>
+                <button type="button" onClick={() => setEditing(!editing)}>{editing ? "Cancel" : "Edit"}</button>
               </div>
-            </form>
-
-            {suggestedQueries.length > 0 && (
-              <div className="example-chips">
-                {suggestedQueries.map(q => (
-                  <button key={q} type="button" className="chip" onClick={() => void runProjectQuery(q)}>
-                    {q}
-                  </button>
-                ))}
-              </div>
+            </div>
+            {editing && (
+              <form className="project-edit-form sidebar-edit-form" onSubmit={saveEdit}>
+                <label>Title<input value={editTitle} onChange={e => setEditTitle(e.target.value)} required /></label>
+                <label>Research question<input value={editQuestion} onChange={e => setEditQuestion(e.target.value)} /></label>
+                <label>Description<textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={2} /></label>
+                <button type="submit">Save</button>
+              </form>
             )}
           </div>
 
-          {chatError && <div className="notice error" role="alert">{chatError}</div>}
-
-          {(latestResponse || chatLoading) && (
-            <div className="result-area">
-              {(chatLoading || (latestResponse?.tool_trace && latestResponse.tool_trace.length > 0)) && (
-                <AgentActivityTimeline
-                  events={latestResponse?.tool_trace}
-                  isLoading={chatLoading}
-                  defaultCollapsed={!chatLoading}
-                />
-              )}
-              {latestResponse && (
-                <>
-                  <AnswerSummary response={latestResponse} loading={false} />
-                  {isClarification && clarifyingQuestions.length > 0 && (
-                    <ClarificationPanel questions={clarifyingQuestions} onChoose={handleChipClick} />
-                  )}
-                  {hasResults && clarifyingQuestions.length > 0 && (
-                    <NarrowChips questions={clarifyingQuestions} onChoose={handleChipClick} />
-                  )}
-                  {hasResults && latestResponse && (
-                    <ResultSections
-                      results={latestResponse.results}
-                      limitations={latestResponse.limitations}
-                      onViewEvidence={setDrawerItem}
-                      projectId={projectId}
-                      onItemSaved={handleItemSaved}
-                    />
-                  )}
-                  {hasResults && !chatLoading && (
-                    <div className="feedback-row">
-                      <button type="button" onClick={() => void feedbackFn("thumbs_up")}>Useful</button>
-                      <button type="button" onClick={() => void feedbackFn("thumbs_down")}>Not useful</button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </main>
-
-        {/* Right sidebar */}
-        <aside className="project-workspace-sidebar">
-          {/* Quick note */}
-          <div className="pws-section">
+          <div className="sidebar-section">
             <form onSubmit={addNote} className="quick-note-form">
               <textarea
                 value={noteText}
                 onChange={e => setNoteText(e.target.value)}
                 placeholder="Add a research note…"
-                rows={3}
+                rows={2}
               />
               <button type="submit" disabled={!noteText.trim()}>Add note</button>
             </form>
           </div>
 
-          {/* Evidence basket */}
-          <div className="pws-section pws-section-grow">
-            <div className="pws-tabs">
-              <button
-                type="button"
-                className={sidebarTab === "evidence" ? "active" : ""}
-                onClick={() => setSidebarTab("evidence")}
-              >
-                Evidence
-                {evidenceItems.length > 0 && <span className="pws-tab-count">{evidenceItems.length}</span>}
-              </button>
-              <button
-                type="button"
-                className={sidebarTab === "notes" ? "active" : ""}
-                onClick={() => setSidebarTab("notes")}
-              >
-                Notes
-                {noteItems.length > 0 && <span className="pws-tab-count">{noteItems.length}</span>}
-              </button>
+          <div className="sidebar-section sidebar-section-fill">
+            <div className="sidebar-section-head">
+              <span className="sidebar-section-label">Threads</span>
+              <button type="button" onClick={startNewThread}>New</button>
             </div>
-
-            <div className="evidence-list">
-              {sidebarTab === "evidence" && (
-                <>
-                  {evidenceItems.length === 0 && (
-                    <p className="sidebar-note">Run a search — results are saved here automatically. You can also save individual variables, reports, and sources from each result.</p>
-                  )}
-                  {evidenceItems.map(item => {
-                    const isSearch = item.item_type === "search_result";
-                    const drawerData = isSearch ? null : projectItemToDrawerItem(item);
-                    const isClickable = isSearch
-                      ? Boolean(item.metadata?.result_payload)
-                      : Boolean(drawerData);
-                    const handleClick = isSearch
-                      ? () => reopenSearchFromEvidence(item)
-                      : drawerData ? () => setDrawerItem(drawerData) : undefined;
-                    return (
-                      <div key={item.id} className="evidence-item">
-                        <button
-                          type="button"
-                          className={`evidence-item-content${isClickable ? " clickable" : ""}`}
-                          onClick={handleClick}
-                        >
-                          <span className={`evidence-type-tag et-${item.item_type}`}>
-                            {evidenceTypeLabel(item.item_type)}
-                          </span>
-                          <span className="evidence-item-title">{item.title || item.item_type}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="evidence-item-remove"
-                          aria-label={`Remove ${item.title || item.item_type}`}
-                          onClick={() => void removeItem(item.id)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-
-              {sidebarTab === "notes" && (
-                <>
-                  {noteItems.length === 0 && (
-                    <p className="sidebar-note">Your notes will appear here.</p>
-                  )}
-                  {noteItems.map(item => (
-                    <div key={item.id} className="note-item">
-                      <p className="note-item-text">{item.note || item.title}</p>
-                      <div className="note-item-foot">
-                        <span className="note-item-date">{formatDate(item.created_at)}</span>
-                        <button type="button" onClick={() => void removeItem(item.id)}>Remove</button>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
+            {!currentThread && projectThreads.length === 0 && (
+              <p className="sidebar-note">Project research threads appear here.</p>
+            )}
+            {(currentThread || projectThreads.length > 0) && (
+              <div className="sidebar-list">
+                {currentThread && (
+                  <button
+                    type="button"
+                    className={activeThreadId === currentThread.id ? "active" : undefined}
+                    aria-current={activeThreadId === currentThread.id ? "true" : undefined}
+                    onClick={() => setConversationId(currentThread.id)}
+                  >
+                    <strong className="thread-title-clamp">{currentThread.title}</strong>
+                    <span className="thread-meta-line">{projectThreadSummary(currentThread)}</span>
+                  </button>
+                )}
+                {projectThreads.map(thread => {
+                  const active = activeThreadId === thread.id;
+                  return (
+                    <button
+                      key={thread.id}
+                      type="button"
+                      className={active ? "active" : undefined}
+                      aria-current={active ? "true" : undefined}
+                      onClick={() => selectProjectThread(thread)}
+                    >
+                      <strong className="thread-title-clamp">{thread.title}</strong>
+                      <span className="thread-meta-line">{projectThreadSummary(thread)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </aside>
-      </div>
 
-      <DetailDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
-    </div>
+        <section className="data-main">
+          {loadError && <div className="notice error" role="alert">{loadError}</div>}
+          <PageHeader
+            title={project?.title || "Project"}
+            description={project?.research_question || "Run searches and build evidence for this research project."}
+          />
+
+          {showMarkdown && markdown && (
+            <div className="project-export-area">
+              <div className="project-export-head">
+                <span>Markdown brief</span>
+                <button type="button" onClick={() => setShowMarkdown(false)}>Close</button>
+              </div>
+              <textarea className="markdown-export" value={markdown} readOnly rows={8} />
+            </div>
+          )}
+
+          <div className="thread-shell">
+            <div className="thread-scroll">
+              {!hasTurns && (
+                <div className="thread-empty">
+                  <p>Start a research thread for this project — ask about metrics, reports, organizations, or sources.</p>
+                  {suggestedQueries.length > 0 && (
+                    <div className="example-chips">
+                      {suggestedQueries.map(q => (
+                        <button key={q} type="button" className="chip" onClick={() => void runProjectQuery(q)}>
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="thread-messages" aria-live="polite">
+                {turns.map(turn => (
+                  <ResearchTurn
+                    key={turn.id}
+                    turn={turn}
+                    selected={panelTurn?.id === turn.id}
+                    onSelectResults={() => {
+                      setSelectedResultTurnId(turn.id);
+                      setSelectedEvidenceItem(null);
+                    }}
+                    onChooseClarification={handleRefinementChip}
+                    onViewEvidence={item => {
+                      setSelectedResultTurnId(turn.id);
+                      setSelectedEvidenceItem(item);
+                    }}
+                    projectId={projectId}
+                    onSaved={handleSaved}
+                    onFeedback={feedback}
+                  />
+                ))}
+                {error && <p className="thread-error">{error}</p>}
+                <div ref={messagesEndRef} className="thread-messages-end" aria-hidden="true" />
+              </div>
+            </div>
+
+            <form className="thread-composer" onSubmit={onSubmit}>
+              <div className="search-row">
+                <Search size={17} className="search-icon" aria-hidden="true" />
+                <input
+                  value={message}
+                  onChange={e => setMessage(e.target.value)}
+                  placeholder="Ask a follow-up about a metric, geography, source, organization, or definition..."
+                  autoFocus
+                  aria-label="Project research message"
+                />
+                <button type="submit" disabled={loading || !message.trim()}>
+                  {loading ? "Searching..." : "Send"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <EvidenceWorkspacePanel
+          turn={panelTurn}
+          evidenceItem={selectedEvidenceItem}
+          activeProject={activeProjectContext}
+          onViewEvidence={setSelectedEvidenceItem}
+          onClearEvidence={() => setSelectedEvidenceItem(null)}
+          onSaved={handleSaved}
+          projectId={projectId}
+        />
+      </main>
+    </>
   );
 }
 
@@ -2323,64 +2422,4 @@ function isAfter(a?: string, b?: string) {
 
 function dateTime(value?: string) {
   return value ? new Date(value).getTime() || 0 : 0;
-}
-
-function ClarificationPanel({
-  questions,
-  onChoose,
-}: {
-  questions: ClarifyingQuestion[];
-  onChoose: (option: string) => void;
-}) {
-  return (
-    <div className="clarification-panel">
-      <p>Could you clarify what you&rsquo;re looking for?</p>
-      {questions.map(q => (
-        <div className="clarification-question" key={q.question}>
-          <p>{q.question}</p>
-          {q.options && q.options.length > 0 && (
-            <div className="example-chips">
-              {q.options.map(opt => (
-                <button
-                  key={opt}
-                  type="button"
-                  className="chip"
-                  onClick={() => onChoose(opt)}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function NarrowChips({
-  questions,
-  onChoose,
-}: {
-  questions: ClarifyingQuestion[];
-  onChoose: (option: string) => void;
-}) {
-  const allOptions = questions.flatMap(q => q.options ?? []);
-  if (allOptions.length === 0) return null;
-
-  return (
-    <div className="narrow-section">
-      <span className="narrow-label">Narrow your search:</span>
-      {allOptions.map(opt => (
-        <button
-          key={opt}
-          type="button"
-          className="chip"
-          onClick={() => onChoose(opt)}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
-  );
 }

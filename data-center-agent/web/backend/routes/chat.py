@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import uuid
 from typing import Any, Iterator
 
 try:
@@ -49,6 +50,7 @@ CHAT_TOOL_NAMES = SAFE_WEB_TOOLS - {"submit_feedback"}
 
 def _planning_message_for_focus(message: str, context: dict[str, Any]) -> str:
     """Augment the planner prompt only; user-visible message stays unchanged."""
+    augmented = message
     focus = str((context.get("search_focus") or "")).strip().lower()
     hints = {
         "variables": "\n\n(System hint: Prioritize structured data variables and definitions.)",
@@ -57,7 +59,22 @@ def _planning_message_for_focus(message: str, context: dict[str, Any]) -> str:
         "sources": "\n\n(System hint: Prioritize primary sources and data links.)",
         "compare": "\n\n(System hint: Compare definitions and assess comparability between concepts.)",
     }
-    return message + hints.get(focus, "")
+    if focus in hints:
+        augmented += hints[focus]
+    project_title = str(context.get("project_title") or "").strip()
+    research_question = str(context.get("research_question") or "").strip()
+    if project_title or research_question:
+        bits = []
+        if project_title:
+            bits.append(f"Project: {project_title}")
+        if research_question:
+            bits.append(f"Research question: {research_question}")
+        augmented += (
+            f"\n\n(System hint: Research project context — {'; '.join(bits)}. "
+            "Keep clarifying_questions options and follow_up_queries labels short; "
+            "do not prefix them with project metadata.)"
+        )
+    return augmented
 
 
 def handle_chat(
@@ -654,8 +671,7 @@ def iter_chat_stream(user_id: str, payload: ChatRequest) -> Iterator[str]:
         try:
             trace = AgentTraceCollector(on_update=on_trace_update)
             response = handle_chat(payload.model_dump(), trace=trace)
-            _save_chat_history(user_id, payload, response)
-            holder["response"] = response
+            holder["response"] = _finalize_chat_response(user_id, payload, response)
         except Exception as exc:  # pragma: no cover
             holder["error"] = str(exc)
         finally:
@@ -683,8 +699,7 @@ if router:
         if not user:
             return _auth_required_response()
         response = handle_chat(payload.model_dump())
-        _save_chat_history(user["id"], payload, response)
-        return response
+        return _finalize_chat_response(user["id"], payload, response)
 
     @router.post("/api/chat/stream")
     def chat_stream(request: Request, payload: ChatRequest):
@@ -724,6 +739,15 @@ if router:
     @router.post("/api/feedback")
     def feedback(request: FeedbackRequest) -> dict[str, Any]:
         return call_demo_tool("submit_feedback", request.model_dump())
+
+
+def _finalize_chat_response(user_id: str, payload: ChatRequest, response: dict[str, Any]) -> dict[str, Any]:
+    context = payload.context or {}
+    if context.get("project_id"):
+        response["conversation_id"] = payload.conversation_id or str(uuid.uuid4())
+        return response
+    _save_chat_history(user_id, payload, response)
+    return response
 
 
 def _save_chat_history(user_id: str, payload: ChatRequest, response: dict[str, Any]) -> None:
