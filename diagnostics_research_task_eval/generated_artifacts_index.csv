@@ -1,0 +1,8 @@
+query_id,query,path,format,exists,size_bytes,rows
+11,make me a dataset on Asian startups,/data/hermes/exports/eval/research_task_85426339.csv,csv,True,183,0
+12,Create an Excel of Singapore startup funding by stage,/data/hermes/exports/eval/research_task_0ff9f866.xlsx,xlsx,True,25435,25
+13,Create a table of Singapore median funding round values,/data/hermes/exports/eval/research_task_0f868f19.csv,csv,True,23106,25
+14,Build an Excel of public innovation metrics,/data/hermes/exports/eval/research_task_9f70d441.xlsx,xlsx,True,25425,25
+15,Create a source comparison table for startup funding reports,/data/hermes/exports/eval/research_task_c6699ee6.csv,csv,True,23125,25
+16,Export a dataset of SME digital adoption variables,/data/hermes/exports/eval/research_task_5c83c582.csv,csv,True,22779,25
+21,Create a single Asia startup exits dataset from all reports,/data/hermes/exports/eval/research_task_70cc7370.csv,csv,True,183,0

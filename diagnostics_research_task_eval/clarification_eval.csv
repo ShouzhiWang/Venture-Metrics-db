@@ -1,0 +1,94 @@
+query_id,query,group,task_type,clarification_asked,variables_count,answer_preview,should_clarify
+1,startup funding in Singapore,A_normal,simple_answer,False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for startup funding in Singapore.
+
+Concept groups: stage breakdown (8); funding amount (8); sector breakdown (2); exits (3); deal activity (4).
+
+Direct matches: Early-stage funding amount / value 15.38 USD (billion) / 2023, 2",False
+2,Singapore VC deal count by stage,A_normal,simple_answer,False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Singapore VC deal count by stage.
+
+Concept groups: stage breakdown (9); deal activity (8); sector breakdown (1); other (1); funding amount (4); exits (2).
+
+Direct matches: Early-stage deals / 2024 / global / private; Late",False
+3,Singapore median funding round value,A_normal,simple_answer,False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Singapore median funding round value.
+
+Concept groups: stage breakdown (7); deal activity (7); funding amount (8); sector breakdown (2); exits (1).
+
+Direct matches: Median value of Seed rounds / value 82.4 USD / 2022 / Si",False
+4,R&D expenditure as percentage of GDP,A_normal,simple_answer,False,25,"Direct answer: I found 24 direct variable matches and 1 contextual match for R&D expenditure as percentage of GDP.
+
+Concept groups: other (15); funding amount (6); stage breakdown (1); sector breakdown (3).
+
+Direct matches: gross expenditure on research and development as a percentage of GDP / value",False
+5,SME digital adoption,A_normal,simple_answer,False,25,"Direct answer: I found 25 contextual variable matches for SME digital adoption, but no high-confidence direct variable match.
+
+Concept groups: other (19); sector breakdown (5); funding amount (1).
+
+Contextual matches: Financial Services PMET recruitment rate / value 0.2 percentage change / Q1 to Q2 ",False
+6,government support for startups,A_normal,simple_answer,False,25,"Direct answer: I found 4 direct variable matches and 21 contextual matches for government support for startups.
+
+Concept groups: funding amount (3); other (16); deal activity (4); sector breakdown (2).
+
+Direct matches: Activate Fellowship benefits and support metrics / annual selection process since",False
+7,startup data,B_clarification,find_data,False,25,"Direct answer: I found 2 direct variable matches and 23 contextual matches for startup data.
+
+Concept groups: sector breakdown (1); other (12); stage breakdown (3); deal activity (2); funding amount (7).
+
+Direct matches: exit value in Artificial Intelligence and Big Data / value 8.0 USD / January 20",True
+8,innovation ecosystem in Asia,B_clarification,simple_answer,True,0,"I could not find direct evidence for this request in the current index. The current result set has no variables, reports, or source links to cite.",True
+9,funding trends,B_clarification,simple_answer,False,25,"Direct answer: I found 6 direct variable matches and 19 contextual matches for funding trends.
+
+Concept groups: funding amount (1); deal activity (9); sector breakdown (1); stage breakdown (13); other (1).
+
+Direct matches: Singapore tech startups funding amount / value 2024.0 USD (billion) / 2022, 2",True
+10,analyze Singapore startups,B_clarification,simple_answer,False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for analyze Singapore startups.
+
+Concept groups: exits (2); stage breakdown (4); other (13); funding amount (4); sector breakdown (2).
+
+Direct matches: Number of emerging tech startups incorporated annually / value 60.0 Numbe",True
+11,make me a dataset on Asian startups,B_clarification,build_table,True,0,"I could not find direct evidence for this request in the current index. The current result set has no variables, reports, or source links to cite.",True
+12,Create an Excel of Singapore startup funding by stage,C_export,create_excel,False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Create an Excel of Singapore startup funding by stage.
+
+Concept groups: stage breakdown (10); funding amount (6); deal activity (4); sector breakdown (1); exits (3); other (1).
+
+Direct matches: Early-stage funding amount ",False
+13,Create a table of Singapore median funding round values,C_export,build_table,False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Create a table of Singapore median funding round values.
+
+Concept groups: stage breakdown (9); deal activity (5); funding amount (8); sector breakdown (3).
+
+Direct matches: Median value of Seed rounds / value 82.4 USD / 2",False
+14,Build an Excel of public innovation metrics,C_export,create_excel,False,25,"Direct answer: I found 14 direct variable matches and 11 contextual matches for Build an Excel of public innovation metrics.
+
+Concept groups: other (16); stage breakdown (1); sector breakdown (2); funding amount (6).
+
+Direct matches: Number of policy projects delivered by Open Innovation Team (OIT) ",False
+15,Create a source comparison table for startup funding reports,C_export,build_table,False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Create a source comparison table for startup funding reports.
+
+Concept groups: stage breakdown (12); exits (6); funding amount (2); other (3); deal activity (2).
+
+Direct matches: late-stage funding amount / value 2.0 USD ",False
+16,Export a dataset of SME digital adoption variables,C_export,build_table,False,25,"Direct answer: I found 2 direct variable matches and 23 contextual matches for Export a dataset of SME digital adoption variables.
+
+Concept groups: sector breakdown (3); other (21); funding amount (1).
+
+Direct matches: Total number of private sector businesses / value 2024.0 number of businesses / s",False
+17,Add up startup funding across Singapore reports,D_comparability,aggregate_values,False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Add up startup funding across Singapore reports.
+
+Concept groups: stage breakdown (7); funding amount (7); sector breakdown (3); deal activity (4); exits (2); other (2).
+
+Direct matches: Early-stage funding amount / value",False
+18,Aggregate VC deal counts from all available sources,D_comparability,aggregate_values,False,25,"Direct answer: I found 3 direct variable matches and 22 contextual matches for Aggregate VC deal counts from all available sources.
+
+Concept groups: funding amount (2); deal activity (8); other (7); sector breakdown (6); stage breakdown (2).
+
+Direct matches: Number of VC-backed company exits / value",False
+19,Compare startup funding amount vs VC investment definitions,D_comparability,compare_definitions,False,20,"Direct answer: I found 20 direct variable matches and 0 contextual matches for Compare startup funding amount vs VC investment definitions.
+
+Concept groups: funding amount (5); other (4); stage breakdown (5); deal activity (5); exits (1).
+
+Direct matches: venture funding amounts by region / value 16",False
+20,Can we combine IPO proceeds with startup funding?,D_comparability,simple_answer,False,25,"Direct answer: I found 25 contextual variable matches for Can we combine IPO proceeds with startup funding?, but no high-confidence direct variable match.
+
+Concept groups: funding amount (5); stage breakdown (9); other (2); exits (1); deal activity (8).
+
+Contextual matches: alternative funding sourc",False
+21,Create a single Asia startup exits dataset from all reports,D_comparability,build_table,True,0,"I could not find direct evidence for this request in the current index. The current result set has no variables, reports, or source links to cite.",False

@@ -1,0 +1,6 @@
+query_id,query,task_type,output_format,export_path,export_format,export_rows,variables_count,comparability_status,error
+12,Create an Excel of Singapore startup funding by stage,create_excel,xlsx,/data/hermes/exports/eval/research_task_0ff9f866.xlsx,xlsx,25,25,not_comparable,
+13,Create a table of Singapore median funding round values,build_table,csv,/data/hermes/exports/eval/research_task_0f868f19.csv,csv,25,25,not_comparable,
+14,Build an Excel of public innovation metrics,create_excel,xlsx,/data/hermes/exports/eval/research_task_9f70d441.xlsx,xlsx,25,25,not_comparable,
+15,Create a source comparison table for startup funding reports,build_table,csv,/data/hermes/exports/eval/research_task_c6699ee6.csv,csv,25,25,not_comparable,
+16,Export a dataset of SME digital adoption variables,build_table,csv,/data/hermes/exports/eval/research_task_5c83c582.csv,csv,25,25,not_comparable,

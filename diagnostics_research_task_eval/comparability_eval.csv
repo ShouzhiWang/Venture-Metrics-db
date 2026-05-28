@@ -1,0 +1,22 @@
+query_id,query,task_type,comparability_status,comparability_issues,can_aggregate,variables_count,answer_preview
+17,Add up startup funding across Singapore reports,aggregate_values,not_comparable,"Mixed geography: asean, asean, singapore, global, top 10 ecosystems, singapore, singapore and asean 6.; Mixed time period: 2018 to 2023, 2018-2022, 2020-2022, 2021-2022, 2022, 2022, 2023, 2024, 2023, 2023, 2024, 9 months 2024, 9m 2025, 9m 2025 and 9m 2024.; Mixed unit: companies, count, number of funding events, number of startups, percentage (%), percentage change and usd amount implied, trillion usd, us$, us$ million, usd, usd (billion), usd (million), usd billion.",False,25,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Add up startup funding across Singapore reports.
+
+Concept groups: stage breakdown (7); funding amount (7); sector breakdown (3); deal activity (4); exits (2); other (2).
+
+Direct matches: Early-stage funding amount / value"
+18,Aggregate VC deal counts from all available sources,aggregate_values,not_comparable,"Mixed geography: americas, asean-6 countries, global, multiple countries including uk, us, brazil, france, selected countries, uk, unclear, united kingdom, united kingdom, france, germany, united kingdom, united states, rest of europe, united states, united states and canada.; Mixed time period: 2013-2022, 2015-2024, 2015-2025, 2016-2024, 2016-2024 q3, 2019 - ytd 2023, 2020-2023 (up to 30 june 2023), 2021-2025, 2023-2024, 2024, 2025, average 2018-2023, h2 2022 and h1 2023, q1-q3 2024, up to 2022, up to 2023.; Mixed unit: count (number of deals), gbp, gbp million (£m), million usd, number of deals, number of exits, number of funds, number of funds; billion gbp (£bn), number of jobs, number of users, percent, percentage (%), percentage change, percentage of total vc investments, usd, usd (trillions), usd billion for deal value, number of deals for deal count, users.",False,25,"Direct answer: I found 3 direct variable matches and 22 contextual matches for Aggregate VC deal counts from all available sources.
+
+Concept groups: funding amount (2); deal activity (8); other (7); sector breakdown (6); stage breakdown (2).
+
+Direct matches: Number of VC-backed company exits / value"
+19,Compare startup funding amount vs VC investment definitions,compare_definitions,not_comparable,"Missing geography metadata.; Missing time period metadata.; Mixed unit: $, %.",False,20,"Direct answer: I found 20 direct variable matches and 0 contextual matches for Compare startup funding amount vs VC investment definitions.
+
+Concept groups: funding amount (5); other (4); stage breakdown (5); deal activity (5); exits (1).
+
+Direct matches: venture funding amounts by region / value 16"
+20,Can we combine IPO proceeds with startup funding?,simple_answer,not_comparable,"Mixed geography: cairo, mena, global, mena, north america and global, north america, europe, asia, oceania, san francisco metropolitan area, united states, singapore, southeast asia, uk, united states.; Mixed time period: 2017 to 2021, 2018 to 2020, 2020, 2020 to 2021, 2021, 2022, 2023-2024, 2024, january 1, 2022 to december 31, 2022, last 5 years, q1-q3 2025, q3 2025, since 2012 to 2022.; Mixed unit: billion usd, british pounds (£), count, million usd, number of rounds, percent, percentage, usd, usd (million), usd million.",False,25,"Direct answer: I found 25 contextual variable matches for Can we combine IPO proceeds with startup funding?, but no high-confidence direct variable match.
+
+Concept groups: funding amount (5); stage breakdown (9); other (2); exits (1); deal activity (8).
+
+Contextual matches: alternative funding sourc"
+21,Create a single Asia startup exits dataset from all reports,build_table,insufficient_metadata,No rows available for comparison.,False,0,"I could not find direct evidence for this request in the current index. The current result set has no variables, reports, or source links to cite."

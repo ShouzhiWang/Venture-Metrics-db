@@ -1,0 +1,94 @@
+query_id,group,query,task_type,variables_count,direct_matches,contextual_matches,reports_count,sources_count,evidence_count,availability_labels,limitations,cited_reports,comparability_status,answer_preview,error
+1,A_normal,startup funding in Singapore,simple_answer,25,25,0,14,22,25,obtainable; private; public; unknown,,Singapore Venture Funding Landscape 2023 Nine-Month Report; Key Insights into the Singapore Tech Ecosystem and Funding Trends in the year 2024 | Tracxn Report - Feb 2025; In partnership with VENTURE FUNDING LANDSCAPE 2022 SINGAPORE Full Year Study; Powered by 1 PITCHBOOK QUANTITATIVE PERSPECTIVES SINGAPORE VENTURE FUNDING LANDSCAPE 2024 A Nine-Month Report Powered by; Ecosystem Startup Genome | Building world-class startup ecosystems,not_comparable,"Direct answer: I found 25 direct variable matches and 0 contextual matches for startup funding in Singapore.
+
+Concept groups: stage breakdown (8); funding amount (8); sector breakdown (2); exits (3); deal activity (4).
+
+Direct matches: Early-stage funding amount / value 15.38 USD (billion) / 2023, 2",
+2,A_normal,Singapore VC deal count by stage,simple_answer,25,25,0,5,15,25,obtainable; private; public,,Powered by 1 PITCHBOOK QUANTITATIVE PERSPECTIVES SINGAPORE VENTURE FUNDING LANDSCAPE 2024 A Nine-Month Report Powered by; Singapore Venture Funding Landscape 2023 Nine-Month Report; Key Insights into the Singapore Tech Ecosystem and Funding Trends in the year 2024 | Tracxn Report - Feb 2025; In partnership with VENTURE FUNDING LANDSCAPE 2022 SINGAPORE Full Year Study,not_comparable,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Singapore VC deal count by stage.
+
+Concept groups: stage breakdown (9); deal activity (8); sector breakdown (1); other (1); funding amount (4); exits (2).
+
+Direct matches: Early-stage deals / 2024 / global / private; Late",
+3,A_normal,Singapore median funding round value,simple_answer,25,25,0,12,22,25,obtainable; private; public; unknown,,Key Insights into the Singapore Tech Ecosystem and Funding Trends in the year 2024 | Tracxn Report - Feb 2025; Powered by 1 PITCHBOOK QUANTITATIVE PERSPECTIVES SINGAPORE VENTURE FUNDING LANDSCAPE 2024 A Nine-Month Report Powered by; Singapore Venture Funding Landscape 2023 Nine-Month Report; In partnership with VENTURE FUNDING LANDSCAPE 2022 SINGAPORE Full Year Study,not_comparable,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Singapore median funding round value.
+
+Concept groups: stage breakdown (7); deal activity (7); funding amount (8); sector breakdown (2); exits (1).
+
+Direct matches: Median value of Seed rounds / value 82.4 USD / 2022 / Si",
+4,A_normal,R&D expenditure as percentage of GDP,simple_answer,25,24,1,1,25,25,obtainable; private; public,,Research and development expenditure by the UK government - Office for National Statistics,not_comparable,"Direct answer: I found 24 direct variable matches and 1 contextual match for R&D expenditure as percentage of GDP.
+
+Concept groups: other (15); funding amount (6); stage breakdown (1); sector breakdown (3).
+
+Direct matches: gross expenditure on research and development as a percentage of GDP / value",
+5,A_normal,SME digital adoption,simple_answer,25,0,25,1,25,25,obtainable; private; public; unknown,,,not_comparable,"Direct answer: I found 25 contextual variable matches for SME digital adoption, but no high-confidence direct variable match.
+
+Concept groups: other (19); sector breakdown (5); funding amount (1).
+
+Contextual matches: Financial Services PMET recruitment rate / value 0.2 percentage change / Q1 to Q2 ",
+6,A_normal,government support for startups,simple_answer,25,4,21,2,25,25,obtainable; private; public; unknown,,GEM Global Entrepreneurship Monitor; Seizing the scale-up moment - Future Governance Forum,not_comparable,"Direct answer: I found 4 direct variable matches and 21 contextual matches for government support for startups.
+
+Concept groups: funding amount (3); other (16); deal activity (4); sector breakdown (2).
+
+Direct matches: Activate Fellowship benefits and support metrics / annual selection process since",
+7,B_clarification,startup data,find_data,25,2,23,0,25,25,obtainable; private; public,,,not_comparable,"Direct answer: I found 2 direct variable matches and 23 contextual matches for startup data.
+
+Concept groups: sector breakdown (1); other (12); stage breakdown (3); deal activity (2); funding amount (7).
+
+Direct matches: exit value in Artificial Intelligence and Big Data / value 8.0 USD / January 20",
+8,B_clarification,innovation ecosystem in Asia,simple_answer,0,0,0,0,0,0,,,,insufficient_metadata,"I could not find direct evidence for this request in the current index. The current result set has no variables, reports, or source links to cite.",
+9,B_clarification,funding trends,simple_answer,25,6,19,1,25,25,obtainable; private; public,,Key Insights into the Singapore Tech Ecosystem and Funding Trends in the year 2024 | Tracxn Report - Feb 2025,not_comparable,"Direct answer: I found 6 direct variable matches and 19 contextual matches for funding trends.
+
+Concept groups: funding amount (1); deal activity (9); sector breakdown (1); stage breakdown (13); other (1).
+
+Direct matches: Singapore tech startups funding amount / value 2024.0 USD (billion) / 2022, 2",
+10,B_clarification,analyze Singapore startups,simple_answer,25,25,0,19,24,25,obtainable; private; public; unknown,,Ecosystem Startup Genome | Building world-class startup ecosystems; Powered by 1 PITCHBOOK QUANTITATIVE PERSPECTIVES SINGAPORE VENTURE FUNDING LANDSCAPE 2024 A Nine-Month Report Powered by; Singapore Venture Funding Landscape 2023 Nine-Month Report,not_comparable,"Direct answer: I found 25 direct variable matches and 0 contextual matches for analyze Singapore startups.
+
+Concept groups: exits (2); stage breakdown (4); other (13); funding amount (4); sector breakdown (2).
+
+Direct matches: Number of emerging tech startups incorporated annually / value 60.0 Numbe",
+11,B_clarification,make me a dataset on Asian startups,build_table,0,0,0,0,0,0,,,,insufficient_metadata,"I could not find direct evidence for this request in the current index. The current result set has no variables, reports, or source links to cite.",
+12,C_export,Create an Excel of Singapore startup funding by stage,create_excel,25,25,0,13,21,25,obtainable; private; public; unknown,,Powered by 1 PITCHBOOK QUANTITATIVE PERSPECTIVES SINGAPORE VENTURE FUNDING LANDSCAPE 2024 A Nine-Month Report Powered by; Key Insights into the Singapore Tech Ecosystem and Funding Trends in the year 2024 | Tracxn Report - Feb 2025; In partnership with VENTURE FUNDING LANDSCAPE 2022 SINGAPORE Full Year Study; Singapore Venture Funding Landscape 2023 Nine-Month Report,not_comparable,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Create an Excel of Singapore startup funding by stage.
+
+Concept groups: stage breakdown (10); funding amount (6); deal activity (4); sector breakdown (1); exits (3); other (1).
+
+Direct matches: Early-stage funding amount ",
+13,C_export,Create a table of Singapore median funding round values,build_table,25,25,0,4,17,25,obtainable; private; public,,Powered by 1 PITCHBOOK QUANTITATIVE PERSPECTIVES SINGAPORE VENTURE FUNDING LANDSCAPE 2024 A Nine-Month Report Powered by; Key Insights into the Singapore Tech Ecosystem and Funding Trends in the year 2024 | Tracxn Report - Feb 2025; Singapore Venture Funding Landscape 2023 Nine-Month Report; In partnership with VENTURE FUNDING LANDSCAPE 2022 SINGAPORE Full Year Study,not_comparable,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Create a table of Singapore median funding round values.
+
+Concept groups: stage breakdown (9); deal activity (5); funding amount (8); sector breakdown (3).
+
+Direct matches: Median value of Seed rounds / value 82.4 USD / 2",
+14,C_export,Build an Excel of public innovation metrics,create_excel,25,14,11,1,25,25,obtainable; public; unknown,,,not_comparable,"Direct answer: I found 14 direct variable matches and 11 contextual matches for Build an Excel of public innovation metrics.
+
+Concept groups: other (16); stage breakdown (1); sector breakdown (2); funding amount (6).
+
+Direct matches: Number of policy projects delivered by Open Innovation Team (OIT) ",
+15,C_export,Create a source comparison table for startup funding reports,build_table,25,25,0,0,25,25,obtainable; private,,,not_comparable,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Create a source comparison table for startup funding reports.
+
+Concept groups: stage breakdown (12); exits (6); funding amount (2); other (3); deal activity (2).
+
+Direct matches: late-stage funding amount / value 2.0 USD ",
+16,C_export,Export a dataset of SME digital adoption variables,build_table,25,2,23,0,25,25,obtainable; private,,,not_comparable,"Direct answer: I found 2 direct variable matches and 23 contextual matches for Export a dataset of SME digital adoption variables.
+
+Concept groups: sector breakdown (3); other (21); funding amount (1).
+
+Direct matches: Total number of private sector businesses / value 2024.0 number of businesses / s",
+17,D_comparability,Add up startup funding across Singapore reports,aggregate_values,25,25,0,13,19,25,obtainable; private; public; unknown,,Powered by 1 PITCHBOOK QUANTITATIVE PERSPECTIVES SINGAPORE VENTURE FUNDING LANDSCAPE 2024 A Nine-Month Report Powered by; Key Insights into the Singapore Tech Ecosystem and Funding Trends in the year 2024 | Tracxn Report - Feb 2025; Singapore Venture Funding Landscape 2023 Nine-Month Report; In partnership with VENTURE FUNDING LANDSCAPE 2022 SINGAPORE Full Year Study; Ecosystem Startup Genome | Building world-class startup ecosystems,not_comparable,"Direct answer: I found 25 direct variable matches and 0 contextual matches for Add up startup funding across Singapore reports.
+
+Concept groups: stage breakdown (7); funding amount (7); sector breakdown (3); deal activity (4); exits (2); other (2).
+
+Direct matches: Early-stage funding amount / value",
+18,D_comparability,Aggregate VC deal counts from all available sources,aggregate_values,25,3,22,0,25,25,obtainable; private,,,not_comparable,"Direct answer: I found 3 direct variable matches and 22 contextual matches for Aggregate VC deal counts from all available sources.
+
+Concept groups: funding amount (2); deal activity (8); other (7); sector breakdown (6); stage breakdown (2).
+
+Direct matches: Number of VC-backed company exits / value",
+19,D_comparability,Compare startup funding amount vs VC investment definitions,compare_definitions,20,20,0,5,0,20,obtainable; private,Some variables rely on private data sources.; Existing compare_concepts returned no matching comparison rows.,Report a96a1558-4d46-4675-8634-412a28e2cc07; Report 1e88eb70-b1c0-41e5-917c-c8c163acd7a5; Report 841d7f48-8fcf-43e8-a3f9-916f3d441147; Report 943fa67d-cada-4dff-be16-b8893985599b; Report 05951e89-79a9-445a-9a4b-e440761f43b3,not_comparable,"Direct answer: I found 20 direct variable matches and 0 contextual matches for Compare startup funding amount vs VC investment definitions.
+
+Concept groups: funding amount (5); other (4); stage breakdown (5); deal activity (5); exits (1).
+
+Direct matches: venture funding amounts by region / value 16",
+20,D_comparability,Can we combine IPO proceeds with startup funding?,simple_answer,25,0,25,0,21,25,obtainable; private; public,,,not_comparable,"Direct answer: I found 25 contextual variable matches for Can we combine IPO proceeds with startup funding?, but no high-confidence direct variable match.
+
+Concept groups: funding amount (5); stage breakdown (9); other (2); exits (1); deal activity (8).
+
+Contextual matches: alternative funding sourc",
+21,D_comparability,Create a single Asia startup exits dataset from all reports,build_table,0,0,0,0,0,0,,,,insufficient_metadata,"I could not find direct evidence for this request in the current index. The current result set has no variables, reports, or source links to cite.",
