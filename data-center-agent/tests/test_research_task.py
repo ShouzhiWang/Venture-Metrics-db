@@ -155,6 +155,7 @@ def test_execute_research_task_uses_tool_caller_without_llm(tmp_path) -> None:
         tool_caller=fake_tool,
         output_dir=tmp_path,
         output_format="xlsx",
+        use_llm=False,
     )
 
     assert result["ok"] is True
