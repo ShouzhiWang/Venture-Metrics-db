@@ -1,0 +1,10 @@
+stage,count,notes
+sources,434,
+reports,239,
+reports_with_chunks,230,
+reports_without_chunks,9,Should be 0 or near 0
+document_chunks,5069,
+report_variables,144,
+reports_with_variables,15,
+variables_with_evidence,144,
+variables_high_confidence_0.65,144,

@@ -1,0 +1,11 @@
+priority,query,query_id,failure_type,evidence,recommended_action,expected_impact,effort,related_report_ids,related_source_ids,related_variable_ids,overall_score
+high,Shenzhen startup organizations,6,no_source,0 variables found; 0 matching reports,Find and ingest sources for this topic,high,high,,,,2
+medium,Asian startup exits,9,genuinely_limited,"2 private refs, 0 obtainable",Ingest more reports covering this topic/geography,high,high,,,,3
+medium,AI investment by country,10,genuinely_limited,overall_score=3/5,Ingest more reports covering this topic/geography,high,high,,,,3
+medium,public data on business births,11,genuinely_limited,0 matching reports,Ingest more reports covering this topic/geography,high,high,,,,3
+medium,VC funding by sector in Southeast Asia,13,genuinely_limited,"2 private refs, 0 obtainable",Ingest more reports covering this topic/geography,high,high,,,,3
+medium,China unicorn company count and valuation,14,genuinely_limited,"1 private refs, 0 obtainable",Ingest more reports covering this topic/geography,high,high,,,,2
+medium,compare VC investment and startup funding definitions,17,genuinely_limited,0 matching reports,Ingest more reports covering this topic/geography,high,high,,,,2
+medium,what organizations are relevant to Singapore's startup ecosystem?,20,genuinely_limited,0 organizations found,Ingest more reports covering this topic/geography,high,high,,,,2
+medium,Hong Kong innovation output,5,genuinely_limited,0 variables found; 0 matching reports,Ingest more reports covering this topic/geography,high,high,,,,1
+medium,India startup funding by sector,15,genuinely_limited,0 variables found,Ingest more reports covering this topic/geography,high,high,,,,1
