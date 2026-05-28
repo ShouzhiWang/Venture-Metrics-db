@@ -19,6 +19,7 @@ from app.agents.demo_llm import DemoLLMClient, DemoLLMConfigError, DemoLLMProvid
 from app.agents.query_planner import plan_query
 from app.db.connection import get_engine
 from app.db.repositories.history import ChatHistoryRepository
+from app.services.research_task import execute_research_task
 from app.services.auth import SESSION_COOKIE_NAME
 from web.backend.routes.auth import user_from_session_token
 from web.backend.services.agent_trace import AgentTraceCollector, attach_tool_trace, sanitize_trace_detail
@@ -43,6 +44,16 @@ class FeedbackRequest(BaseModel):
     result_id: str | None = None
     feedback_type: str
     comment: str | None = None
+
+
+class ResearchTaskRequest(BaseModel):
+    query: str
+    project_id: str | None = None
+    format: str = "json"
+    output_dir: str = "exports/research_tasks"
+    dry_run: bool = False
+    max_results: int = 30
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 CHAT_TOOL_NAMES = SAFE_WEB_TOOLS - {"submit_feedback"}
@@ -826,6 +837,27 @@ if router:
     @router.post("/api/feedback")
     def feedback(request: FeedbackRequest) -> dict[str, Any]:
         return call_demo_tool("submit_feedback", request.model_dump())
+
+    @router.post("/api/research-task")
+    def research_task(request: Request, payload: ResearchTaskRequest) -> dict[str, Any]:
+        user = user_from_session_token(request.cookies.get(SESSION_COOKIE_NAME))
+        if not user:
+            return _auth_required_response()
+        context = dict(payload.context or {})
+        if payload.project_id:
+            context["project_id"] = payload.project_id
+        try:
+            return execute_research_task(
+                payload.query,
+                tool_caller=call_demo_tool,
+                context=context,
+                output_dir=payload.output_dir,
+                output_format=payload.format,
+                dry_run=payload.dry_run,
+                max_results=payload.max_results,
+            )
+        except ValueError as exc:
+            return {"ok": False, "error": {"code": "invalid_args", "message": str(exc)}}
 
 
 def _finalize_chat_response(user_id: str, payload: ChatRequest, response: dict[str, Any]) -> dict[str, Any]:
