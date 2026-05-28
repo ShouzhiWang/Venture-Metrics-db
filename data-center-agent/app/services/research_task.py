@@ -22,6 +22,7 @@ TASK_TYPES = {
     "create_excel",
     "aggregate_values",
     "source_audit",
+    "source_comparison",
     "coverage_gap_analysis",
     "research_brief",
     "organization_mapping",
@@ -31,6 +32,7 @@ NORMALIZED_COLUMNS = [
     "metric_name",
     "concept_group",
     "geography",
+    "geography_match",
     "time_period",
     "value",
     "value_status",
@@ -100,6 +102,8 @@ class ResearchTaskPlanner:
             return "research_brief"
         if any(term in lowered for term in ("sum", "total", "aggregate", "add up")):
             return "aggregate_values"
+        if "source comparison" in lowered or "compare sources" in lowered or "compare reports" in lowered:
+            return "source_comparison"
         if any(term in lowered for term in ("compare", "definition", "definitions")):
             return "compare_definitions"
         if detected.get("output_format") == "excel" or any(term in lowered for term in ("excel", "xlsx", "workbook", "spreadsheet")):
@@ -153,10 +157,21 @@ def clarification_plan(query: str, context: dict[str, Any] | None = None) -> dic
 class EvidencePacketBuilder:
     def build(self, query: str, task_plan: ResearchTaskPlan | dict[str, Any], retrieved: dict[str, Any]) -> dict[str, Any]:
         plan = task_plan if isinstance(task_plan, dict) else task_plan.to_dict()
-        variables = [self._variable(item) for item in retrieved.get("closest_variables", []) or []]
+        target_geo = plan.get("geography")
+        variables = [self._variable(item, target_geo) for item in retrieved.get("closest_variables", []) or []]
+        # Re-sort: exact_match first, then contextual, then mismatch, then unknown
+        geo_order = {"exact_match": 0, "contextual_match": 1, "unknown": 2, "mismatch": 3}
+        variables.sort(key=lambda v: (geo_order.get(v.get("geography_match", "unknown"), 2), -(v.get("confidence_score") or 0)))
         reports = [self._report(item) for item in retrieved.get("relevant_reports", []) or []]
         sources = [self._source(item) for item in retrieved.get("source_links", []) or []]
         organizations = [self._organization(item) for item in retrieved.get("relevant_organizations", []) or []]
+        # Geography mismatch warning
+        geo_warnings = []
+        if target_geo:
+            mismatched = [v for v in variables if v.get("geography_match") == "mismatch"]
+            if mismatched and not any(v.get("geography_match") == "exact_match" for v in variables):
+                mismatched_geos = sorted({v.get("geography") for v in mismatched if v.get("geography")})
+                geo_warnings.append(f"No exact {target_geo} data found. Showing data from: {', '.join(mismatched_geos[:3])}.")
         return {
             "query": query,
             "interpreted_intent": plan,
@@ -170,21 +185,23 @@ class EvidencePacketBuilder:
             "geography_coverage": sorted({item.get("geography") for item in variables + reports if item.get("geography")}),
             "time_coverage": sorted({item.get("time_period") for item in variables if item.get("time_period")}),
             "confidence_scores": [item.get("confidence_score") for item in variables if item.get("confidence_score") is not None],
-            "limitations": list(retrieved.get("limitations") or []),
+            "limitations": list(retrieved.get("limitations") or []) + geo_warnings,
         }
 
-    def _variable(self, item: dict[str, Any]) -> dict[str, Any]:
+    def _variable(self, item: dict[str, Any], target_geography: str | None = None) -> dict[str, Any]:
         structured = structured_value_fields(item)
         value = structured["value"]
         unit = structured["unit"]
         value_status = structured["value_status"]
+        item_geo = first_present(item, "geographic_coverage", "geography")
         return {
             "id": item.get("object_id") or item.get("id") or item.get("variable_id"),
             "metric_name": item.get("title") or item.get("raw_variable_name"),
             "concept_group": concept_group(item),
             "definition": item.get("definition"),
             "measurement_method": item.get("measurement_method"),
-            "geography": first_present(item, "geographic_coverage", "geography"),
+            "geography": item_geo,
+            "geography_match": classify_geography_match(item_geo, target_geography),
             "time_period": first_present(item, "temporal_coverage", "time_period", "time_coverage"),
             "value": value,
             "value_status": value_status,
@@ -304,7 +321,7 @@ class ComparabilityValidator:
             "can_aggregate": can_aggregate,
             "explanation": comparability_explanation(status, issue_details, aggregation_requested),
             "safe_aggregation_requirements": safe_aggregation_requirements(),
-            "comparison_table": comparability_table(rows),
+            "comparison_table": comparability_table(rows, issue_details),
         }
 
     def _status(self, issues: list[str]) -> str:
@@ -341,8 +358,12 @@ class AnswerSynthesizer:
         variables = evidence_packet.get("variables") or []
         reports = evidence_packet.get("reports") or []
         sources = evidence_packet.get("sources") or []
+        query = evidence_packet.get("query") or "this request"
+        plan = evidence_packet.get("interpreted_intent") or {}
+        target_geo = plan.get("geography")
+
         if not variables and not reports and not sources:
-            return "I could not find direct evidence for this request in the current index. The current result set has no variables, reports, or source links to cite."
+            return self._empty_result_response(query, target_geo, evidence_packet)
         direct = [item for item in variables if item.get("directness") == "direct"]
         contextual = [item for item in variables if item.get("directness") != "direct"]
         lines = [self._direct_answer(evidence_packet, direct, variables)]
@@ -412,6 +433,35 @@ class AnswerSynthesizer:
             bits.append(str(item["availability"]))
         return " / ".join(bits)
 
+    def _empty_result_response(self, query: str, target_geo: str | None, evidence_packet: dict[str, Any]) -> str:
+        """Generate a user-friendly response when no results are found."""
+        lines = [f'I could not find matching data for "{query}" in the current database.']
+        # Say what was searched
+        search_parts = []
+        if target_geo:
+            search_parts.append(f"geography: {target_geo}")
+        plan = evidence_packet.get("interpreted_intent") or {}
+        if plan.get("domain"):
+            search_parts.append(f"domain: {plan['domain']}")
+        if plan.get("metric_type"):
+            search_parts.append(f"metric: {plan['metric_type']}")
+        if search_parts:
+            lines.append(f"Searched for: {', '.join(search_parts)}.")
+        # Say what's missing
+        lines.append("The database does not yet contain matching variables, reports, or sources for this specific query.")
+        # Suggest next actions
+        suggestions = []
+        if target_geo:
+            suggestions.append(f"Try broadening the geography (remove '{target_geo}' filter)")
+        suggestions.append("Search for related reports only")
+        suggestions.append("Search for ecosystem organizations in this area")
+        suggestions.append("Include private/proprietary sources in results")
+        suggestions.append("Check if data exists under a different name (e.g., 'venture capital' instead of 'startup funding')")
+        lines.append("You can try:")
+        for s in suggestions[:5]:
+            lines.append(f"  - {s}")
+        return "\n".join(lines)
+
 
 class TableExcelExportService:
     def build_rows(self, evidence_packet: dict[str, Any], comparability: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -452,24 +502,114 @@ class TableExcelExportService:
         output_path.mkdir(parents=True, exist_ok=True)
         stem = f"research_task_{uuid.uuid4().hex[:8]}"
         rows = self.build_rows(evidence_packet, comparability)
+        all_paths = []
         if output_format == "xlsx":
             path = output_path / f"{stem}.xlsx"
             self._write_xlsx(path, evidence_packet, rows, comparability or {})
+            all_paths.append(str(path))
         elif output_format == "csv":
-            path = output_path / f"{stem}.csv"
-            self._write_csv(path, rows)
+            # Write main data file + sidecar files for metadata
+            data_path = output_path / f"{stem}_data.csv"
+            self._write_csv(data_path, rows)
+            all_paths.append(str(data_path))
+            # Sidecar: methodology notes
+            notes_path = output_path / f"{stem}_methodology_notes.csv"
+            notes = methodology_notes(evidence_packet, comparability or {})
+            self._write_sidecar_csv(notes_path, ["note_type", "note"], notes)
+            all_paths.append(str(notes_path))
+            # Sidecar: data gaps
+            gaps_path = output_path / f"{stem}_data_gaps.csv"
+            gaps = data_gaps(evidence_packet, comparability or {})
+            self._write_sidecar_csv(gaps_path, ["gap_type", "description"], gaps)
+            all_paths.append(str(gaps_path))
+            # Sidecar: source reports
+            reports_path = output_path / f"{stem}_source_reports.csv"
+            report_cols = ["id", "title", "publisher", "geography", "time_period", "source_url", "availability", "confidence_score", "evidence_quote"]
+            self._write_sidecar_csv(reports_path, report_cols, evidence_packet.get("reports") or [])
+            all_paths.append(str(reports_path))
+            path = data_path  # Primary path for backward compat
         elif output_format == "json":
             path = output_path / f"{stem}.json"
             path.write_text(json.dumps({"evidence_packet": evidence_packet, "normalized_data": rows, "comparability": comparability}, indent=2, default=str), encoding="utf-8")
+            all_paths.append(str(path))
         else:
             raise ValueError("output_format must be xlsx, csv, or json.")
-        return {"path": str(path), "format": output_format, "row_count": len(rows)}
+        return {"path": str(path), "format": output_format, "row_count": len(rows), "all_paths": all_paths}
 
     def _write_csv(self, path: Path, rows: list[dict[str, Any]]) -> None:
         with path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=NORMALIZED_COLUMNS)
             writer.writeheader()
             writer.writerows([{column: row.get(column) for column in NORMALIZED_COLUMNS} for row in rows])
+
+    def _write_sidecar_csv(self, path: Path, columns: list[str], rows: list[dict[str, Any]]) -> None:
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows([{col: row.get(col) for col in columns} for row in rows])
+
+    def build_source_comparison(self, evidence_packet: dict[str, Any]) -> list[dict[str, Any]]:
+        """Build a side-by-side source comparison table."""
+        reports = evidence_packet.get("reports") or []
+        variables = evidence_packet.get("variables") or []
+        # Group variables by source report
+        vars_by_report: dict[str, list[dict[str, Any]]] = {}
+        for v in variables:
+            report = v.get("source_report") or "Unknown"
+            vars_by_report.setdefault(report, []).append(v)
+        # If no reports, build from variable source_report groups
+        if not reports and vars_by_report:
+            comparison = []
+            for report_name, report_vars in vars_by_report.items():
+                geos = sorted({v.get("geography") for v in report_vars if v.get("geography")})
+                times = sorted({v.get("time_period") for v in report_vars if v.get("time_period")})
+                avail = sorted({v.get("availability") for v in report_vars if v.get("availability")})
+                concept_groups = sorted({v.get("concept_group") for v in report_vars if v.get("concept_group")})
+                values_with_data = [v for v in report_vars if v.get("value") is not None]
+                comparison.append({
+                    "source_title": report_name[:80],
+                    "publisher": "",
+                    "geography": "; ".join(geos[:3]) if geos else "",
+                    "time_coverage": "; ".join(times[:3]) if times else "",
+                    "variables_found": len(report_vars),
+                    "values_extracted": len(values_with_data),
+                    "concept_groups": "; ".join(concept_groups[:3]) if concept_groups else "",
+                    "availability": "; ".join(avail[:3]) if avail else "",
+                    "source_url": "",
+                    "confidence": "",
+                })
+            return comparison
+        if not reports:
+            return []
+        comparison = []
+        for report in reports:
+            title = report.get("title") or "Unknown"
+            # Find matching variables
+            report_vars = vars_by_report.get(title, [])
+            # Also try partial match
+            if not report_vars:
+                for key, vals in vars_by_report.items():
+                    if key and title and (key[:30] in title or title[:30] in key):
+                        report_vars = vals
+                        break
+            geos = sorted({v.get("geography") for v in report_vars if v.get("geography")})
+            times = sorted({v.get("time_period") for v in report_vars if v.get("time_period")})
+            avail = sorted({v.get("availability") for v in report_vars if v.get("availability")})
+            concept_groups = sorted({v.get("concept_group") for v in report_vars if v.get("concept_group")})
+            values_with_data = [v for v in report_vars if v.get("value") is not None]
+            comparison.append({
+                "source_title": title[:80],
+                "publisher": report.get("publisher") or "",
+                "geography": "; ".join(geos[:3]) if geos else (report.get("geography") or ""),
+                "time_coverage": "; ".join(times[:3]) if times else (report.get("time_period") or ""),
+                "variables_found": len(report_vars),
+                "values_extracted": len(values_with_data),
+                "concept_groups": "; ".join(concept_groups[:3]) if concept_groups else "",
+                "availability": "; ".join(avail[:3]) if avail else (report.get("availability") or ""),
+                "source_url": report.get("source_url") or "",
+                "confidence": report.get("confidence_score") or "",
+            })
+        return comparison
 
     def _write_xlsx(
         self,
@@ -487,6 +627,11 @@ class TableExcelExportService:
         notes = methodology_notes(evidence_packet, comparability)
         append_table(wb.create_sheet("methodology_notes"), ["note_type", "note"], notes)
         append_table(wb.create_sheet("data_gaps"), ["gap_type", "description"], data_gaps(evidence_packet, comparability))
+        # Source comparison sheet
+        source_comp = self.build_source_comparison(evidence_packet)
+        if source_comp:
+            comp_cols = ["source_title", "publisher", "geography", "time_coverage", "variables_found", "values_extracted", "concept_groups", "availability", "source_url", "confidence"]
+            append_table(wb.create_sheet("source_comparison"), comp_cols, source_comp)
         wb.save(path)
 
 
@@ -501,12 +646,24 @@ def execute_research_task(
     max_results: int = 30,
     llm_client: Any | None = None,
     use_llm: bool = True,
+    run_with_defaults: bool = False,
 ) -> dict[str, Any]:
     clarification = clarification_plan(query, context)
-    if clarification:
+    if clarification and not run_with_defaults:
+        # Add run_with_defaults option for export/dataset tasks
+        intent = clarification.get("intent", "")
+        if intent in ("create_excel", "build_table"):
+            clarification["run_with_defaults_option"] = {
+                "message": "Or run with defaults: all available geographies and time periods, public and private sources labeled.",
+                "defaults": {"geography": "all available", "time_range": "all available", "availability": "all"},
+            }
         return clarification
     planner = ResearchTaskPlanner()
     task_plan = planner.plan(query, context, max_results=max_results, dry_run=dry_run)
+    # If run_with_defaults, override missing geography/time with None (search all)
+    if run_with_defaults:
+        task_plan.geography = task_plan.geography or None
+        task_plan.availability = None  # Include all
     retrieve_args = {
         "query": query,
         "limit": min(max_results, 25),
@@ -526,20 +683,49 @@ def execute_research_task(
             tool_result = tool_caller("find_data", {key: value for key, value in retrieve_args.items() if value is not None})
             retrieved = normalize_find_data_results(tool_result)
     packet = EvidencePacketBuilder().build(query, task_plan, retrieved)
+    if run_with_defaults:
+        packet.setdefault("limitations", []).append("Running with defaults: all available geographies and time periods. Results may not be directly comparable.")
     export_service = TableExcelExportService()
     rows = export_service.build_rows(packet)
     comparability = ComparabilityValidator().validate(rows, aggregation_requested=task_plan.task_type == "aggregate_values")
     packet["comparability"] = comparability
+    # Build source comparison if task type is source_comparison
+    source_comparison = None
+    if task_plan.task_type == "source_comparison":
+        source_comparison = export_service.build_source_comparison(packet)
+        packet["source_comparison"] = source_comparison
     answer = AnswerSynthesizer(llm_client=llm_client, use_llm=use_llm).synthesize(packet, comparability)
+    # If aggregation is blocked and we have a comparison table, append it to the answer
+    if comparability.get("status") not in (None, "comparable") and comparability.get("comparison_table"):
+        table = comparability["comparison_table"]
+        if table and "comparison table" not in answer.lower():
+            answer += "\n\n### Comparison Table\n\n"
+            answer += "| Metric | Value | Unit | Geography | Time | Source | Why not comparable | Safe use |\n"
+            answer += "|--------|-------|------|-----------|------|--------|-------------------|----------|\n"
+            for row in table[:15]:
+                vals = [
+                    str(row.get("metric_name") or "")[:30],
+                    str(row.get("value") or ""),
+                    str(row.get("unit") or "")[:15],
+                    str(row.get("geography") or "")[:15],
+                    str(row.get("time_period") or "")[:15],
+                    str(row.get("source_report") or "")[:25],
+                    str(row.get("why_not_comparable") or "")[:30],
+                    str(row.get("safe_use") or "")[:20],
+                ]
+                answer += "| " + " | ".join(vals) + " |\n"
     export = None
     requested_format = output_format or task_plan.output_format
-    if not dry_run and requested_format in {"xlsx", "csv", "json"} and task_plan.task_type in {"build_table", "create_excel", "aggregate_values"}:
+    # Trigger export for source_comparison tasks too
+    export_task_types = {"build_table", "create_excel", "aggregate_values", "source_comparison"}
+    if not dry_run and requested_format in {"xlsx", "csv", "json"} and task_plan.task_type in export_task_types:
         export = export_service.export(packet, output_dir=output_dir, output_format=requested_format, comparability=comparability)
     return {
         "ok": True,
         "task_plan": task_plan.to_dict(),
         "evidence_packet": packet,
         "comparability": comparability,
+        "source_comparison": source_comparison,
         "answer": answer,
         "normalized_data": rows,
         "export": export,
@@ -690,51 +876,111 @@ def normalize_blank(value: Any) -> str:
     return str(value or "").strip().lower()
 
 
-def comparability_table(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {
+def classify_geography_match(item_geography: str | None, target_geography: str | None) -> str:
+    """Classify how well an item's geography matches the target."""
+    if not target_geography:
+        return "unknown"
+    if not item_geography:
+        return "unknown"
+    item_lower = normalize_blank(item_geography)
+    target_lower = normalize_blank(target_geography)
+    # Exact match
+    if item_lower == target_lower:
+        return "exact_match"
+    # Target is contained in item (e.g., "Singapore" in "Singapore and ASEAN 6")
+    if target_lower in item_lower:
+        return "contextual_match"
+    # Item is contained in target (e.g., "ASEAN" in "Southeast Asia")
+    if item_lower in target_lower:
+        return "contextual_match"
+    # Known related geographies
+    geo_groups = [
+        {"singapore", "asean", "southeast asia", "sea"},
+        {"hong kong", "china", "greater bay area", "gba"},
+        {"asia", "asian", "southeast asia", "east asia", "south asia"},
+    ]
+    for group in geo_groups:
+        if target_lower in group and item_lower in group:
+            return "contextual_match"
+    return "mismatch"
+
+
+def comparability_table(rows: list[dict[str, Any]], issue_details: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    issue_fields = set()
+    if issue_details:
+        for item in issue_details:
+            field = item.get("field")
+            if field:
+                issue_fields.add(field)
+    table = []
+    for row in rows:
+        # Determine why this row is not comparable
+        why_parts = []
+        if "geography" in issue_fields:
+            why_parts.append(f"geography: {row.get('geography') or 'missing'}")
+        if "time_period" in issue_fields:
+            why_parts.append(f"time: {row.get('time_period') or 'missing'}")
+        if "unit" in issue_fields:
+            why_parts.append(f"unit: {row.get('unit') or 'missing'}")
+        if "metric_name" in issue_fields:
+            why_parts.append("different metric")
+        # Determine safe use
+        safe_parts = []
+        if row.get("geography") and "geography" not in issue_fields:
+            safe_parts.append("same geography")
+        if row.get("time_period") and "time_period" not in issue_fields:
+            safe_parts.append("same time period")
+        if row.get("availability") in ("obtainable", "public"):
+            safe_parts.append("public data")
+        table.append({
             "metric_name": row.get("metric_name"),
+            "value": row.get("value"),
+            "unit": row.get("unit"),
             "geography": row.get("geography"),
             "time_period": row.get("time_period"),
-            "unit": row.get("unit"),
-            "dimension": row.get("dimension"),
             "source_report": row.get("source_report"),
             "source_url": row.get("source_url"),
             "availability": row.get("availability"),
-            "value_status": row.get("value_status"),
-        }
-        for row in rows
-    ]
+            "why_not_comparable": "; ".join(why_parts) if why_parts else "",
+            "safe_use": "; ".join(safe_parts) if safe_parts else "use with caution",
+        })
+    return table
 
 
 def comparability_explanation(status: str, issue_details: list[dict[str, Any]], aggregation_requested: bool) -> str:
     if status == "comparable":
-        return "The rows appear comparable on geography, time period, unit, metric name, dimension, source overlap, and availability."
-    prefix = "Aggregation is blocked" if aggregation_requested else "Comparability is limited"
+        return "These rows measure the same thing, from the same kind of source, over the same time period. They can be combined."
     if not issue_details:
-        return f"{prefix} because the current metadata is insufficient."
-    reasons = []
+        if aggregation_requested:
+            return "I cannot add these values because I do not have enough information about what each source measures."
+        return "I do not have enough information to compare these rows."
+    plain_reasons = []
     for item in issue_details:
         code = item.get("code")
         if code == "unit_mismatch":
-            reasons.append("units differ across rows")
+            plain_reasons.append("they use different units (e.g., count vs. USD vs. percentage)")
         elif code == "geography_mismatch":
-            reasons.append("geographies differ across rows")
+            plain_reasons.append("they cover different countries or regions")
         elif code == "time_period_mismatch":
-            reasons.append("time periods differ across rows")
+            plain_reasons.append("they cover different years or time periods")
         elif code == "metric_name_mismatch":
-            reasons.append("metric definitions or names differ")
+            plain_reasons.append("they measure different things (e.g., deal value vs. IPO proceeds vs. funding amount)")
         elif code == "dimension_mismatch":
-            reasons.append("dimensions differ")
+            plain_reasons.append("they break down data differently (e.g., by stage vs. by sector)")
         elif code == "source_overlap_double_counting":
-            reasons.append("source overlap creates double-counting risk")
+            plain_reasons.append("some sources overlap, which would double-count the same data")
         elif code == "private_source_limitation":
-            reasons.append("private/proprietary availability limits reproducibility")
+            plain_reasons.append("some sources are private, so the combined result would not be reproducible")
         elif str(code).startswith("missing_"):
-            reasons.append(item.get("message", "required metadata is missing").rstrip(".").lower())
+            plain_reasons.append(f"some rows are missing {item.get('field', 'key')} information")
         else:
-            reasons.append(item.get("message", "metadata issue").rstrip("."))
-    return f"{prefix} because " + "; ".join(reasons) + "."
+            plain_reasons.append(item.get("message", "there is a data quality issue").rstrip(".").lower())
+    if aggregation_requested:
+        intro = "I should not add these into one total"
+    else:
+        intro = "These rows are not directly comparable"
+    reason_text = "; ".join(plain_reasons)
+    return f"{intro} because {reason_text}. I created a comparison table instead so you can see each row side by side."
 
 
 def safe_aggregation_requirements() -> list[str]:
@@ -752,7 +998,15 @@ def safe_aggregation_requirements() -> list[str]:
 def append_table(ws, columns: list[str], rows: list[dict[str, Any]]) -> None:
     ws.append(columns)
     for row in rows:
-        ws.append([row.get(column) for column in columns])
+        ws.append([_sanitize_cell(row.get(column)) for column in columns])
+
+
+def _sanitize_cell(value: Any) -> Any:
+    """Remove control characters that openpyxl can't handle in worksheets."""
+    if isinstance(value, str):
+        # Remove control chars except tab, newline, carriage return
+        return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", value)
+    return value
 
 
 def sorted_variable_columns(evidence_packet: dict[str, Any]) -> list[str]:

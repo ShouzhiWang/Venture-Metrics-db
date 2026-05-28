@@ -1,0 +1,6 @@
+answer_preview,avg,clarified,description,file_count,group,query,sidecar_files,test_id,variables
+"### Answer
+
+The current evidence provides the following median funding round values for Singapore:
+
+| Metric Name                     | Value  | Unit | Geography | Time Period | Source Report                                                                                          | Source URL       ",4.5,False,CSV export — should have sidecar files,4,export_metadata,Create a table of Singapore median funding round values,5,X1,25

@@ -1,0 +1,13 @@
+answer_preview,avg,clarified,comparison_table,description,explains_why,group,plain_language,query,safe_use_col,table_in_answer,test_id,variables,why_not_col
+"The current evidence does not support the aggregation of startup funding across Singapore reports due to various comparability issues. 
+
+### Direct Matches vs. Contextual Matches
+- **Direct Matches**: The evidence includes specific funding amounts for early-stage, seed-stage, and late-stage funding,",5,False,5,Aggregation blocked — should use plain language,5,comparability,5,Add up startup funding across Singapore reports,5,5,C1,25,5
+"The current evidence does not provide a definitive answer to whether IPO proceeds can be combined with startup funding. However, it does present various funding metrics that could be relevant for understanding the broader context of startup funding and exits.
+
+### Direct Matches vs. Contextual Match",5,False,5,Different metrics — should explain clearly,5,comparability,5,Can we combine IPO proceeds with startup funding?,5,5,C2,25,5
+"The current evidence does not provide a comprehensive aggregation of VC deal counts from all available sources due to several limitations.
+
+### Direct Matches vs. Contextual Matches
+- **Direct Matches**: 
+  - Number of VC-backed company exits in the UK: 215 exits in 2024 (British Business Bank analy",5,False,5,Should show comparison table when aggregation blocked,5,comparability,5,Aggregate VC deal counts from all available sources,5,5,C3,25,5

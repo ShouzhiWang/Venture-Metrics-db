@@ -1,0 +1,10 @@
+answer_preview,avg,clarified,description,group,labels_geography,prioritizes_target,query,test_id,variables
+"### Answer
+The current evidence indicates that the gross expenditure on research and development (R&D) as a percentage of GDP in the UK is **1.0%**. This value is derived from the ONS Gross Expenditure on R&D statistics (2022) and is classified as **obtainable**.
+
+### Direct Matches vs. Contextual M",4.5,False,R&D without explicit geography — should label geography,geography,5,4,R&D expenditure as percentage of GDP,G1,25
+"The current evidence does not provide a numeric value for Singapore's R&D expenditure as a percentage of GDP.
+
+### Match Types
+- **Direct Matches**: None found for R&D expenditure as a percentage of GDP.
+- **Contextual Matches**: Related metrics such as the share of GDP from digitalisation and tech ",5,False,R&D with explicit Singapore — should prioritize Singapore,geography,5,5,Singapore R&D expenditure as percentage of GDP,G2,25

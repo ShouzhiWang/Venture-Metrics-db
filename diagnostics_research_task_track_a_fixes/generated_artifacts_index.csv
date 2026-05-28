@@ -1,0 +1,13 @@
+artifact_count,artifacts,group,query,test_id
+0,,geography,R&D expenditure as percentage of GDP,G1
+0,,geography,Singapore R&D expenditure as percentage of GDP,G2
+0,,source_comparison,Create a source comparison table for startup funding reports,S1
+0,,empty_result,Create a single Asia startup exits dataset from all reports,E1
+4,/data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_2aee5b5b_data.csv; /data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_2aee5b5b_methodology_notes.csv; /data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_2aee5b5b_data_gaps.csv; /data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_2aee5b5b_source_reports.csv,export_metadata,Create a table of Singapore median funding round values,X1
+0,,comparability,Add up startup funding across Singapore reports,C1
+0,,comparability,Can we combine IPO proceeds with startup funding?,C2
+0,,comparability,Aggregate VC deal counts from all available sources,C3
+0,,run_defaults,Build an Excel of public innovation metrics,D1
+0,,run_defaults,Export a dataset of SME digital adoption variables,D2
+1,/data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_fdc795f7.xlsx,run_defaults,Build an Excel of public innovation metrics,D1_defaults
+4,/data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_4735abeb_data.csv; /data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_4735abeb_methodology_notes.csv; /data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_4735abeb_data_gaps.csv; /data/hermes/diagnostics/research_task_track_a_fixes/artifacts/research_task_4735abeb_source_reports.csv,run_defaults,Export a dataset of SME digital adoption variables,D2_defaults

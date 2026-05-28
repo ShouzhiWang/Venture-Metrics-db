@@ -1,0 +1,20 @@
+answer_preview,avg,clarified,description,group,offers_defaults,query,test_id,variables
+,5,True,Export with missing geography — should offer run_with_defaults,run_defaults,5,Build an Excel of public innovation metrics,D1,0
+,5,True,Export with missing geography — should offer run_with_defaults,run_defaults,5,Export a dataset of SME digital adoption variables,D2,0
+"To build an Excel of public innovation metrics, the following metrics can be included based on the evidence packet:
+
+### Direct Matches
+1. **Number of policy projects delivered by Open Innovation Team (OIT)**
+   - **Value**: 75 (count)
+   - **Geography**: UK
+   - **Time Period**: Last five years (up",5,False,Export with missing geography — should offer run_with_defaults (with defaults),run_defaults,5,Build an Excel of public innovation metrics,D1_defaults,25
+"### Answer
+
+The evidence packet provides various metrics related to SME digital adoption, including:
+
+1. **Total Number of Private Sector Businesses**:
+   - **Value**: 5.5 million
+   - **Unit**: Number of businesses
+   - **Geography**: United Kingdom
+   - **Time Period**: Start of 2024
+   - **Source",5,False,Export with missing geography — should offer run_with_defaults (with defaults),run_defaults,5,Export a dataset of SME digital adoption variables,D2_defaults,25

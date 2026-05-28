@@ -1,0 +1,10 @@
+answer_preview,avg,clarified,description,group,in_answer,produces_table,query,side_by_side,test_id,variables
+"To create a source comparison table for startup funding reports, the following evidence has been compiled:
+
+### Direct Matches
+1. **Late-Stage Funding Amount**
+   - **Value**: 2.0
+   - **Unit**: USD
+   - **Geography**: MENA
+   - **Time Period**: Last 5 years
+   - **Source Report**: ""the total late-s",5,False,Source comparison — should produce side-by-side table,source_comparison,5,5,Create a source comparison table for startup funding reports,5,S1,25
