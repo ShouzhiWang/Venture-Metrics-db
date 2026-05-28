@@ -13,6 +13,23 @@ from bs4 import BeautifulSoup
 
 from app.utils.text import count_tokens_rough, normalize_whitespace
 
+# Module-level OCR engine cache — avoids reloading PaddleOCR models on every PDF
+_ocr_engine_cache: dict[str, "OCREngine"] = {}
+
+
+def _get_cached_ocr_engine(language: str = "en") -> "OCREngine | None":
+    """Return a cached OCR engine, trying PaddleOCR then Tesseract."""
+    if language in _ocr_engine_cache:
+        return _ocr_engine_cache[language]
+    for EngineCls in (PaddleOCREngine, TesseractOCREngine):
+        try:
+            engine = EngineCls(language=language)
+            _ocr_engine_cache[language] = engine
+            return engine
+        except Exception:
+            continue
+    return None
+
 
 PDF_FALLBACK_MIN_CHARS = 500
 DEFAULT_TARGET_TOKENS = 1000
@@ -223,13 +240,7 @@ def extract_text_from_pdf(path: Path, ocr_engine: OCREngine | None = None) -> Pa
         if best_quality.ocr_recommended:
             engine = ocr_engine
             if engine is None:
-                try:
-                    engine = PaddleOCREngine()
-                except Exception:
-                    try:
-                        engine = TesseractOCREngine()
-                    except Exception:
-                        pass
+                engine = _get_cached_ocr_engine()
             if engine is None:
                 # No OCR engine available — return best text-based result
                 return ParsedDocument(
