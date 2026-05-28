@@ -8,6 +8,7 @@ from app.services.research_task import (
     EvidencePacketBuilder,
     ResearchTaskPlanner,
     TableExcelExportService,
+    clarification_plan,
     execute_research_task,
     extract_numeric_value,
 )
@@ -33,6 +34,7 @@ def sample_results() -> dict:
                 "object_id": "var-2",
                 "title": "Singapore startup deal count by stage",
                 "score": 0.67,
+                "value": 120,
                 "definition": "Number of deals split by investment stage.",
                 "unit": "deals",
                 "availability": "private",
@@ -77,6 +79,9 @@ def test_evidence_packet_creation() -> None:
     assert packet["query"]
     assert packet["variables"][0]["metric_name"] == "Singapore startup funding by stage"
     assert packet["variables"][0]["value"] == 42.5
+    assert packet["variables"][0]["value_status"] == "extracted_from_evidence"
+    assert packet["variables"][1]["value"] == 120
+    assert packet["variables"][1]["value_status"] == "structured"
     assert packet["source_urls"] == ["https://example.org/report"]
     assert "private" in packet["availability_labels"]
     assert packet["geography_coverage"] == ["Singapore"]
@@ -134,6 +139,8 @@ def test_comparability_blocks_unsafe_aggregation() -> None:
     assert result["status"] == "not_comparable"
     assert result["can_aggregate"] is False
     assert any("Mixed unit" in issue for issue in result["issues"])
+    assert "units differ" in result["explanation"]
+    assert result["comparison_table"]
 
 
 def test_execute_research_task_uses_tool_caller_without_llm(tmp_path) -> None:
@@ -154,3 +161,29 @@ def test_execute_research_task_uses_tool_caller_without_llm(tmp_path) -> None:
     assert calls[0][0] == "find_data"
     assert result["export"]["format"] == "xlsx"
     assert result["answer"].startswith("Direct answer:")
+
+
+def test_vague_research_task_returns_clarification_without_tool_call() -> None:
+    calls = []
+
+    result = execute_research_task(
+        "startup data",
+        tool_caller=lambda name, args: calls.append((name, args)),
+        use_llm=False,
+    )
+
+    assert result["type"] == "clarification"
+    assert result["clarifying_questions"][0]["dimension"] == "domain_topic"
+    assert calls == []
+
+
+def test_answer_synthesizer_uses_llm_when_provided() -> None:
+    class FakeResearchLLM:
+        def synthesize_research_task(self, **kwargs):
+            return "Direct answer from LLM using packet evidence."
+
+    plan = ResearchTaskPlanner().plan("Singapore startup funding by stage")
+    packet = EvidencePacketBuilder().build("Singapore startup funding by stage", plan, sample_results())
+    answer = AnswerSynthesizer(llm_client=FakeResearchLLM(), use_llm=True).synthesize(packet)
+
+    assert answer == "Direct answer from LLM using packet evidence."

@@ -1,0 +1,6 @@
+query,query_group,questions,returned_clarification,score
+startup data,clarification,Which topic should I focus on?,True,5
+innovation ecosystem in Asia,clarification,,False,1
+funding trends,clarification,Which topic should I focus on? | What time period should I use?,True,5
+make me a dataset on Asian startups,clarification,What output do you want? | What level of data do you need?,True,5
+analyze Singapore startups,clarification,Which metric type do you want?,True,5

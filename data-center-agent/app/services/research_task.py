@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from openpyxl import Workbook
 
+from app.agents.demo_llm import DemoLLMClient, DemoLLMConfigError, DemoLLMProviderError, DemoLLMResponseError
 from app.agents.query_planner import plan_query
 
 
@@ -32,6 +33,7 @@ NORMALIZED_COLUMNS = [
     "geography",
     "time_period",
     "value",
+    "value_status",
     "unit",
     "dimension",
     "dimension_value",
@@ -127,6 +129,27 @@ class ResearchTaskPlanner:
         return None
 
 
+def clarification_plan(query: str, context: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    plan = plan_query(query, context or {})
+    if plan.get("action") != "ask_clarification":
+        return None
+    questions = plan.get("clarifying_questions") or []
+    if not questions:
+        return None
+    return {
+        "ok": True,
+        "type": "clarification",
+        "message": "Before I start the research task, I need one detail." if len(questions) == 1 else "Before I start the research task, I need a couple of details.",
+        "query": query,
+        "specificity": plan.get("specificity"),
+        "intent": plan.get("intent"),
+        "missing_dimensions": plan.get("missing_dimensions") or [],
+        "clarifying_questions": questions[:2],
+        "should_run_tool": False,
+        "debug": {"clarification_plan": plan},
+    }
+
+
 class EvidencePacketBuilder:
     def build(self, query: str, task_plan: ResearchTaskPlan | dict[str, Any], retrieved: dict[str, Any]) -> dict[str, Any]:
         plan = task_plan if isinstance(task_plan, dict) else task_plan.to_dict()
@@ -151,16 +174,20 @@ class EvidencePacketBuilder:
         }
 
     def _variable(self, item: dict[str, Any]) -> dict[str, Any]:
-        value, unit = extract_numeric_value(item.get("evidence_quote") or item.get("why_it_matched") or "")
+        structured = structured_value_fields(item)
+        value = structured["value"]
+        unit = structured["unit"]
+        value_status = structured["value_status"]
         return {
             "id": item.get("object_id") or item.get("id") or item.get("variable_id"),
             "metric_name": item.get("title") or item.get("raw_variable_name"),
             "concept_group": concept_group(item),
             "definition": item.get("definition"),
             "measurement_method": item.get("measurement_method"),
-            "geography": item.get("geographic_coverage"),
-            "time_period": item.get("temporal_coverage"),
+            "geography": first_present(item, "geographic_coverage", "geography"),
+            "time_period": first_present(item, "temporal_coverage", "time_period", "time_coverage"),
             "value": value,
+            "value_status": value_status,
             "unit": item.get("unit") or unit,
             "dimension": infer_dimension(item),
             "dimension_value": infer_dimension_value(item),
@@ -210,8 +237,16 @@ class EvidencePacketBuilder:
 class ComparabilityValidator:
     def validate(self, rows: list[dict[str, Any]], *, aggregation_requested: bool = False) -> dict[str, Any]:
         if not rows:
-            return {"status": "insufficient_metadata", "issues": ["No rows available for comparison."], "can_aggregate": False}
-        issues: list[str] = []
+            return {
+                "status": "insufficient_metadata",
+                "issues": ["No rows available for comparison."],
+                "issue_details": [{"code": "no_rows", "field": None, "message": "No rows available for comparison."}],
+                "can_aggregate": False,
+                "explanation": "Aggregation is blocked because there are no retrieved rows to compare.",
+                "safe_aggregation_requirements": safe_aggregation_requirements(),
+                "comparison_table": [],
+            }
+        issue_details: list[dict[str, Any]] = []
         for field_name, label in [
             ("geography", "geography"),
             ("time_period", "time period"),
@@ -222,18 +257,55 @@ class ComparabilityValidator:
             values = {normalize_blank(row.get(field_name)) for row in rows}
             values.discard("")
             if len(values) > 1:
-                issues.append(f"Mixed {label}: {', '.join(sorted(values))}.")
+                issue_details.append(
+                    {
+                        "code": f"{field_name}_mismatch",
+                        "field": field_name,
+                        "message": f"Mixed {label}: {', '.join(sorted(values))}.",
+                        "values": sorted(values),
+                    }
+                )
             elif not values:
-                issues.append(f"Missing {label} metadata.")
+                issue_details.append(
+                    {
+                        "code": f"missing_{field_name}",
+                        "field": field_name,
+                        "message": f"Missing {label} metadata.",
+                        "values": [],
+                    }
+                )
         availability = {normalize_blank(row.get("availability")) for row in rows}
         if "private" in availability or "not_obtainable" in availability:
-            issues.append("Private or not-obtainable sources limit reproducible aggregation.")
+            issue_details.append(
+                {
+                    "code": "private_source_limitation",
+                    "field": "availability",
+                    "message": "Private or not-obtainable sources limit reproducible aggregation.",
+                    "values": sorted(value for value in availability if value),
+                }
+            )
         source_urls = [row.get("source_url") for row in rows if row.get("source_url")]
         if len(source_urls) != len(set(source_urls)):
-            issues.append("Source overlap creates double-counting risk.")
+            issue_details.append(
+                {
+                    "code": "source_overlap_double_counting",
+                    "field": "source_url",
+                    "message": "Source overlap creates double-counting risk.",
+                    "values": sorted({str(url) for url in source_urls if source_urls.count(url) > 1}),
+                }
+            )
+        issues = [item["message"] for item in issue_details]
         status = self._status(issues)
         can_aggregate = aggregation_requested and status == "comparable"
-        return {"status": status, "issues": issues, "can_aggregate": can_aggregate}
+        return {
+            "status": status,
+            "issues": issues,
+            "issue_details": issue_details,
+            "can_aggregate": can_aggregate,
+            "explanation": comparability_explanation(status, issue_details, aggregation_requested),
+            "safe_aggregation_requirements": safe_aggregation_requirements(),
+            "comparison_table": comparability_table(rows),
+        }
 
     def _status(self, issues: list[str]) -> str:
         if not issues:
@@ -247,7 +319,25 @@ class ComparabilityValidator:
 
 
 class AnswerSynthesizer:
+    def __init__(self, llm_client: Any | None = None, *, use_llm: bool = False) -> None:
+        self.llm_client = llm_client
+        self.use_llm = use_llm
+
     def synthesize(self, evidence_packet: dict[str, Any], comparability: dict[str, Any] | None = None) -> str:
+        if self.use_llm or self.llm_client is not None:
+            try:
+                client = self.llm_client or DemoLLMClient()
+                if hasattr(client, "synthesize_research_task"):
+                    answer = client.synthesize_research_task(evidence_packet=evidence_packet, comparability=comparability or {})
+                else:
+                    answer = client._text_completion(self.prompt_text(evidence_packet, comparability or {}))
+                if isinstance(answer, str) and answer.strip():
+                    return answer.strip()
+            except (DemoLLMConfigError, DemoLLMProviderError, DemoLLMResponseError, AttributeError):
+                pass
+        return self._fallback_synthesize(evidence_packet, comparability)
+
+    def _fallback_synthesize(self, evidence_packet: dict[str, Any], comparability: dict[str, Any] | None = None) -> str:
         variables = evidence_packet.get("variables") or []
         reports = evidence_packet.get("reports") or []
         sources = evidence_packet.get("sources") or []
@@ -275,6 +365,11 @@ class AnswerSynthesizer:
             limitations.extend(comparability["issues"])
         if limitations:
             lines.append("Limitations: " + " ".join(limitations))
+        if comparability and comparability.get("status") not in {None, "comparable"}:
+            lines.append((comparability.get("explanation") or "").strip())
+            requirements = comparability.get("safe_aggregation_requirements") or []
+            if requirements:
+                lines.append("To aggregate safely, the rows need " + "; ".join(requirements[:6]) + ".")
         lines.append("Next actions: export the evidence table, inspect source reports, or refine by geography, time period, metric type, or data availability.")
         return "\n\n".join(lines)
 
@@ -287,6 +382,14 @@ class AnswerSynthesizer:
             ),
             "evidence_packet": evidence_packet,
         }
+
+    def prompt_text(self, evidence_packet: dict[str, Any], comparability: dict[str, Any]) -> str:
+        payload = self.prompt_payload(evidence_packet)
+        return (
+            payload["instruction"]
+            + "\n\nUse only this evidence packet and comparability result. Do not invent values.\n\n"
+            + json.dumps({"evidence_packet": evidence_packet, "comparability": comparability}, ensure_ascii=True, default=str)
+        )
 
     def _direct_answer(self, evidence_packet: dict[str, Any], direct: list[dict[str, Any]], variables: list[dict[str, Any]]) -> str:
         query = evidence_packet.get("query") or "this request"
@@ -322,6 +425,7 @@ class TableExcelExportService:
                     "geography": item.get("geography"),
                     "time_period": item.get("time_period"),
                     "value": item.get("value"),
+                    "value_status": item.get("value_status"),
                     "unit": item.get("unit"),
                     "dimension": item.get("dimension"),
                     "dimension_value": item.get("dimension_value"),
@@ -395,7 +499,12 @@ def execute_research_task(
     output_format: str | None = None,
     dry_run: bool = False,
     max_results: int = 30,
+    llm_client: Any | None = None,
+    use_llm: bool = True,
 ) -> dict[str, Any]:
+    clarification = clarification_plan(query, context)
+    if clarification:
+        return clarification
     planner = ResearchTaskPlanner()
     task_plan = planner.plan(query, context, max_results=max_results, dry_run=dry_run)
     retrieve_args = {
@@ -421,7 +530,7 @@ def execute_research_task(
     rows = export_service.build_rows(packet)
     comparability = ComparabilityValidator().validate(rows, aggregation_requested=task_plan.task_type == "aggregate_values")
     packet["comparability"] = comparability
-    answer = AnswerSynthesizer().synthesize(packet, comparability)
+    answer = AnswerSynthesizer(llm_client=llm_client, use_llm=use_llm).synthesize(packet, comparability)
     export = None
     requested_format = output_format or task_plan.output_format
     if not dry_run and requested_format in {"xlsx", "csv", "json"} and task_plan.task_type in {"build_table", "create_excel", "aggregate_values"}:
@@ -501,6 +610,41 @@ def extract_numeric_value(text: str) -> tuple[float | None, str | None]:
     return number, unit
 
 
+def structured_value_fields(item: dict[str, Any]) -> dict[str, Any]:
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    value = first_present(item, "value", "metric_value", "numeric_value", "amount")
+    unit = first_present(item, "unit", "value_unit", "currency", "measurement_unit")
+    if value is None and metadata:
+        value = first_present(metadata, "value", "metric_value", "numeric_value", "amount")
+    if unit is None and metadata:
+        unit = first_present(metadata, "unit", "value_unit", "currency", "measurement_unit")
+    parsed_value = parse_number(value)
+    if parsed_value is not None:
+        return {"value": parsed_value, "unit": unit, "value_status": "structured"}
+    fallback_value, fallback_unit = extract_numeric_value(item.get("evidence_quote") or item.get("why_it_matched") or "")
+    if fallback_value is not None:
+        return {"value": fallback_value, "unit": unit or fallback_unit, "value_status": "extracted_from_evidence"}
+    return {"value": None, "unit": unit, "value_status": "not_extracted"}
+
+
+def first_present(mapping: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = mapping.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def parse_number(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        match = re.search(r"-?\d+(?:,\d{3})*(?:\.\d+)?", value)
+        if match:
+            return float(match.group(0).replace(",", ""))
+    return None
+
+
 def concept_group(item: dict[str, Any]) -> str | None:
     text = " ".join(str(item.get(key) or "") for key in ("title", "definition", "measurement_method")).lower()
     if any(term in text for term in ("stage", "seed", "series a")):
@@ -546,6 +690,65 @@ def normalize_blank(value: Any) -> str:
     return str(value or "").strip().lower()
 
 
+def comparability_table(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "metric_name": row.get("metric_name"),
+            "geography": row.get("geography"),
+            "time_period": row.get("time_period"),
+            "unit": row.get("unit"),
+            "dimension": row.get("dimension"),
+            "source_report": row.get("source_report"),
+            "source_url": row.get("source_url"),
+            "availability": row.get("availability"),
+            "value_status": row.get("value_status"),
+        }
+        for row in rows
+    ]
+
+
+def comparability_explanation(status: str, issue_details: list[dict[str, Any]], aggregation_requested: bool) -> str:
+    if status == "comparable":
+        return "The rows appear comparable on geography, time period, unit, metric name, dimension, source overlap, and availability."
+    prefix = "Aggregation is blocked" if aggregation_requested else "Comparability is limited"
+    if not issue_details:
+        return f"{prefix} because the current metadata is insufficient."
+    reasons = []
+    for item in issue_details:
+        code = item.get("code")
+        if code == "unit_mismatch":
+            reasons.append("units differ across rows")
+        elif code == "geography_mismatch":
+            reasons.append("geographies differ across rows")
+        elif code == "time_period_mismatch":
+            reasons.append("time periods differ across rows")
+        elif code == "metric_name_mismatch":
+            reasons.append("metric definitions or names differ")
+        elif code == "dimension_mismatch":
+            reasons.append("dimensions differ")
+        elif code == "source_overlap_double_counting":
+            reasons.append("source overlap creates double-counting risk")
+        elif code == "private_source_limitation":
+            reasons.append("private/proprietary availability limits reproducibility")
+        elif str(code).startswith("missing_"):
+            reasons.append(item.get("message", "required metadata is missing").rstrip(".").lower())
+        else:
+            reasons.append(item.get("message", "metadata issue").rstrip("."))
+    return f"{prefix} because " + "; ".join(reasons) + "."
+
+
+def safe_aggregation_requirements() -> list[str]:
+    return [
+        "same geography",
+        "same time period",
+        "same unit/currency",
+        "same metric definition and funding type",
+        "same dimension and dimension value",
+        "non-overlapping source coverage",
+        "clear public/obtainable availability or explicit private-source caveat",
+    ]
+
+
 def append_table(ws, columns: list[str], rows: list[dict[str, Any]]) -> None:
     ws.append(columns)
     for row in rows:
@@ -562,6 +765,7 @@ def sorted_variable_columns(evidence_packet: dict[str, Any]) -> list[str]:
         "geography",
         "time_period",
         "value",
+        "value_status",
         "unit",
         "dimension",
         "dimension_value",

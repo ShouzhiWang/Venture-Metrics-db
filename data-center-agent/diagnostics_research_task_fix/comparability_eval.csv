@@ -1,0 +1,3 @@
+can_aggregate,explanation,query,query_group,score,status
+False,Aggregation is blocked because time periods differ across rows; units differ across rows; metric definitions or names differ; private/proprietary availability limits reproducibility; source overlap creates double-counting risk.,Sum startup funding values across all Singapore reports,comparability,5,not_comparable
+False,Aggregation is blocked because time periods differ across rows; units differ across rows; metric definitions or names differ; private/proprietary availability limits reproducibility; source overlap creates double-counting risk.,Aggregate VC investment across Singapore and Southeast Asia,comparability,5,not_comparable

@@ -90,6 +90,18 @@ class DemoLLMClient:
         )
         return self._json_completion(prompt)
 
+    def synthesize_research_task(
+        self,
+        *,
+        evidence_packet: dict[str, Any],
+        comparability: dict[str, Any] | None = None,
+    ) -> str:
+        prompt = _research_task_synthesis_prompt(
+            evidence_packet=evidence_packet,
+            comparability=comparability or {},
+        )
+        return self._text_completion(prompt).strip()
+
     def _json_completion(self, prompt: str) -> dict[str, Any]:
         last_error: Exception | None = None
         for attempt in range(2):
@@ -283,6 +295,33 @@ Tool results:
 
 Limitations:
 {json.dumps(limitations, ensure_ascii=True)}
+""".strip()
+
+
+def _research_task_synthesis_prompt(*, evidence_packet: dict[str, Any], comparability: dict[str, Any]) -> str:
+    return f"""
+You are writing a research-ready answer from a structured evidence packet.
+
+Use only the evidence packet and comparability result below. Do not invent reports, source names, URLs, metrics, values, units, years, availability labels, or organizations. If a value is missing or value_status is "not_extracted", say that the current evidence does not expose a numeric value.
+
+Required answer structure:
+1. Start with a direct answer to the user's request.
+2. Distinguish direct matches from contextual matches.
+3. Group related variables into concepts.
+4. Discuss values, units, years, geography, and dimensions only when present in the packet.
+5. Cite report/source names and source URLs when present.
+6. Label public/private/unclear/obtainable availability.
+7. Explain limitations specifically.
+8. If aggregation is blocked, explain each blocker and what metadata would be needed to aggregate safely. Do not perform arithmetic unless comparability.can_aggregate is true.
+9. Suggest next actions only after the answer and limitations.
+
+Keep the answer concise but useful. Markdown bullets are allowed. Do not include a large raw JSON dump.
+
+Evidence packet:
+{json.dumps(evidence_packet, ensure_ascii=True, default=str)[:22000]}
+
+Comparability:
+{json.dumps(comparability, ensure_ascii=True, default=str)[:8000]}
 """.strip()
 
 

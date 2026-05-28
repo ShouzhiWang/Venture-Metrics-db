@@ -1,0 +1,3 @@
+metric_name,concept_group,geography,time_period,value,value_status,unit,dimension,dimension_value,source_report,source_url,availability,evidence_quote,confidence_score,comparability_status,notes
+Singapore startup funding by stage,stage breakdown,Singapore,2023,42.5,structured,USD million,stage,,Singapore Venture Report,https://example.org/venture-report,obtainable,Seed funding reached 42.5 USD million in 2023.,0.88,not_comparable,
+Singapore startup deal count by stage,stage breakdown,Singapore,2022,120.0,structured,deals,stage,,Singapore Venture Report,https://example.org/venture-report,private,Seed stage had 120 deals in 2022.,0.71,not_comparable,
