@@ -833,7 +833,14 @@ function combineNarrowSelections(
 ): string {
   if (picks.length === 0) return "";
   const cleanBase = baseQuery ? stripProjectContextPrefix(baseQuery) : undefined;
-  if (picks.length === 1) return stripProjectContextPrefix(picks[0].option);
+  if (picks.length === 1) {
+    const cleanOption = stripProjectContextPrefix(picks[0].option);
+    if (!cleanBase) return cleanOption;
+    const prefix = `${cleanBase} — `;
+    if (cleanOption.startsWith(prefix)) return cleanOption;
+    if (cleanBase.toLowerCase().includes(cleanOption.toLowerCase())) return cleanBase;
+    return `${cleanBase}, ${cleanOption}`;
+  }
 
   const refinements = picks.map(({ question, option }) => {
     const cleanOption = stripProjectContextPrefix(option);
@@ -866,11 +873,11 @@ function NarrowSearchPanel({
   const multiSelect = variant === "narrow" && questions.length > 1;
   const [selections, setSelections] = useState<Record<string, string>>({});
 
-  const title = variant === "clarify" ? "Clarify your request" : "Narrow this search";
+  const title = variant === "clarify" ? "Before I search, I need one detail" : "Narrow this search";
   const subtitle = multiSelect
     ? "Choose one or more refinements, then apply them as a single message."
     : variant === "clarify"
-      ? "Choose an option — it is sent as a new message in this thread."
+      ? "Choose an option to continue this search."
       : "One-tap refinements — each is sent as a new message.";
   const anyOptions = questions.some(q => (q.options?.length ?? 0) > 0);
   const selectedCount = Object.keys(selections).length;
@@ -931,7 +938,7 @@ function NarrowSearchPanel({
                     key={opt}
                     type="button"
                     className="suggestion-chip suggestion-chip-compact"
-                    onClick={() => onChoose(label)}
+                    onClick={() => onChoose(combineNarrowSelections(baseQuery, [{ question: q.question, option: opt }]))}
                   >
                     {label}
                   </button>

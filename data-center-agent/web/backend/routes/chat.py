@@ -89,6 +89,10 @@ def handle_chat(
     plan_message = _planning_message_for_focus(message, context)
     trace = trace or AgentTraceCollector()
     trace.planning_started()
+    deterministic_plan = plan_query(message, context)
+    if deterministic_plan["action"] == "ask_clarification" and _should_preempt_with_clarification(message, deterministic_plan):
+        trace.planning_complete(deterministic_plan["intent"], [])
+        return attach_tool_trace(_clarification_response(deterministic_plan), trace)
     try:
         llm = llm_client or DemoLLMClient()
         plan = _validate_plan(llm.plan(message=plan_message, history=history, safe_tools=CHAT_TOOL_NAMES), message)
@@ -102,6 +106,7 @@ def handle_chat(
         trace.error_event("Planning failed", str(exc))
         return attach_tool_trace(_llm_error_response("llm_provider_error", str(exc)), trace)
 
+    plan = _merge_planner_metadata(plan, deterministic_plan)
     tool_names = [str(item.get("name")) for item in plan.get("tool_calls") or [] if item.get("name")]
     trace.planning_complete(plan["intent"], tool_names)
 
@@ -119,6 +124,7 @@ def handle_chat(
                 "assistant_message": assistant_message,
                 "intent": plan["intent"],
                 "clarifying_questions": plan["clarifying_questions"],
+                "refinement_chips": [],
                 "tool_calls": [],
                 "results": _empty_results(),
                 "limitations": [],
@@ -138,6 +144,7 @@ def handle_chat(
                 "clarifying_questions": plan.get("clarifying_questions") or [
                     {"question": "What metric, geography, or source type should I search for?", "options": []}
                 ],
+                "refinement_chips": [],
                 "tool_calls": [],
                 "results": _empty_results(),
                 "limitations": ["no_tool_call_selected"],
@@ -195,6 +202,7 @@ def handle_chat(
             "assistant_message": assistant_message,
             "intent": plan["intent"],
             "clarifying_questions": clarifying_questions,
+            "refinement_chips": plan.get("refinement_chips") or [],
             "follow_up_queries": follow_up_queries,
             "tool_calls": [{"name": item["name"], "args": item["args"], "status": item["status"]} for item in executed],
             "results": results,
@@ -216,6 +224,7 @@ def handle_chat_deterministic(payload: dict[str, Any], tool_caller=call_demo_too
             "assistant_message": "I need one or two details before searching.",
             "intent": plan["intent"],
             "clarifying_questions": plan["clarifying_questions"],
+            "refinement_chips": [],
             "tool_calls": [],
             "results": _empty_results(),
             "limitations": [],
@@ -281,13 +290,85 @@ def _validate_plan(plan: dict[str, Any], message: str) -> dict[str, Any]:
     }
 
 
+def _clarification_response(plan: dict[str, Any]) -> dict[str, Any]:
+    assistant_message = "Before I search, I need one detail." if len(plan.get("clarifying_questions") or []) == 1 else "Before I search, I need a couple of details."
+    return {
+        "type": "clarification",
+        "message": assistant_message,
+        "assistant_message": assistant_message,
+        "intent": plan["intent"],
+        "clarifying_questions": _sanitize_questions(plan.get("clarifying_questions") or []),
+        "refinement_chips": [],
+        "tool_calls": [],
+        "results": _empty_results(),
+        "limitations": [],
+        "debug": {"plan": plan},
+    }
+
+
+def _should_preempt_with_clarification(message: str, plan: dict[str, Any]) -> bool:
+    lowered = " ".join(message.lower().split())
+    if lowered in {
+        "startup data",
+        "innovation ecosystem",
+        "funding trends",
+        "make me a dataset",
+        "make me a data set",
+        "analyze singapore startups",
+    }:
+        return True
+    if lowered.startswith(("make me a dataset", "create a dataset", "make me an excel", "create an excel")):
+        return True
+    return bool("domain_topic" in (plan.get("missing_dimensions") or []) and len(plan.get("clarifying_questions") or []) >= 1)
+
+
+def _merge_planner_metadata(llm_plan: dict[str, Any], planner: dict[str, Any]) -> dict[str, Any]:
+    merged = {**llm_plan}
+    merged["specificity"] = planner.get("specificity")
+    merged["action"] = planner.get("action")
+    merged["detected"] = planner.get("detected") or {}
+    merged["missing_dimensions"] = planner.get("missing_dimensions") or []
+    merged["inferred_query"] = planner.get("inferred_query") or ""
+    merged["should_run_tool"] = planner.get("should_run_tool")
+    refinement_questions = planner.get("refinement_chips") or []
+    if merged.get("intent") == "unknown":
+        refinement_questions = []
+    if refinement_questions:
+        merged["refinement_chips"] = _sanitize_questions(refinement_questions)
+        merged["clarifying_questions"] = _merge_question_lists(
+            merged.get("clarifying_questions") or [],
+            refinement_questions,
+        )
+    if not merged.get("tool_calls") and merged.get("intent") != "unknown" and planner.get("should_run_tool") and planner.get("tool_calls"):
+        merged["tool_calls"] = planner["tool_calls"]
+    filters = merged.get("filters") if isinstance(merged.get("filters"), dict) else {}
+    merged["filters"] = {**(planner.get("extracted_filters") or {}), **filters}
+    merged["tool_calls"] = _sanitize_tool_calls(merged.get("tool_calls") or [], planner.get("query") or "", merged["filters"])
+    return merged
+
+
+def _merge_question_lists(primary: list[Any], secondary: list[Any]) -> list[dict[str, Any]]:
+    merged = _sanitize_questions(primary)
+    seen = {(item.get("question") or "").lower() for item in merged}
+    for item in _sanitize_questions(secondary):
+        key = item["question"].lower()
+        if key in seen:
+            continue
+        merged.append(item)
+        seen.add(key)
+    return merged[:5]
+
+
 def _sanitize_questions(questions: list[Any]) -> list[dict[str, Any]]:
     cleaned = []
-    for item in questions[:3]:
+    for item in questions[:5]:
         if not isinstance(item, dict) or not isinstance(item.get("question"), str):
             continue
         options = item.get("options") if isinstance(item.get("options"), list) else []
-        cleaned.append({"question": item["question"].strip(), "options": [str(option) for option in options[:6]]})
+        cleaned_item = {"question": item["question"].strip(), "options": [str(option) for option in options[:7]]}
+        if isinstance(item.get("dimension"), str):
+            cleaned_item["dimension"] = item["dimension"].strip()
+        cleaned.append(cleaned_item)
     return cleaned
 
 
@@ -449,6 +530,7 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
         "assistant_message": message_text,
         "intent": plan["intent"],
         "clarifying_questions": _questions_from_data(data, message),
+        "refinement_chips": plan.get("refinement_chips") or [],
         "follow_up_queries": [],
         "tool_calls": [{"name": "find_data", "args": {}, "status": "ok"}],
         "results": {
@@ -474,6 +556,7 @@ def _comparison_response(message: str, plan: dict[str, Any], tool_result: dict[s
         "assistant_message": data.get("comparison", {}).get("summary") or "Comparison results are available.",
         "intent": "compare_concepts",
         "clarifying_questions": [{"question": q, "options": []} for q in data.get("clarifying_questions", [])],
+        "refinement_chips": [],
         "tool_calls": [{"name": "compare_concepts_auto", "args": {}, "status": "ok"}],
         "results": {
             "closest_variables": data.get("closest_variables", []),
@@ -498,6 +581,7 @@ def _organization_response(message: str, plan: dict[str, Any], tool_result: dict
         "assistant_message": f"Found {len(organizations)} organization matches." if organizations else "I could not find matching organizations yet.",
         "intent": "find_organizations",
         "clarifying_questions": [],
+        "refinement_chips": [],
         "tool_calls": [{"name": "semantic_search", "args": {"object_types": ["organization"]}, "status": "ok"}],
         "results": {
             "closest_variables": [],
@@ -617,6 +701,7 @@ def _error_response(
         "assistant_message": message_text,
         "intent": plan.get("intent", "unknown"),
         "clarifying_questions": [],
+        "refinement_chips": [],
         "tool_calls": [
             {"name": item["name"], "args": item["args"], "status": item["status"]}
             for item in (tool_calls or [])
@@ -634,6 +719,7 @@ def _llm_error_response(code: str, message: str) -> dict[str, Any]:
         "assistant_message": message,
         "intent": "unknown",
         "clarifying_questions": [],
+        "refinement_chips": [],
         "tool_calls": [],
         "results": _empty_results(),
         "limitations": [code],
@@ -652,6 +738,7 @@ def _auth_required_response() -> dict[str, Any]:
         "assistant_message": "Login is required to use data discovery.",
         "intent": "unknown",
         "clarifying_questions": [],
+        "refinement_chips": [],
         "tool_calls": [],
         "results": _empty_results(),
         "limitations": ["auth_required"],

@@ -1,4 +1,5 @@
 export type ClarifyingQuestion = {
+  dimension?: string;
   question: string;
   options?: string[];
 };
@@ -104,6 +105,7 @@ export type ChatResponse = {
   saved_result_id?: string;
   intent: string;
   clarifying_questions: ClarifyingQuestion[];
+  refinement_chips?: ClarifyingQuestion[];
   follow_up_queries?: FollowUpQuery[];
   tool_calls?: {
     name: string;
