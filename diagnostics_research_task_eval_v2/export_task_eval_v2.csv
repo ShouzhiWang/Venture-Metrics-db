@@ -1,0 +1,6 @@
+avg_score,clarified,data_gaps,export_path,file_created,format,methodology_notes,no_invented,non_null_values,normalized_data,null_values,query,query_id,row_count,source_evidence,structure,values_extracted
+4.5,False,4,/data/hermes/diagnostics/research_task_eval_v2/generated_artifacts/research_task_be6ab6e0.xlsx,5,xlsx,4,5,19,4,6,Create an Excel of Singapore startup funding by stage,12,25,4,5,5
+3.75,False,2,/data/hermes/diagnostics/research_task_eval_v2/generated_artifacts/research_task_bed5e5b5.csv,5,csv,2,5,19,4,6,Create a table of Singapore median funding round values,13,25,4,3,5
+3.25,True,3,,3,,3,5,0,3,0,Build an Excel of public innovation metrics,14,0,3,3,3
+3.75,False,2,/data/hermes/diagnostics/research_task_eval_v2/generated_artifacts/research_task_914a49eb.csv,5,csv,2,5,22,4,3,Create a source comparison table for startup funding reports,15,25,4,3,5
+3.25,True,3,,3,,3,5,0,3,0,Export a dataset of SME digital adoption variables,16,0,3,3,3

@@ -1,0 +1,17 @@
+asks_when_needed,avg_score,clarified,does_not_over_ask,options_useful,preview,query,query_id,question_specific,questions_asked,uses_context
+5,5,True,5,5,"Before I start the research task, I need one detail.
+  Which topic should I focus on?
+  Options: Startup funding, Innovation metrics, SME digital adoption, R&D indicators, Ecosystem organizations",startup data,7,5,1,5
+1,3,False,5,3,"The current evidence does not provide specific information regarding the innovation ecosystem in Asia. There are no direct matches or contextual matches available in the evidence packet.
+
+### Concepts",innovation ecosystem in Asia,8,3,0,3
+5,5,True,5,5,"Before I start the research task, I need a couple of details.
+  Which topic should I focus on?
+  Options: Startup funding, Innovation metrics, SME digital adoption, R&D indicators, Ecosystem organizat",funding trends,9,5,2,5
+5,5,True,5,5,"Before I start the research task, I need one detail.
+  Which metric type do you want?
+  Options: Funding amount, Deal count, Median/average round size, Stage breakdown, Sector breakdown",analyze Singapore startups,10,5,1,5
+5,4.6,True,5,3,"Before I start the research task, I need a couple of details.
+  What output do you want?
+  Options: Short answer, Comparison table, Excel workbook, Source list, Research brief
+  What level of data do ",make me a dataset on Asian startups,11,5,2,5

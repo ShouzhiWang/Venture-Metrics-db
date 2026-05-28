@@ -1,0 +1,107 @@
+answer_preview,availability_labeling,avg_score,clarified,contextual_matches,direct_matches,grounding,group,query,query_id,relevance,reports_count,source_transparency,specificity,synthesis_quality,task_type,usefulness,variables_count
+"### Answer
+
+The current evidence indicates various aspects of startup funding in Singapore, particularly focusing on early-stage, seed-stage, and late-stage funding amounts, as well as overall funding trends for tech startups.
+
+#### Direct Matches:
+- **Early-stage funding amount**: In 2024, Singapor",5,4.71,False,0,25,5,A_normal,startup funding in Singapore,1,4,15,5,5,5,simple_answer,4,25
+"The current evidence does not provide a numeric value for the count of Singapore VC deals by stage. 
+
+### Matches
+- **Direct Matches**: 
+  - Early-stage deals: Defined as seed to Series B venture rounds, but no numeric value is extracted.
+  - Late-stage deals: Defined as Series C and subsequent roun",5,4.71,False,0,25,5,A_normal,Singapore VC deal count by stage,2,4,7,5,5,5,simple_answer,4,25
+"The current evidence indicates the following median funding round values for Singapore in 2022:
+
+- **Median value of Seed rounds**: $2.7 million (USD)
+  - Source: [Singapore Venture Funding Landscape 2022 Report](https://www.startupsg.gov.sg/public/2023-03/Singapore%20Venture%20Funding%20Landscape%2",5,4.71,False,0,25,5,A_normal,Singapore median funding round value,3,4,13,5,5,5,simple_answer,4,25
+"### Answer
+
+The current evidence indicates that the gross expenditure on research and development (R&D) as a percentage of GDP in the UK is **1.0%**. This value is extracted from the **ONS Gross Expenditure on R&D statistics (2022)**, which is publicly available and obtainable. 
+
+### Matches
+- **Dir",5,4.29,False,2,23,5,A_normal,R&D expenditure as percentage of GDP,4,4,1,2,5,5,simple_answer,4,25
+"### Answer
+
+The evidence indicates several metrics related to SME digital adoption in Singapore:
+
+1. **SMEs Adoption Rate of Sector-Specific Digital Solutions**:
+   - **Value**: 61% in 2021, increasing to 85% in 2023.
+   - **Source**: [Singapore Digital Economy Report 2024](https://www.imda.gov.sg/-",5,4.14,False,25,0,5,A_normal,SME digital adoption,5,4,3,1,5,5,simple_answer,4,25
+"### Answer
+The current evidence indicates various forms of government support for startups, particularly in the UK and the United States. Key findings include:
+
+- **Future Fifty Cohort Employment**: In 2022, the Future Fifty cohort in the UK employed over **2,100 staff**. This data is sourced from a",5,4.43,False,21,4,5,A_normal,government support for startups,6,4,2,3,5,5,simple_answer,4,25
+"Before I start the research task, I need one detail.
+  Which topic should I focus on?
+  Options: Startup funding, Innovation metrics, SME digital adoption, R&D indicators, Ecosystem organizations",4,4.71,True,0,0,5,B_clarification,startup data,7,5,0,4,5,5,clarification,5,0
+"The current evidence does not provide specific information regarding the innovation ecosystem in Asia. There are no direct matches or contextual matches available in the evidence packet.
+
+### Concepts
+- **Innovation Ecosystem**: No specific variables or metrics related to the innovation ecosystem in",1,2,False,0,0,1,B_clarification,innovation ecosystem in Asia,8,4,0,1,1,5,simple_answer,1,0
+"Before I start the research task, I need a couple of details.
+  Which topic should I focus on?
+  Options: Startup funding, Innovation metrics, SME digital adoption, R&D indicators, Ecosystem organizations
+  What time period should I use?
+  Options: Latest available, Past 5 years, Past 10 years, Spec",4,4.71,True,0,0,5,B_clarification,funding trends,9,5,0,4,5,5,clarification,5,0
+"Before I start the research task, I need one detail.
+  Which metric type do you want?
+  Options: Funding amount, Deal count, Median/average round size, Stage breakdown, Sector breakdown",4,4.71,True,0,0,5,B_clarification,analyze Singapore startups,10,5,0,4,5,5,clarification,5,0
+"Before I start the research task, I need a couple of details.
+  What output do you want?
+  Options: Short answer, Comparison table, Excel workbook, Source list, Research brief
+  What level of data do you need?
+  Options: Company-level, Deal-level, City/country-level indicators, Organization/ecosyste",4,4.71,True,0,0,5,B_clarification,make me a dataset on Asian startups,11,5,0,4,5,5,clarification,5,0
+"To create an Excel sheet of Singapore startup funding by stage, the following data is available:
+
+### Direct Matches:
+1. **Early-stage funding amount**: 
+   - **Value**: $1.1 billion in 2024 (down from $1.3 billion in 2023)
+   - **Source**: Based on Tracxn’s extensive database
+   - **Availability**:",5,4.71,False,0,25,5,C_export,Create an Excel of Singapore startup funding by stage,12,4,15,5,5,5,create_excel,4,25
+"### Answer
+The current evidence provides the following median funding round values for Singapore in 2022:
+
+| Funding Round Stage | Median Value (USD) | Source Report | Source URL |
+|---------------------|--------------------|----------------|------------|
+| Seed                | 2.7 million        |",5,4.71,False,0,25,5,C_export,Create a table of Singapore median funding round values,13,4,6,5,5,5,build_table,4,25
+"Before I start the research task, I need a couple of details.
+  What level of data do you need?
+  Options: Company-level, Deal-level, City/country-level indicators, Organization/ecosystem actors, Report-level sources
+  Which market should I focus on?
+  Options: Singapore, Hong Kong, Shenzhen, India,",4,4.57,True,0,0,5,C_export,Build an Excel of public innovation metrics,14,4,0,4,5,5,clarification,5,0
+"### Answer
+
+The current evidence packet provides various metrics related to startup funding, including late-stage funding amounts, exit counts, and early-stage funding averages across different regions and time periods. However, it is not feasible to create a comprehensive source comparison table du",4,3.86,False,0,25,5,C_export,Create a source comparison table for startup funding reports,15,4,0,1,5,5,build_table,3,25
+"Before I start the research task, I need a couple of details.
+  What output do you want?
+  Options: Short answer, Comparison table, Excel workbook, Source list, Research brief
+  What level of data do you need?
+  Options: Company-level, Deal-level, City/country-level indicators, Organization/ecosyste",4,4.57,True,0,0,5,C_export,Export a dataset of SME digital adoption variables,16,4,0,4,5,5,clarification,5,0
+"The current evidence does not support the aggregation of startup funding across Singapore reports due to several limitations.
+
+### Direct Matches vs. Contextual Matches
+- **Direct Matches**: 
+  - Early-stage funding amount: 15.38 USD billion for 2023 and 2024.
+  - Singapore tech startups funding amo",5,4.71,False,0,25,5,D_comparability,Add up startup funding across Singapore reports,17,4,15,5,5,5,aggregate_values,4,25
+"### Answer
+The current evidence does not provide a comprehensive aggregation of VC deal counts from all available sources due to various limitations, including mixed geography, time periods, and units of measurement.
+
+### Direct Matches vs. Contextual Matches
+- **Direct Matches**: 
+  - Number of VC-",4,3.86,False,22,3,5,D_comparability,Aggregate VC deal counts from all available sources,18,4,0,1,5,5,aggregate_values,3,25
+"### Direct Answer
+The current evidence does not provide a clear numeric comparison between startup funding amounts and venture capital (VC) investment definitions. However, it does include various metrics related to funding amounts and definitions of investment stages.
+
+### Matches
+- **Direct Matche",4,4.71,False,0,20,5,D_comparability,Compare startup funding amount vs VC investment definitions,19,4,5,5,5,5,compare_definitions,5,20
+"### Answer
+The current evidence does not provide a clear numeric value for the combination of IPO proceeds with startup funding. However, it does present relevant data on IPO proceeds and startup funding separately.
+
+### Matches
+- **Direct Matches**: None.
+- **Contextual Matches**: 
+  - IPO proceeds",5,4,False,25,0,5,D_comparability,Can we combine IPO proceeds with startup funding?,20,4,0,1,5,5,simple_answer,3,25
+"Before I start the research task, I need one detail.
+  What output do you want?
+  Options: Short answer, Comparison table, Excel workbook, Source list, Research brief",4,4.57,True,0,0,5,D_comparability,Create a single Asia startup exits dataset from all reports,21,4,0,4,5,5,clarification,5,0

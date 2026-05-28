@@ -1,0 +1,4 @@
+bytes,group,path,query,query_id,type
+26201,C_export,/data/hermes/diagnostics/research_task_eval_v2/generated_artifacts/research_task_be6ab6e0.xlsx,Create an Excel of Singapore startup funding by stage,12,xlsx
+23916,C_export,/data/hermes/diagnostics/research_task_eval_v2/generated_artifacts/research_task_bed5e5b5.csv,Create a table of Singapore median funding round values,13,csv
+23469,C_export,/data/hermes/diagnostics/research_task_eval_v2/generated_artifacts/research_task_914a49eb.csv,Create a source comparison table for startup funding reports,15,csv
