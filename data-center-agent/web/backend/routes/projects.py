@@ -289,19 +289,12 @@ if router:
         research_question = (project.get("research_question") or "").strip()
 
         user_message = (payload.message or "").strip()
-        context_parts = []
-        if project_title:
-            context_parts.append(f"Project: {project_title}")
-        if research_question:
-            context_parts.append(f"Research question: {research_question}")
-
-        enriched_message = f"[{'; '.join(context_parts)}] {user_message}" if context_parts else user_message
 
         # Local import to avoid circular imports at module level
-        from web.backend.routes.chat import ChatRequest, handle_chat  # noqa: PLC0415
+        from web.backend.routes.chat import ChatRequest, _finalize_chat_response, handle_chat  # noqa: PLC0415
 
         chat_request = ChatRequest(
-            message=enriched_message,
+            message=user_message,
             conversation_id=payload.conversation_id,
             history=payload.history,
             context={
@@ -311,8 +304,4 @@ if router:
             },
         )
         chat_result = handle_chat(chat_request.model_dump())
-        # Assign a stable conversation_id for multi-turn threading without saving
-        # project queries to the general search history.
-        if not chat_result.get("conversation_id"):
-            chat_result["conversation_id"] = payload.conversation_id or str(uuid.uuid4())
-        return chat_result
+        return _finalize_chat_response(user["id"], chat_request, chat_result)

@@ -847,6 +847,41 @@ a:hover {
   margin: 0;
 }
 
+.sidebar-project-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-project-summary .project-stat-row {
+  margin-top: 2px;
+}
+
+.sidebar-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sidebar-project-actions button {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.sidebar-project-actions button:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.sidebar-edit-form {
+  margin-top: 8px;
+}
+
 .error-text {
   color: #9b1c1c;
 }
