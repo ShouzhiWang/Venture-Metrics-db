@@ -1,0 +1,11 @@
+rank,bottleneck,count,total,pct,impact,fix
+1,Reports without variables,121,239,51%,medium,Run extraction on remaining 112 reports with chunks but no variables
+2,Low-text reports,94,239,39%,high,Re-process with Tesseract OCR or find alternative sources
+3,Landing-page-only reports,24,239,10%,medium,Resolve HTML sources to find actual report PDFs
+4,Paywalled/gated reports,19,239,8%,low,Find open-access alternatives for key reports
+5,Missing geography coverage,"India, HK, broader Asia",-,-,high,Ingest reports for underrepresented geographies
+6,No canonical variable normalization,0,1177,0%,medium,Build deduplication layer for similar variables across reports
+7,Variable availability labeling,unclear,1177,-,low,Audit and label variables as public/private/obtainable
+8,Search index lacks chunk-level embeddings,0,5069,0%,medium,Add document_chunks to search_index for finer-grained retrieval
+9,Answer generation doesn't synthesize across variables,-,-,-,medium,Improve LLM answer layer to aggregate and summarize variable values
+10,Chart noise in variable names,4%,100 sampled,4%,low,Clean chart-label artifacts from variable names

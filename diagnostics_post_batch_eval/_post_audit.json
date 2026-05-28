@@ -1,0 +1,73 @@
+{
+  "core_counts": {
+    "sources": 434,
+    "reports": 239,
+    "document_chunks": 5069,
+    "report_variables": 1177,
+    "variables": 0,
+    "ecosystem_organizations": 256,
+    "search_index": 2106
+  },
+  "si_by_status": {
+    "embedded": 2106
+  },
+  "si_by_type_status": [
+    [
+      "organization",
+      "embedded",
+      256
+    ],
+    [
+      "report",
+      "embedded",
+      239
+    ],
+    [
+      "source",
+      "embedded",
+      434
+    ],
+    [
+      "variable",
+      "embedded",
+      1177
+    ]
+  ],
+  "si_by_type": {
+    "variable": 1177,
+    "source": 434,
+    "organization": 256,
+    "report": 239
+  },
+  "funnel": {
+    "total_sources": 434,
+    "total_reports": 239,
+    "reports_with_chunks": 230,
+    "reports_without_chunks": 9,
+    "total_chunks": 5069,
+    "total_variables": 1177,
+    "reports_with_variables": 118,
+    "variables_with_evidence": 1177,
+    "variables_high_confidence": 1177
+  },
+  "content_quality": {
+    "low_text": 94,
+    "full_report": 87,
+    "landing_page_only": 24,
+    "paywalled_or_gated": 19,
+    "no_label": 11,
+    "failed": 3,
+    "js_required": 1
+  },
+  "geography_dist": {
+    "United States": 25,
+    "United Kingdom": 22,
+    "China": 17,
+    "Singapore": 11,
+    "50 states, 1875 counties, 380 MSAs) \u2014 Demographics: Gender, Ethnicity Source: America\u2019s small businesses, October 2024": 1,
+    "financial services in Edinburgh, Leeds and London - advanced manufacturing in Broughton and Newport, Greater Manchester,": 1,
+    "Temasek [9] https://www": 1,
+    "all figures and percentages in this document are rounded": 1
+  },
+  "reports_with_chunks_no_vars": 112
+}

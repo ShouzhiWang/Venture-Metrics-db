@@ -1,0 +1,1802 @@
+[
+  {
+    "id": "bfc523ff-4a23-478a-baf2-4eca96eedadb",
+    "raw_variable_name": "Share of total nominal gross lending to SMEs by challenger and specialist banks",
+    "definition": "Percentage share of total nominal gross lending to SMEs accounted for by challenger and specialist banks",
+    "unit": "percentage (%)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The share of total nominal gross lending to SMEs by challenger and specialist banks in 2024 was 60%",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "651a534c-101e-49e3-9587-2103609adc36",
+    "raw_variable_name": "Number of mid-market private debt deals",
+    "definition": "Number of mid-market private debt deals recorded quarterly",
+    "unit": "number of deals",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure B.72 Number of mid-market private debt deals by country (four-quarter rolling average) ... Source: British Business Bank analysis of Deloitte data",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "c2c01c35-d5c4-4d6c-a1b3-8a1639c6a632",
+    "raw_variable_name": "Equity investment received by spinouts in 2024",
+    "definition": "Total value of equity investment secured by UK spinouts in the year 2024.",
+    "unit": "GBP (billion)",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit total equity investment value with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "\u00a32.60b Equity investment received by spinouts in 2024",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "f8675a7e-acd4-4800-a81d-9958587acc1c",
+    "raw_variable_name": "Share of UK mid-market private debt deals by sector",
+    "definition": "Proportion of mid-market private debt deals invested in various industry sectors",
+    "unit": "percentage (%)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure B.73 Share of UK mid-market private debt deals by sector, 2015-17 vs 2022-24 ... Source: British Business Bank analysis of Preqin Ltd",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "chart_metric"
+  },
+  {
+    "id": "66f62abf-2aeb-4e6d-a9f2-921060d9fe0b",
+    "raw_variable_name": "Number of unique UK funds investing in at least one UK equity deal",
+    "definition": "Count of unique UK funds that invested in at least one UK equity deal",
+    "unit": "number of funds",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure B.69 Number of unique UK funds investing in at least one UK equity deal ... Source: British Business Bank analysis of Beauhurst data",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "a98c903b-aec8-4eeb-987a-9bbc40f28b35",
+    "raw_variable_name": "Net employment rate",
+    "definition": "The net number of jobs by the end of the accounting year, equal to the difference between job creation and job destruction over the period.",
+    "unit": "ratio or percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition and measurement method provided with data source and temporal coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The net employment rate is the job creation rate less the job destruction rate.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "767bb414-4ff8-4692-a12d-ab00844ca348",
+    "raw_variable_name": "Risk of insolvency",
+    "definition": "Perceived risk of insolvency reported by businesses, categorized as severe risk, moderate risk, low risk, no risk, not sure, or business is insolvent.",
+    "unit": "percentage of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit survey question, categories, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Across all businesses, about 12 per cent report a moderate or severe risk of insolvency, 40 per cent indicate low risk, and roughly 31 per cent report no risk.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "9a6a604b-3562-4fed-a7d7-b6f06b591e76",
+    "raw_variable_name": "Number of spinouts tracked since 2011",
+    "definition": "Total number of UK spinout companies tracked by Beauhurst since 2011.",
+    "unit": "count",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit total count of spinouts tracked with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "2,064 Total number of spinouts tracked since 2011 in the UK",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "bc8a5da7-a6e2-4b31-a361-8ac69eaeff9e",
+    "raw_variable_name": "Number of registered business births and deaths",
+    "definition": "Number of VAT and PAYE registrations (business births) and de-registrations (business deaths) used as proxy for business start-ups and closures",
+    "unit": "number of businesses",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "VAT and PAYE registrations (and de-registrations) are used as a proxy for business start-ups (and closures) ... Source: Business demography, quarterly, UK (Q4 2024)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "f0d40d43-3839-4696-9c02-6fecfca76950",
+    "raw_variable_name": "Value of VC-backed company exits",
+    "definition": "Total value of exits of venture capital-backed companies in the UK measured by exited companies' post-money valuation",
+    "unit": "billion GBP (\u00a3bn)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Exit value doubled from \u00a35.2bn in 2023 to \u00a310.4bn in 2024 ... Source: British Business Bank analysis of user defined PitchBook search",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "11c30a7e-0f25-4e4d-aa88-d904c163bc71",
+    "raw_variable_name": "Number of UK SME equity deals",
+    "definition": "Count of equity deals announced for UK SMEs",
+    "unit": "number of deals",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The first three quarters of 2024 saw a total of 1,303 UK SME equity deals announced ... Source: British Business Bank analysis of Beauhurst data",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "7ce301c3-225b-4f4e-9f82-97cd96a6ab1c",
+    "raw_variable_name": "R&D spending by expenditure type",
+    "definition": "Breakdown of R&D spending into current expenditures (staff costs, other current costs) and capital investment (plant, machinery, land, buildings).",
+    "unit": "Percentage change or share of total R&D spending",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit breakdown of R&D spending categories with growth rates and shares.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Spending on salaries and wages grew by over five per cent, and because wages account for more than half of all R&D expenditure... Capital investment... fell by almost 13%",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "1998222e-36e8-443d-84f3-2e49dc31a8b2",
+    "raw_variable_name": "Percentage of UK businesses actively engaged in innovation",
+    "definition": "The share of UK businesses that are actively engaged in innovation activities.",
+    "unit": "Percentage (%)",
+    "confidence_score": "0.75",
+    "metadata": {
+      "reason": "Explicit percentage measure with temporal and geographic coverage, though data source is not clearly identified.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "the percentage of UK businesses actively dropped from 45% in 2018-20 to 36% in 2020-22",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "95d572a7-4721-4741-bdbe-e36b904aaa0a",
+    "raw_variable_name": "Job destruction rate",
+    "definition": "The number of jobs lost by firm exit and firm contraction expressed as a ratio of the total opening stock of employment in that accounting year.",
+    "unit": "ratio or percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, data source and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Job Destruction: The number of jobs lost by firm exit and firm contraction... expressed as the ratio of the total opening stock of employment in that accounting year.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "f4c4f685-eca8-4395-a6a0-edead95fdf58",
+    "raw_variable_name": "Cash reserves duration by firm size",
+    "definition": "Expected duration of business cash reserves by firm size, measured as the length of time cash reserves will last.",
+    "unit": "percentage of businesses by duration category",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit survey question, unit, data source and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Question: \u2018How long do you expect your business\u2019s cash reserves will last?\u2019; as percentage of currently trading businesses, weighted count, UK.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "9778f9cb-23c8-4293-8d50-6b7cff3d9f81",
+    "raw_variable_name": "SME classification",
+    "definition": "Businesses with 0-249 employees; small firms have 0-49 employees; micro businesses have 0-9 employees.",
+    "unit": "number of employees",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit official classification with definition and data source.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The majority of these - 99.9 per cent - were classified as small and medium sized enterprises (SMEs), officially defined as businesses with 0-249 employees; 99.2 per cent were small firms (with 0 to 49 employees), and 95 per cent were micro businesses (with 0-9 employees).",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "6bf58f85-e12e-4962-8c21-aebafceb4f72",
+    "raw_variable_name": "R&D investment activity",
+    "definition": "Percentage of firms reporting engagement in R&D activity.",
+    "unit": "percentage of firms",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit metric with data source, temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Overall, 39 per cent of firms reported engaging in some form of R&D activity in 2025.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "13851202-4291-41ff-bef6-6491e7856ef3",
+    "raw_variable_name": "Median university equity stake by company type",
+    "definition": "Median percentage equity stake held by universities in spinouts by company type (hardware, software, life sciences) in the year of spinning out.",
+    "unit": "percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit median equity stakes by company type with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Since January 2011, universities have taken median stakes of 19.1% in hardware spinouts, 20.0% in software, and 21.5% in life sciences.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "c7a959cb-1c34-420b-9a66-074f73e3571c",
+    "raw_variable_name": "University equity stakes by institution",
+    "definition": "Median, average, standard deviation of equity stakes held by universities in spinouts incorporated since 2010, by institution.",
+    "unit": "percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit equity stake statistics by university with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Spinout equity stakes taken by academic institutions since 2011 and incorporated since 2010 ... Median Academic Institution Average Standard deviation Eligible spinouts Total spinouts",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "79603fdb-798a-4e15-aee5-3a4fb688b199",
+    "raw_variable_name": "Share of investment as a percentage of GDP",
+    "definition": "Business investment as a percentage of Gross Domestic Product (GDP)",
+    "unit": "percentage (%)",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The UK has the lowest share of investment as a percentage of GDP among G7 countries for 24 out of the last 30 years ... Source: World Economic Outlook (WEO) database",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "8b35e512-460d-4bc5-b30a-c178507395c4",
+    "raw_variable_name": "QS university ranking, top 3",
+    "definition": "QS Quacquarelli Symonds Ltd annually assesses over 1,200 universities globally and scores them between 0 and 100. Ranks can be a single value, a tie, or a range.",
+    "unit": "score (0-100)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "QS Quacquarelli Symonds Ltd annually assesses over 1,200 universities across the globe and scores them between [0,100].",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "dc82f4db-a77f-45f5-bc11-43d6f3c92116",
+    "raw_variable_name": "Number of VC-backed company exits",
+    "definition": "Count of exits of venture capital-backed companies in the UK",
+    "unit": "number of exits",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "There were 215 exits of VC-backed companies in the UK in 2024 ... Source: British Business Bank analysis of user defined PitchBook search",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "4ff55d74-93a3-4b06-bf0f-7095b23e3517",
+    "raw_variable_name": "Share of smaller businesses willing to use finance to grow",
+    "definition": "Proportion of smaller businesses expressing willingness to use finance to grow and develop",
+    "unit": "percentage (%)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The share of smaller businesses that expressed willingness to use finance to grow and develop fluctuated in 2024 ... Source: UK Finance BVA BDRC SME Finance Monitor",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "ae38c16d-a369-4edf-9d9d-63063da2198d",
+    "raw_variable_name": "Equity investment in UK smaller businesses",
+    "definition": "Total value of equity investment in UK smaller businesses",
+    "unit": "billion GBP (\u00a3bn)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Equity investment in UK smaller businesses was \u00a36.89bn in the first three quarters of 2024 ... Source: British Business Bank analysis of Beauhurst data",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "077e1126-f12e-4ae4-86dc-a0e8c3dad113",
+    "raw_variable_name": "UK business R&D spending growth rate",
+    "definition": "Percentage change in business R&D spending over time.",
+    "unit": "Percentage (%)",
+    "confidence_score": "0.85",
+    "metadata": {
+      "reason": "Explicitly defined percentage change in UK business R&D spending with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "UK business R&D spending has dropped by 6.3% since 2021 (real terms)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "33609c59-773a-4b6a-bdce-1e9bdcae5597",
+    "raw_variable_name": "Business Enterprise R&D (BERD) spending",
+    "definition": "Total business research and development spending by enterprises in the UK.",
+    "unit": "Billion GBP",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicitly defined R&D spending measure with source, unit, temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Business research spending increased by 2.3 per cent in 2024 to reach \u00a355.6 billion in constant 2024 prices",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "eea05ace-bb79-405d-8c40-e8b567ddd63c",
+    "raw_variable_name": "Total business R&D spending by firm size",
+    "definition": "Total business R&D expenditure segmented by firm size in real terms.",
+    "unit": "Billion GBP",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined R&D spending by firm size with source and temporal/geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure 3. Total business R&D spending, 2022-2024, by firm size in real terms",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "5e3cf99c-d087-4a0c-ad72-8ba39021d96b",
+    "raw_variable_name": "Gross Fixed Capital Formation (GFCF)",
+    "definition": "Investment in long-term physical and intellectual capital, including physical assets like machinery, buildings, infrastructure, and intangible assets such as Research and Development (R&D), mineral exploration, software, and databases.",
+    "unit": "Rank among countries (numeric rank), investment amount (monetary units implied)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with measurement, unit, data source, and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "WIPO ranks the UK\u2019s GFCF 107 among the 133 included countries. GFCF, which represents investment in long-term physical and intellectual capital...",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "b580f6ab-20b9-4a94-b662-0f5d5e9972f8",
+    "raw_variable_name": "Rate of innovation activity",
+    "definition": "Proportion of firms reporting making product or service changes over the last year.",
+    "unit": "percentage of firms",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit percentage and temporal coverage provided from survey data.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "In 2024, 56 per cent of the businesses surveyed reported making product or service changes over the last year.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "296d9550-3abb-4ae1-8196-8a54f14770e0",
+    "raw_variable_name": "Business concerns: falling demand",
+    "definition": "Percentage of businesses reporting falling demand for goods and services as their main concern.",
+    "unit": "percentage of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit percentage, survey source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The highest concern for businesses in October 2024 was falling demand for goods and services, with 14.1 per cent of businesses surveyed highlighting this.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "d62b0425-d547-4dce-8623-055605145a78",
+    "raw_variable_name": "Established firms scaling from \u00a31-2m to \u00a33m+ turnover",
+    "definition": "Percentage of established firms (trading at least 3 years) with \u00a31-2m turnover in 2020 scaling to \u00a33m+ turnover in 2023.",
+    "unit": "percentage of firms",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Established firms (i.e., trading for at least 3 years) that had \u00a31-2m turnover in 2020 scaling to \u00a33m+ in 2023 \u2013 i.e., \u2018kicking on beyond the first million\u2019.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "ab0869f8-5f45-43f4-b654-c28ff8040a9b",
+    "raw_variable_name": "Business concerns: taxation",
+    "definition": "Percentage of businesses reporting taxation as their main concern.",
+    "unit": "percentage of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit percentages, survey source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "An increasing number of businesses said they were concerned by taxation (11.5 per cent in October 2024 compared to 5.8 per cent last year).",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "23d896d6-9e88-4960-9a73-c5db7adcbca3",
+    "raw_variable_name": "Equity finance use among early-stage ventures",
+    "definition": "Percentage of early-stage ventures using external finance, with equity being the most commonly used source.",
+    "unit": "percentage of firms",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit survey data with defined sample, measurement method, unit, and temporal coverage; data source is a private survey.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Overall, around 62.6 per cent of respondents were using external finance 12 months before the survey, equity was the most commonly used source of funding among responding ventures, being used by 45.8 per cent of firms.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "1cf859de-af93-46eb-9be2-c4679359e5d8",
+    "raw_variable_name": "Share of businesses operating solely online",
+    "definition": "Percentage of businesses that operate exclusively online without physical stores",
+    "unit": "percentage",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with unit and data source",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "About 73% of these businesses operate solely online",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Appendix Figures & Tables 62",
+    "geography": "United States",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "66c00041-eaa6-4034-8ad5-640e91b54ef2",
+    "raw_variable_name": "Business concerns",
+    "definition": "Main concerns reported by businesses including falling demand, competition, taxation, inflation, energy prices, and others.",
+    "unit": "percentage of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit survey question, categories, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure 4: Business concerns (All businesses)... as a percentage of businesses not permanently stopped trading, weighted by count, UK.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "cf9b648e-ef2e-4e7b-ab9e-fe409a5928c4",
+    "raw_variable_name": "Late payment impact metrics",
+    "definition": "Metrics related to late payment including percentage of businesses affected, average amount owed, staff time spent chasing payments, and estimated business closures due to late payments.",
+    "unit": "percentage of businesses, monetary value in GBP, hours of staff time, number of business closures",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit definitions, measurement methods, units, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The study found that the estimated cost of late payments to the UK economy is almost \u00a311 billion per year. 28 per cent of businesses are affected by late payments each year, and businesses are owed an estimated \u00a326 billion in late payments at any given time - an average of \u00a317,000 per business affected by late payment.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "eb625517-745c-4213-b4dd-069e260e1323",
+    "raw_variable_name": "Number of foreign national directors",
+    "definition": "Count of directors of UK spinouts who are nationals of countries other than the UK.",
+    "unit": "count",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit count of foreign national directors with date and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "1,459 Number of foreign national directors (January 2025)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "fa9e5ed9-70db-46e2-802c-4fd67885ccc0",
+    "raw_variable_name": "Number of spinouts by top universities in England, Scotland, Northern Ireland, Wales",
+    "definition": "Count of spinouts originating from top universities in each UK nation as of January 2025.",
+    "unit": "count",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit counts of spinouts by university with date and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Top three universities in England by number of spinouts ... University of Edinburgh University of Glasgow University of Strathclyde University of Ulster Queen\u2019s University Belfast Swansea University Cardiff University",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "32a54b87-6be4-4de4-a913-4f3686ab1cb5",
+    "raw_variable_name": "Survival rate of UK university spinouts",
+    "definition": "Proportion of UK university spinouts still operational as of January 2025.",
+    "unit": "percentage",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit survival rate with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Of the 2,064 UK university spinouts, 441 (21.4%) are no longer operational.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "b62e360d-b62e-49bd-a536-b26238dd9943",
+    "raw_variable_name": "Gender diversity of spinout founders and directors",
+    "definition": "Proportion of spinouts by gender composition of founders and directors for companies incorporated in 2018 and 2023.",
+    "unit": "percentage",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit gender diversity proportions with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Spinouts by gender of directors (spinouts incorporated in 2018 and 2023), Spinouts by gender of founders (2018 and 2023)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "87ece5fc-ec1d-42fe-891e-f80ed8683042",
+    "raw_variable_name": "Gross lending by challenger and specialist banks to SMEs",
+    "definition": "Nominal gross lending excluding overdrafts to small and medium-sized enterprises by challenger and specialist banks",
+    "unit": "billion GBP (\u00a3bn)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "BoE data shows nominal gross lending excluding overdrafts to SMEs by challenger and specialist banks in 2024 was \u00a337.3bn",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "73a956a8-8d74-403a-a2a4-727a23b032ae",
+    "raw_variable_name": "Investment value of equity deals by Nation and region",
+    "definition": "Total investment value in equity deals based on the head office of the recipient business in each UK Nation and region",
+    "unit": "million GBP (\u00a3m)",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Investment value \u00a3m (Q1-Q3 2024) ... Source: British Business Bank analysis of Beauhurst data",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "chart_metric"
+  },
+  {
+    "id": "640eb934-06f0-436d-862a-eb44589c8adc",
+    "raw_variable_name": "Share of transactions by investor type",
+    "definition": "Proportion of total transactions accounted for by venture capital and private equity investors.",
+    "unit": "percentage",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined percentage shares of transactions by investor type with source and coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Together they accounted for 78% of all transactions (58% for venture capital and 19% for private equity, with rounding used), broadly in line with 2023\u2019s figures (79% combined)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "4171908b-bdc5-4a06-8d00-adfc21a70e1a",
+    "raw_variable_name": "Global corporate R&D investors, top 3, mn USD",
+    "definition": "Ranks the top 2,000 firms by R&D investment annually; for countries not represented, companies with R&D expenditure above USD 50 million were identified and used to complement the dataset.",
+    "unit": "million USD",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Data is based on the 2024 EU Industrial R&D Investment Scoreboard from the European Commission\u2019s Joint Research Centre, which ranks the top 2,000 firms by R&D investment annually.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "d3e02c84-d100-452d-8c40-c11258308a16",
+    "raw_variable_name": "Domestic industry diversification",
+    "definition": "An indicator measuring the diversification of domestic industries within the economy.",
+    "unit": "Not specified",
+    "confidence_score": "0.7",
+    "metadata": {
+      "reason": "Explicit indicator name with ranking; part of GII 2025 indicators though detailed definition is not provided in chunk.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "United Kingdom\u2019s best-ranked innovation strengths are ... Domestic industry diversification (rank 3).",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "fdaf2e31-949d-4264-899b-c2559f670a4d",
+    "raw_variable_name": "Consumer Price Index (CPI) inflation rate",
+    "definition": "Annual rate of inflation measured by the consumer price index (CPI)",
+    "unit": "percentage (%)",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The rate of inflation measured by the consumer price index (CPI) continued to fall in 2024 ... Source: ONS",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "ef21c47e-da69-4655-a980-00ec54f19076",
+    "raw_variable_name": "UK business R&D growth by Industrial Strategy (IS) sector",
+    "definition": "Percentage growth in business R&D spending weighted by sectoral share of total R&D spending in 2024.",
+    "unit": "Percentage (%)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Defined sector-level R&D growth metric with source and temporal/geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Construction (-23.5%) and the residual \u201cOther\u201d category (-26.2%) saw the most pronounced declines... Figure 4. UK business R&D growth by Industrial Strategy (IS) sector (2022-2024)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "b3320456-c2da-49e8-995f-772a59381fe7",
+    "raw_variable_name": "UK business population",
+    "definition": "Estimated total number of UK private sector businesses",
+    "unit": "number of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "There were an estimated 5.5 million UK private sector businesses at the start of 2024",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "692efd6f-81cc-4ba5-a673-2d4a8eb39675",
+    "raw_variable_name": "Labor productivity growth, %",
+    "definition": "Growth rate of labor productivity expressed as a percentage.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.85",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; productivity data typically from official statistics.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Rank Code Indicator name 83 6.2.1 Labor productivity growth, %",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "53019ea6-635b-4e46-bcce-a6d9dc6b91a4",
+    "raw_variable_name": "Pupil\u2013teacher ratio, secondary",
+    "definition": "Ratio of pupils to teachers in secondary education.",
+    "unit": "ratio",
+    "confidence_score": "0.85",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; education statistics typically from official sources.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Rank Code Indicator name 90 2.1.5 Pupil\u2013teacher ratio, secondary",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "7571b1b4-98e2-43e4-a48f-26841b688e49",
+    "raw_variable_name": "Electricity output, GWh/mn pop.",
+    "definition": "Electricity output measured in gigawatt-hours per million population.",
+    "unit": "GWh per million population",
+    "confidence_score": "0.85",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; energy statistics typically from official sources.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Rank Code Indicator name 54 3.2.1 Electricity output, GWh/mn pop.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "835932e7-03e9-4b09-8c09-399feccdc294",
+    "raw_variable_name": "UK business R&D investment",
+    "definition": "Total investment in research and development by UK businesses, measured in real terms.",
+    "unit": "GBP (billion pounds)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined monetary measure of UK business R&D investment with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Data shows a sharp 6.3% drop in UK business R&D investment since 2021\u2014a loss of \u00a33.4bn",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "91915215-acc0-45c3-b9b3-f65f5a88cf43",
+    "raw_variable_name": "Number of new Greenfield R&D projects",
+    "definition": "Count of newly established Greenfield R&D projects in the UK.",
+    "unit": "Count (number of projects)",
+    "confidence_score": "0.8",
+    "metadata": {
+      "reason": "Explicitly defined count metric with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "number of new Greenfield R&D projects down around 30% since 2022/23",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "7560648a-e78f-463c-a79e-cdafa95c98ee",
+    "raw_variable_name": "Share of business R&D investment by foreign-owned firms",
+    "definition": "Proportion of total business R&D investment accounted for by foreign-owned firms.",
+    "unit": "Percentage (%)",
+    "confidence_score": "0.8",
+    "metadata": {
+      "reason": "Explicitly defined share metric with geographic and temporal context.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Foreign-owned firms increased R&D investment, now accounting for nearly half of total business R&D",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "7bcc5d43-2ebc-41c2-a3fe-ebb8b1b73477",
+    "raw_variable_name": "UK business R&D growth by region and country",
+    "definition": "Percentage growth in business R&D spending by UK region and country between 2022 and 2024.",
+    "unit": "Percentage (%)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit regional R&D growth measure with source and coverage details.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Only two regions recorded genuinely strong growth between 2022 and 2024. The West Midlands saw a 22% increase, and London managed 15% growth",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "c5a61c6c-d6db-426a-8b0d-917cf4daf1bf",
+    "raw_variable_name": "GDP growth and R&D growth by UK Industrial Strategy sectors",
+    "definition": "Comparison of GDP growth and business R&D growth by sector between 2022 and 2024.",
+    "unit": "Percentage (%)",
+    "confidence_score": "0.85",
+    "metadata": {
+      "reason": "Defined dual metric comparing GDP and R&D growth by sector with source and coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure 6. GDP growth and R&D growth UK industrial strategy sectors (2022-2024).",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "006076d9-18c7-40de-afbe-01bbd7e4df40",
+    "raw_variable_name": "Sectoral R&D growth rates (2022-2024)",
+    "definition": "Percentage growth rates of business R&D spending by sector between 2022 and 2024.",
+    "unit": "Percentage (%)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit sector-level R&D growth rates with source and coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Financial services recorded the strongest growth (+20.7%)... Digital & Tech +15.9%, Clean Energy +13.0%, Advanced Manufacturing +9.8%, Professional & Business Services +7.3%, Life sciences -0.8%, Creative industries -9.7%",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "db4c936d-2aea-40db-a917-b34c73062d00",
+    "raw_variable_name": "Percentage of SMEs in total private sector businesses",
+    "definition": "Percentage of private sector businesses classified as small and medium sized enterprises (SMEs) with 0-249 employees.",
+    "unit": "percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit percentage, definition, data source and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The majority of these - 99.8 per cent - were classified as small and medium sized enterprises (SMEs), officially defined as businesses with 0-249 employees.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "50c4a5a2-4c1d-46cc-89aa-d81008410714",
+    "raw_variable_name": "R&D investment growth rates",
+    "definition": "Annual percentage change in Research and Development (R&D) investment.",
+    "unit": "Percentage (%) change",
+    "confidence_score": "0.7",
+    "metadata": {
+      "reason": "Explicit metric with defined measurement and unit, though data source is not clearly identified.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "R&D fell by 0.4%, while international investment rose by 5%",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "0f2394aa-c45e-4635-b8bf-812193f69115",
+    "raw_variable_name": "Innovation active firm",
+    "definition": "A firm engaged in R&D, product, service, process, or organisational innovation or one that has either been actively engaged in or abandoned innovation in the last three years.",
+    "unit": "percentage of firms",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition and measurement method provided from ISNS survey data.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "In the ISNS survey, an \u2018innovation active\u2019 firm is defined as one engaged in R&D, product, service, process, or organisational innovation or one that has either been actively engaged in or abandoned innovation in the last three years.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "0023a1b3-c921-4a79-a287-c9b8723e5748",
+    "raw_variable_name": "R&D activity rate",
+    "definition": "Proportion of firms engaging in some form of research and development activity.",
+    "unit": "percentage of firms",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit percentage and temporal coverage provided from survey data.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Overall, 39 per cent of firms reported engaging in some form of R&D activity in 2023, which remained the same in 2024.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "01021b62-fdc8-410e-9539-8e5b5cc93adf",
+    "raw_variable_name": "Job creation rate",
+    "definition": "The number of jobs created through firm entry and expansion expressed as a ratio of the total opening stock of employment in that accounting year.",
+    "unit": "ratio or percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, data source and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Job Creation: The number of jobs created through firm entry and expansion... expressed as the ratio of the total opening stock of employment in that accounting year.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "b7958c80-03c8-46af-b2af-e679b727dd38",
+    "raw_variable_name": "Cultural and creative services exports, % total trade",
+    "definition": "Percentage of total trade accounted for by cultural and creative services exports.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.75",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; part of GII 2025 indicators.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Weaknesses include Cultural and creative services exports, % total trade",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "c146a82d-4623-4921-9f09-67f349c150c0",
+    "raw_variable_name": "Start-ups scaling to \u00a31m turnover within 3 years",
+    "definition": "Percentage of all start-ups surviving three years that reach \u00a31 million turnover within 3 years.",
+    "unit": "percentage of start-ups",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Start-ups scaling to \u00a31m turnover and over within 3 years. Chosen because of the oft-cited ambition of many entrepreneurs to \u2018reach their first million\u2019 in turnover. Expressed as a percentage of all start-ups surviving three years.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "71a81d54-6b9f-427c-af03-7b8bda29a5d6",
+    "raw_variable_name": "Productivity Heroes",
+    "definition": "Small businesses (1-249 employees) registering productivity gains (turnover per employee) while also creating jobs, expressed as a percentage of all firms increasing productivity.",
+    "unit": "percentage of firms",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Established firms (i.e., trading for at least 3 years; 1-249 employees) registering productivity gains (i.e., turnover per employee) and doing so while still creating jobs. We have called these small businesses \u2018Productivity Heroes\u2019.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "ee58a819-a339-48f8-8d43-04950e0f7d36",
+    "raw_variable_name": "Total number of private sector businesses",
+    "definition": "Total number of private sector businesses in the UK at the start of 2024.",
+    "unit": "number of businesses",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit number, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "According to official data, the total number of private sector businesses in the UK at the start of 2024 was 5.5 million.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "e08442ba-a935-4f62-b45f-17be0bac0479",
+    "raw_variable_name": "Risk of insolvency by firm size",
+    "definition": "Perceived risk of insolvency by business size, categorized as severe, moderate, low, no risk, or insolvent.",
+    "unit": "percentage of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit survey question, unit, data source and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Question: \u2018What is your business\u2019s risk of insolvency?\u2019; as a percentage of businesses not permanently stopped trading, weighted by count, UK.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "b4a6782b-26db-4f5c-995b-6d6c3bb02606",
+    "raw_variable_name": "Early-stage entrepreneurial activity rate (TEA rate)",
+    "definition": "The sum of nascent entrepreneurship and new business ownership/management as a percentage of working-age individuals.",
+    "unit": "percentage of adult population aged 18-64",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, data source and temporal coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The rate of total early-stage entrepreneurial activity (known as the TEA rate), which is the sum of nascent entrepreneurship and new business ownership/management, has increased over time in the UK.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "bbbb3dcd-f2a3-4818-93b1-914954a9900a",
+    "raw_variable_name": "Innovation active firm",
+    "definition": "A firm engaged in R&D, product, service, process, or organisational innovation, or one that has either been actively engaged in, or abandoned innovation in the last three years.",
+    "unit": "percentage of firms",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "In the ISNS survey, an \u2018innovation active\u2019 firm is defined as one that is engaged in R&D, product, service, process, or organisational innovation, or one that has either been actively engaged in, or abandoned innovation in the last three years.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "dd8991cd-9028-4f77-b546-d29ebc5dbeb3",
+    "raw_variable_name": "Total number of private sector businesses",
+    "definition": "Total count of private sector businesses in the UK at the start of 2025.",
+    "unit": "number of businesses",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit count with official data source and temporal/geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "According to official data, the total number of private sector businesses in the UK at the start of 2025 was 5.7 million.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "fbfdd7b0-c673-47c4-a7f4-5de933e9ea21",
+    "raw_variable_name": "Cash reserves duration",
+    "definition": "Length of time businesses expect their cash reserves to last, categorized as no reserves, less than 1 month, 1 to 3 months, 4 to 6 months, more than 6 months, or not sure.",
+    "unit": "percentage of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit survey question, categories, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure 2 shows how long businesses think their cash reserves will last by size (using data from wave 141 of BICS in September 2025).",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "4ffbbcd6-b228-4133-98ae-aa140f1592b1",
+    "raw_variable_name": "Total early-stage entrepreneurial activity (TEA) rate",
+    "definition": "Sum of nascent entrepreneurship and new business ownership/management as a percentage of working-age individuals.",
+    "unit": "percentage of adult population aged 18-64 years",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The rate of total early-stage entrepreneurial activity (known as the TEA rate), which is the sum of nascent entrepreneurship and new business ownership/management, has increased over time in the UK.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "6c958f51-c2ad-4150-890c-6ed672cc9965",
+    "raw_variable_name": "Labour shortages",
+    "definition": "Incidence of businesses currently experiencing a shortage of workers.",
+    "unit": "percentage of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit survey question, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Only 8.7 per cent of businesses reported experiencing a shortage of workers during the survey period.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "d6aa6c4c-fc16-41e2-9a31-35850781d955",
+    "raw_variable_name": "Unicorn valuation, % GDP",
+    "definition": "Valuation of unicorn companies as a percentage of GDP.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.75",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; part of GII 2025 indicators.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Weaknesses include Unicorn valuation, % GDP",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "58c548c8-ca37-46f3-9b66-b2d768bf2c6c",
+    "raw_variable_name": "Adoption rate of Artificial Intelligence (AI)",
+    "definition": "Percentage of businesses that have adopted AI technology.",
+    "unit": "percentage of businesses",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit metric with data source, temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "45 per cent of businesses said they had adopted AI, with the rate of adoption increasing with firm size: 72 per cent of large businesses had adopted AI compared to 41 per cent of the wider population of businesses.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "767f2567-a137-4e53-af9f-9172195356eb",
+    "raw_variable_name": "Total early-stage entrepreneurial activity (TEA) rate by home nations",
+    "definition": "Percentage of working-age individuals aged 18-64 years engaged in early-stage entrepreneurial activity in Wales, Scotland, Northern Ireland, and UK overall.",
+    "unit": "percentage of adult population aged 18-64 years",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit metric with data source, temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure 1: Total early-stage Entrepreneurial Activity (TEA) in the Home Nations 2002-24",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2025 Navigating uncertainty",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "4c381dfb-5ea7-4e5a-b121-b23e6c43b177",
+    "raw_variable_name": "Number of UK national directors",
+    "definition": "Count of directors of UK spinouts who are UK nationals.",
+    "unit": "count",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit count of UK national directors with date and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "3,752 Number of UK national directors (January 2025)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "29a43aef-778b-44ab-9c26-e51122b77651",
+    "raw_variable_name": "Number of spinouts per nation",
+    "definition": "Count of spinout companies by UK nation (England, Wales, Northern Ireland, Scotland) as of January 2025.",
+    "unit": "count",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit counts of spinouts by UK nation with date and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "England 1,635 Wales 105 Northern Ireland 81 Scotland 243",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "7460f843-d2b0-4fa2-ac17-71125cbe2f2f",
+    "raw_variable_name": "Knowledge-intensive employment, %",
+    "definition": "Percentage of employment in knowledge-intensive sectors.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.75",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; part of GII 2025 indicators.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Weaknesses include Knowledge-intensive employment, %",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "b8282b61-0888-46bb-a745-2132699f8bfa",
+    "raw_variable_name": "Average university equity stake in 2024",
+    "definition": "Average percentage equity stake taken by universities in spinouts in the year 2024.",
+    "unit": "percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit average equity stake with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "16.1% Average stake taken by universities in 2024",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "68eb71cc-3cfa-4821-9455-98047ed8d48b",
+    "raw_variable_name": "Average age of UK spinouts at death",
+    "definition": "Average lifespan in years of UK spinouts that have ceased operations, measured from incorporation to death.",
+    "unit": "years",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit average lifespan with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "7.75 years Average age of UK spinouts at death (2015-2024)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "2998ee8a-8e9e-42f0-84d0-243181c66e5a",
+    "raw_variable_name": "Top sectors by number of spinouts",
+    "definition": "Number of spinouts by sector as of January 2025, including pharmaceuticals, data provision and analysis, electronics hardware, etc.",
+    "unit": "count",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit counts of spinouts by sector with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Pharmaceuticals 399, Data provision and analysis 282, Electronics hardware 269",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "41a87b9a-c98b-4616-86e8-5fa23a54e89a",
+    "raw_variable_name": "Number of equity investment deals in spinouts (2015-2024)",
+    "definition": "Total number of equity investment deals secured by UK spinouts from 2015 to 2024.",
+    "unit": "count",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit count of investment deals with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "3,788 Total number of equity investment deals (2015-2024)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "59c3713b-4478-4f7f-a2bf-a20a10e0b5df",
+    "raw_variable_name": "Equity investment secured by spinouts (2015-2024)",
+    "definition": "Total value of equity investment secured by UK spinouts from 2015 to 2024.",
+    "unit": "GBP (billion)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit total investment value with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "\u00a317.0b Total value of equity investment (2015-2024)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "65e968ca-96d5-452b-a70e-4900a715ebe5",
+    "raw_variable_name": "Mean and median university and founder equity stakes",
+    "definition": "Mean, median, and standard deviation of equity stakes taken by universities and founders in the year of spinning out for companies incorporated since 2010.",
+    "unit": "percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit equity stake statistics with temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "22.6% Mean stake taken in the year of spinning out (university), 52.2% Mean stake taken in the year of spinning out (founder), 20.1% Median stake taken in the year of spinning out (university), 51.6% Median stake taken in the year of spinning out (founder)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "1 Spotlight on Spinouts Spinouts UK academic spinout trends Spotlight on February 2025",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "8a1a57aa-e6bf-4c89-9544-01adc90d51e7",
+    "raw_variable_name": "Number of equity deals by Nation and region",
+    "definition": "Count of equity deals based on the head office of the recipient business in each UK Nation and region",
+    "unit": "number of deals",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Number of equity deals (Q1-Q3 2024) ... Source: British Business Bank analysis of Beauhurst data",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "066f6062-81f3-46bd-a011-74a990ccdcc8",
+    "raw_variable_name": "Disclosed funding in UK circular economy businesses",
+    "definition": "Total amount of capital invested in UK circular economy businesses as disclosed in funding deals.",
+    "unit": "GBP (pounds sterling)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined measure of disclosed funding with unit, source, temporal and geographic coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "British circular economy businesses attracted \u00a32.2bn in disclosed funding last year, a 64% increase on 2023\u2019s figure",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "d032e964-15ca-4847-8a78-3c73d7e919a9",
+    "raw_variable_name": "Number of transactions in UK circular economy sector",
+    "definition": "Count of funding transactions involving UK circular economy businesses.",
+    "unit": "count",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined count variable with temporal and geographic coverage and source.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "number of transactions was broadly flat year-on-year, with 184 in 2023 and 183 last year",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "a7f2ecc9-8e7d-4e0f-beca-829f7b406a9f",
+    "raw_variable_name": "Number of disclosed deals over \u00a3100m",
+    "definition": "Count of funding transactions with disclosed investment values exceeding \u00a3100 million.",
+    "unit": "count",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit count of deals above a monetary threshold with temporal and geographic coverage and source.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "BDO tracked seven transactions last year in which the disclosed value invested was over \u00a3100m, up from three \u00a3100m+ deals in 2023",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "423604aa-bb10-410d-8efb-cdc25fddad79",
+    "raw_variable_name": "Venture capital (VC) received, deal count/bn PPP$ GDP",
+    "definition": "Number of venture capital deals received per billion PPP-adjusted GDP.",
+    "unit": "deal count per billion PPP$ GDP",
+    "confidence_score": "0.75",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; part of GII 2025 indicators.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Weaknesses include Venture capital (VC) received, deal count/bn PPP$ GDP",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "chart_metric"
+  },
+  {
+    "id": "9f676cd7-11fb-4b3f-9f55-247fb6cb2be9",
+    "raw_variable_name": "University industry and international engagement score",
+    "definition": "Score calculated as the average of the International Outlook score (covering international staff, students, and co-authorship) and the industry score (reflecting industry income and patent citations).",
+    "unit": "score (numeric)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicit definition, measurement method, unit, data source, temporal and geographic coverage provided.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The score is calculated as the average of the International Outlook score (encompassing international staff, students, and co-authorship) and the industry score (reflecting industry income and patent citations). The 2025 ranking corresponds to data from the academic year that ended in 2022.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "38d21151-537c-4cd6-a1b0-109d12261caf",
+    "raw_variable_name": "Intellectual property receipts, % total trade",
+    "definition": "Percentage of total trade accounted for by intellectual property receipts.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.75",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; part of GII 2025 indicators.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Weaknesses include Intellectual property receipts, % total trade",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "ac42ab72-c99e-477a-a456-bcb7a847e340",
+    "raw_variable_name": "Citable documents H-index",
+    "definition": "An indicator measuring the impact and quality of scientific publications by counting the number of citable documents and their H-index.",
+    "unit": "H-index (numeric)",
+    "confidence_score": "0.8",
+    "metadata": {
+      "reason": "Explicit indicator name with ranking and unit implied by H-index; part of GII 2025 indicators.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "United Kingdom\u2019s best-ranked innovation strengths are Citable documents H-index (rank 1)",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "source_artifact"
+  },
+  {
+    "id": "54cdb38d-607f-45a7-a6a2-696f46117410",
+    "raw_variable_name": "Late-stage VC deal count, % global VC",
+    "definition": "Percentage share of global venture capital deal count that are late-stage deals.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.75",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; part of GII 2025 indicators.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Weaknesses include Late-stage VC deal count, % global VC",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "chart_metric"
+  },
+  {
+    "id": "451f11de-bb76-42ba-b625-a101299436ce",
+    "raw_variable_name": "Gross capital formation, % GDP",
+    "definition": "Gross capital formation as a percentage of GDP.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.85",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; gross capital formation data typically from official statistics.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Rank Code Indicator name 113 3.2.3 Gross capital formation, % GDP",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "da6ff81a-6a1d-4d66-83e9-fe5b84684a4d",
+    "raw_variable_name": "Graduates in science and engineering, %",
+    "definition": "Percentage of graduates in science and engineering fields.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.85",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; education statistics typically from official sources.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Rank Code Indicator name 57 2.2.2 Graduates in science and engineering, %",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "d26614be-b8ed-4164-be2d-c549f3933fa3",
+    "raw_variable_name": "FDI net inflows, % GDP",
+    "definition": "Net inflows of foreign direct investment as a percentage of GDP.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.85",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; FDI data typically from official statistics.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Rank Code Indicator name 128 5.3.4 FDI net inflows, % GDP",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "f968aebe-5a65-43d2-a16f-7eb2d448a611",
+    "raw_variable_name": "Job reallocation rate",
+    "definition": "Sum of job creation (via entry and expansion) and destruction (via contraction and exit) expressed as a rate, representing the reshuffling of job opportunities across regions.",
+    "unit": "ratio or percentage",
+    "confidence_score": "0.95",
+    "metadata": {
+      "reason": "Explicit definition and measurement method provided with data source and temporal coverage.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "The sum of job creation (via entry and expansion) and destruction (via contraction and exit) expressed as a rate refers is referred to as the job reallocation rate.",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "@ERC_UK www.enterpriseresearch.ac.uk The State of Small Business Britain 2024 Rising to the challenge",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "7c068eac-f0af-4b7f-be30-4a9ce5e871f2",
+    "raw_variable_name": "Youth demographic dividend, %",
+    "definition": "Percentage representing the youth demographic dividend.",
+    "unit": "percentage (%)",
+    "confidence_score": "0.8",
+    "metadata": {
+      "reason": "Explicit indicator name with unit and ranking; demographic data typically from official statistics.",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Rank Code Indicator name 94 5.1.3 Youth demographic dividend, %",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": null,
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  },
+  {
+    "id": "44b1b82c-bdd6-4047-8b89-bb42f6c9dfdf",
+    "raw_variable_name": "Number of UK private debt funds raised and total fundraising value",
+    "definition": "Count of private debt funds closed and total fundraising value in GBP",
+    "unit": "number of funds; billion GBP (\u00a3bn)",
+    "confidence_score": "0.9",
+    "metadata": {
+      "reason": "Explicitly defined variable with data source, unit, temporal and geographic coverage",
+      "batch_id": "949ac61a-55b4-477d-b0da-3e406b715242",
+      "extractor": "openai_batch",
+      "item_type": "codebook_variable",
+      "evidence_quote": "Figure B.75 Number and value of UK private debt funds raised ... Source: British Business Bank analysis of Preqin Ltd",
+      "prompt_version": "codebook_extraction_v1"
+    },
+    "report_title": "Small Business Finance Markets 2024/25 british-business-bank.co.uk",
+    "geography": "United Kingdom",
+    "classification": "valid_codebook"
+  }
+]
