@@ -268,7 +268,7 @@ def rebuild_search_index() -> dict:
                 "search_text": search_text,
                 "geography": row[3],
                 "source_url": row[6],
-                "availability": "metadata_only",
+                "availability": "obtainable" if row[9] == "synced" else "metadata_only",
                 "metadata": json.dumps({"access_type": row[8], "portal": row[7], "topic": row[5]}),
             })
         counts["connector_datasets"] = len(ds_rows)

@@ -241,8 +241,16 @@ class ConnectorSnapshotRepository(BaseRepository):
 class ConnectorRowRepository(BaseRepository):
     def create_bulk(self, snapshot_id: UUID | str, rows: list[dict]) -> int:
         """Insert rows in bulk. Returns count inserted."""
+        import math
         count = 0
         for row_data in rows:
+            # Sanitize NaN/Inf values for JSON
+            clean = {}
+            for k, v in row_data.items():
+                if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                    clean[k] = None
+                else:
+                    clean[k] = v
             self.connection.execute(
                 text(
                     "INSERT INTO connector_rows (snapshot_id, row_json) "
@@ -250,7 +258,7 @@ class ConnectorRowRepository(BaseRepository):
                 ),
                 {
                     "sid": str(snapshot_id),
-                    "row_json": json.dumps(row_data),
+                    "row_json": json.dumps(clean),
                 },
             )
             count += 1
