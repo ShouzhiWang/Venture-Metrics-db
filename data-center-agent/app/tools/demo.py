@@ -36,7 +36,8 @@ READ_TOOL_NAMES = {
 }
 WRITE_TOOL_NAMES = {"submit_feedback"}
 ALLOWED_TOOL_NAMES = READ_TOOL_NAMES | WRITE_TOOL_NAMES
-ALLOWED_OBJECT_TYPES = {"variable", "dataset", "report", "source", "organization", "chunk"}
+ALLOWED_OBJECT_TYPES = {"variable", "dataset", "report", "source", "organization", "chunk",
+                        "connector_dataset", "connector_candidate"}
 ALLOWED_FEEDBACK_TYPES = {"thumbs_up", "thumbs_down", "incorrect", "missing_data", "not_useful", "other"}
 
 

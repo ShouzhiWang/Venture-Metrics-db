@@ -45,7 +45,8 @@ def find_data(
     search_callable = search_fn or semantic_search
     search = search_callable(
         query,
-        object_types=["variable", "dataset", "report", "source", "organization"],
+        object_types=["variable", "dataset", "report", "source", "organization",
+                       "connector_dataset", "connector_candidate"],
         limit=max(limit * 3, 20),
         hybrid=True,
         client=client,
@@ -60,9 +61,11 @@ def find_data(
         "warning": search.get("warning"),
         "closest_variables": groups["variables"],
         "closest_datasets": groups["datasets"],
+        "connector_datasets": groups["connector_datasets"],
         "relevant_reports": groups["reports"],
         "source_links": groups["sources"],
         "relevant_organizations": groups["organizations"],
+        "connector_candidates": groups["connector_candidates"],
         "suggested_clarifications": [
             item.model_dump() for item in suggest_clarifications(query, intent, has_results=has_results)
         ],
@@ -107,7 +110,10 @@ def is_broad_query(lowered_query: str) -> bool:
 
 
 def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
-    grouped = {"variables": [], "datasets": [], "reports": [], "sources": [], "organizations": []}
+    grouped = {
+        "variables": [], "datasets": [], "reports": [], "sources": [],
+        "organizations": [], "connector_datasets": [], "connector_candidates": [],
+    }
     seen_sources: set[str] = set()
     for row in results:
         item = format_find_data_item(row)
@@ -116,6 +122,10 @@ def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
             grouped["variables"].append(item)
         elif object_type == "dataset" and len(grouped["datasets"]) < limit:
             grouped["datasets"].append(item)
+        elif object_type == "connector_dataset" and len(grouped["connector_datasets"]) < limit:
+            grouped["connector_datasets"].append(item)
+        elif object_type == "connector_candidate" and len(grouped["connector_candidates"]) < limit:
+            grouped["connector_candidates"].append(item)
         elif object_type == "report" and len(grouped["reports"]) < limit:
             grouped["reports"].append(item)
         elif object_type == "organization" and len(grouped["organizations"]) < limit:
@@ -139,7 +149,7 @@ def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
 
 def format_find_data_item(row: dict) -> dict:
     metadata = row.get("metadata") or {}
-    return {
+    item = {
         "title": row.get("title"),
         "object_type": row.get("object_type"),
         "object_id": row.get("object_id"),
@@ -158,6 +168,19 @@ def format_find_data_item(row: dict) -> dict:
         "report_id": row.get("report_id"),
         "source_id": row.get("source_id"),
     }
+    # Enrich connector objects with metadata
+    obj_type = row.get("object_type")
+    if obj_type in ("connector_dataset", "connector_candidate"):
+        item["access_type"] = metadata.get("access_type")
+        item["portal"] = metadata.get("portal")
+        item["source_kind"] = metadata.get("source_kind")
+        item["ecosystem_category"] = metadata.get("ecosystem_category")
+        item["data_status"] = "synced" if row.get("availability") == "obtainable" else "metadata_only"
+    if obj_type == "organization":
+        item["organization_type"] = metadata.get("organization_type")
+        item["parent_organization"] = metadata.get("parent_organization")
+        item["data_status"] = "organization_metadata"
+    return item
 
 
 def suggest_clarifications(query: str, intent: dict, *, has_results: bool = True) -> list[SuggestedClarification]:
