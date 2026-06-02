@@ -46,7 +46,7 @@ def find_data(
     search = search_callable(
         query,
         object_types=["variable", "dataset", "report", "source", "organization",
-                       "connector_dataset", "connector_candidate"],
+                       "connector_dataset", "connector_candidate", "connector_metric"],
         limit=max(limit * 3, 20),
         hybrid=True,
         client=client,
@@ -62,6 +62,7 @@ def find_data(
         "closest_variables": groups["variables"],
         "closest_datasets": groups["datasets"],
         "connector_datasets": groups["connector_datasets"],
+        "connector_metrics": groups["connector_metrics"],
         "relevant_reports": groups["reports"],
         "source_links": groups["sources"],
         "relevant_organizations": groups["organizations"],
@@ -120,6 +121,7 @@ def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
     grouped = {
         "variables": [], "datasets": [], "reports": [], "sources": [],
         "organizations": [], "connector_datasets": [], "connector_candidates": [],
+        "connector_metrics": [],
     }
     seen_sources: set[str] = set()
 
@@ -149,6 +151,8 @@ def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
             grouped["reports"].append(item)
         elif object_type == "organization" and len(grouped["organizations"]) < limit:
             grouped["organizations"].append(item)
+        elif object_type == "connector_metric" and len(grouped["connector_metrics"]) < limit:
+            grouped["connector_metrics"].append(item)
 
         source_key = row.get("source_url") or row.get("source_id") or row.get("object_id")
         if source_key and source_key not in seen_sources and len(grouped["sources"]) < limit:
@@ -230,6 +234,16 @@ def format_find_data_item(row: dict) -> dict:
         item["organization_type"] = metadata.get("organization_type")
         item["parent_organization"] = metadata.get("parent_organization")
         item["data_status"] = "organization_metadata"
+    if obj_type == "connector_metric":
+        item["metric_name"] = row.get("title")
+        item["metric_description"] = metadata.get("definition") or row.get("content")
+        item["category"] = metadata.get("category")
+        item["dimension"] = metadata.get("dimension")
+        item["dataset_name"] = metadata.get("dataset_name")
+        item["portal"] = metadata.get("portal")
+        item["retrieved_at"] = metadata.get("retrieved_at")
+        item["data_status"] = "official_metric"
+        item["data_status_label"] = "official synced dataset metric"
     return item
 
 

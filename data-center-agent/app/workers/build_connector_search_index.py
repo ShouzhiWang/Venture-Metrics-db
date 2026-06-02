@@ -24,13 +24,13 @@ def build_connector_search_index(*, rebuild: bool = False, dry_run: bool = False
     Returns counts by object_type.
     """
     engine = get_engine()
-    counts = {"connector_dataset": 0, "connector_candidate": 0, "organization": 0}
+    counts = {"connector_dataset": 0, "connector_candidate": 0, "organization": 0, "connector_metric": 0}
 
     with engine.begin() as conn:
         if rebuild:
             conn.execute(text(
                 "DELETE FROM search_index WHERE object_type IN "
-                "('connector_dataset', 'connector_candidate')"
+                "('connector_dataset', 'connector_candidate', 'connector_metric')"
             ))
 
         # Connector datasets
@@ -133,6 +133,47 @@ def build_connector_search_index(*, rebuild: bool = False, dry_run: bool = False
             })
             counts["organization"] += 1
 
+        # Connector dataset metrics
+        metric_rows = conn.execute(text(
+            "SELECT m.id, m.metric_name, m.metric_description, m.unit, "
+            "m.geography, m.time_period, m.category, m.dimension, "
+            "m.source_url, m.retrieved_at, m.confidence_score, "
+            "cd.name as dataset_name, cd.portal, cd.access_type "
+            "FROM connector_dataset_metrics m "
+            "JOIN connector_datasets cd ON m.dataset_id = cd.id "
+            "WHERE m.status = 'active'"
+        )).fetchall()
+
+        for row in metric_rows:
+            metric_id = row[0]
+            search_text = _build_metric_search_text(row)
+            if dry_run:
+                counts["connector_metric"] += 1
+                continue
+
+            _upsert_search_row(conn, {
+                "object_type": "connector_metric",
+                "object_id": str(metric_id),
+                "title": row[1],  # metric_name
+                "content": row[2] or row[1],  # metric_description
+                "search_text": search_text,
+                "geography": row[4],
+                "source_url": row[8],
+                "availability": "obtainable",
+                "metadata": {
+                    "unit": row[3],
+                    "category": row[6],
+                    "dimension": row[7],
+                    "time_period": row[5],
+                    "dataset_name": row[11],
+                    "portal": row[12],
+                    "access_type": row[13],
+                    "retrieved_at": str(row[9]) if row[9] else None,
+                    "confidence_score": float(row[10]) if row[10] else None,
+                },
+            })
+            counts["connector_metric"] += 1
+
     return counts
 
 
@@ -168,8 +209,38 @@ def _build_org_search_text(row) -> str:
     return " ".join(parts)
 
 
+def _build_metric_search_text(row) -> str:
+    """Build search text for a connector dataset metric.
+
+    Columns: id(0), metric_name(1), metric_description(2), unit(3),
+    geography(4), time_period(5), category(6), dimension(7),
+    source_url(8), retrieved_at(9), confidence_score(10),
+    dataset_name(11), portal(12), access_type(13)
+    """
+    parts = []
+    # Metric identity
+    for idx in (1, 2, 6, 7):  # name, description, category, dimension
+        if idx < len(row) and row[idx]:
+            parts.append(str(row[idx]))
+    # Dataset context
+    for idx in (11, 12):  # dataset_name, portal
+        if idx < len(row) and row[idx]:
+            parts.append(str(row[idx]))
+    # Geography and unit
+    if row[4]:
+        parts.append(str(row[4]))
+    if row[3]:
+        parts.append(str(row[3]))
+    return " ".join(parts)
+
+
 def _upsert_search_row(conn, values: dict[str, Any]) -> None:
     """Insert or update a search_index row."""
+    import json as _json
+    metadata_raw = values.get("metadata", {})
+    # Properly serialize to JSON (handles None, nested dicts, etc.)
+    metadata_json = _json.dumps(metadata_raw, default=str, ensure_ascii=False) if metadata_raw else "{}"
+
     conn.execute(
         text(
             """
@@ -200,7 +271,7 @@ def _upsert_search_row(conn, values: dict[str, Any]) -> None:
             "geography": values.get("geography"),
             "source_url": values.get("source_url"),
             "availability": values.get("availability", "unclear"),
-            "metadata": str(values.get("metadata", {})).replace("'", '"'),
+            "metadata": metadata_json,
         },
     )
 

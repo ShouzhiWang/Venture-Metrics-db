@@ -170,6 +170,8 @@ class EvidencePacketBuilder:
         connector_datasets = [self._connector_dataset(item) for item in retrieved.get("connector_datasets", []) or []]
         # Connector candidates: always metadata-only portal candidates
         connector_candidates = [self._connector_candidate(item) for item in retrieved.get("connector_candidates", []) or []]
+        # Official synced dataset metrics
+        connector_metrics = [self._connector_metric(item) for item in retrieved.get("connector_metrics", []) or []]
 
         # Geography mismatch warning
         geo_warnings = []
@@ -187,6 +189,8 @@ class EvidencePacketBuilder:
             "organizations": organizations,
             # Synced connector datasets — lead with these in answers
             "connector_datasets": connector_datasets,
+            # Official synced dataset metrics — cite with snapshot date
+            "connector_metrics": connector_metrics,
             # Metadata-only portal candidates — mention as provenance/context only
             "connector_candidates": connector_candidates,
             "evidence_quotes": [item.get("evidence_quote") for item in variables if item.get("evidence_quote")],
@@ -227,6 +231,23 @@ class EvidencePacketBuilder:
             "ecosystem_category": item.get("ecosystem_category"),
             "geography": item.get("geographic_coverage") or item.get("geography"),
             "data_status_label": "source candidate, not yet synced",
+            "score": item.get("score"),
+        }
+
+    def _connector_metric(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Format an official synced dataset metric for the evidence packet."""
+        return {
+            "id": item.get("object_id") or item.get("id"),
+            "metric_name": item.get("metric_name") or item.get("title"),
+            "metric_description": item.get("metric_description") or item.get("definition"),
+            "unit": item.get("unit"),
+            "category": item.get("category"),
+            "dimension": item.get("dimension"),
+            "geography": item.get("geographic_coverage") or item.get("geography"),
+            "dataset_name": item.get("dataset_name"),
+            "portal": item.get("portal"),
+            "retrieved_at": item.get("retrieved_at"),
+            "data_status_label": "official synced dataset metric",
             "score": item.get("score"),
         }
 
@@ -786,6 +807,8 @@ def normalize_find_data_results(tool_result: dict[str, Any]) -> dict[str, Any]:
         "relevant_organizations": data.get("relevant_organizations") or [],
         # Connector datasets synced first, then metadata-only — already sorted by find_data
         "connector_datasets": data.get("connector_datasets") or [],
+        # Official synced dataset metrics
+        "connector_metrics": data.get("connector_metrics") or [],
         # Connector candidates are always metadata-only portals
         "connector_candidates": data.get("connector_candidates") or [],
         "limitations": [item for item in [data.get("warning")] if item],

@@ -876,3 +876,361 @@ class TestSyncedOverMetadataPriority:
         assert packet["connector_datasets"][0]["row_count"] == 1500
         assert len(packet["connector_candidates"]) == 1
         assert packet["connector_candidates"][0]["data_status_label"] == "source candidate, not yet synced"
+
+
+# ============================================================
+# Connector Metric Extraction Tests
+# ============================================================
+
+class TestConnectorMetricExtraction:
+    """Test metric extraction from connector rows."""
+
+    def test_parse_value_numeric(self):
+        from app.workers.connector_metric_extract import parse_value
+        display, numeric = parse_value("34,120")
+        assert display == "34,120"
+        assert numeric == 34120.0
+
+    def test_parse_value_percentage(self):
+        from app.workers.connector_metric_extract import parse_value
+        display, numeric = parse_value("98%")
+        assert display == "98%"
+        assert numeric == 0.98
+
+    def test_parse_value_null(self):
+        from app.workers.connector_metric_extract import parse_value
+        display, numeric = parse_value(None)
+        assert display is None
+        assert numeric is None
+
+    def test_parse_value_nan_string(self):
+        from app.workers.connector_metric_extract import parse_value
+        display, numeric = parse_value("nan")
+        assert display is None
+        assert numeric is None
+
+    def test_match_metric_trademark_applications(self):
+        from app.workers.connector_metric_extract import match_metric_pattern
+        result = match_metric_pattern("Trademarks - Applications Received")
+        assert result is not None
+        assert result["metric_name"] == "trademark_applications_received"
+        assert result["unit"] == "count"
+        assert result["category"] == "trademarks"
+
+    def test_match_metric_standard_patent_grants(self):
+        from app.workers.connector_metric_extract import match_metric_pattern
+        result = match_metric_pattern("Standard Patents (R) - Patents granted")
+        assert result is not None
+        assert result["metric_name"] == "standard_patents_granted"
+
+    def test_match_metric_designs_registered(self):
+        from app.workers.connector_metric_extract import match_metric_pattern
+        result = match_metric_pattern("Designs - Designs registered")
+        assert result is not None
+        assert result["metric_name"] == "designs_registered"
+
+    def test_match_metric_short_term_patents(self):
+        from app.workers.connector_metric_extract import match_metric_pattern
+        result = match_metric_pattern("Short-term Patents - Applications received")
+        assert result is not None
+        assert result["metric_name"] == "short_term_patent_applications_received"
+
+    def test_match_metric_unknown_returns_none(self):
+        from app.workers.connector_metric_extract import match_metric_pattern
+        result = match_metric_pattern("Some Random Label")
+        assert result is None
+
+    def test_classify_time_period_fiscal_year(self):
+        from app.workers.connector_metric_extract import classify_time_period
+        result = classify_time_period("Apr 2024 to Mar 2025")
+        assert result is not None
+        assert result["time_period"] == "Apr 2024 to Mar 2025"
+        assert result["period_type"] == "fiscal_year"
+
+    def test_classify_time_period_monthly_average(self):
+        from app.workers.connector_metric_extract import classify_time_period
+        result = classify_time_period("Monthly average of 2025")
+        assert result is not None
+        assert result["time_period"] == "Monthly average 2025"
+
+    def test_classify_time_period_provisional(self):
+        from app.workers.connector_metric_extract import classify_time_period
+        result = classify_time_period("Mar 2026 (the figures are provisional and subject to changes)")
+        assert result is not None
+        assert "provisional" in result["time_period"]
+
+    def test_extract_metrics_from_mock_rows(self):
+        """Test metric extraction from mock row data."""
+        from app.workers.connector_metric_extract import (
+            match_metric_pattern, classify_time_period, parse_value,
+        )
+        # Simulate a single row
+        row_json = {
+            "Unnamed: 0": "Trademarks - Applications Received",
+            "Apr 2024 to Mar 2025": "34,120",
+            "Monthly average of 2025": "3,124",
+        }
+        label = row_json["Unnamed: 0"]
+        metric_def = match_metric_pattern(label)
+        assert metric_def is not None
+
+        observations = []
+        for col, raw in row_json.items():
+            if col == "Unnamed: 0":
+                continue
+            display, numeric = parse_value(raw)
+            if display is None:
+                continue
+            time_info = classify_time_period(col)
+            observations.append({
+                "value": display,
+                "value_numeric": numeric,
+                "time_period": time_info["time_period"] if time_info else col,
+            })
+
+        assert len(observations) == 2
+        assert observations[0]["value_numeric"] == 34120.0
+        assert observations[1]["value_numeric"] == 3124.0
+
+    def test_all_19_rows_match_patterns(self):
+        """All 19 rows in the HK IP CSV should match known metric patterns."""
+        from app.workers.connector_metric_extract import match_metric_pattern
+        labels = [
+            "Trademarks - Applications Received",
+            "Trademarks - Applications Registered",
+            "Trademarks - Providing first response within two months (calculated from the date of the Trade Marks Registry's notice confirming receipt of all the required information for substantive examination)",
+            "Trademarks - Providing second response within three months (calculated from the date of expiry of first opinion or from the date of applicant's reply to first opinion)",
+            "Trademarks - Outstanding applications pending for first response",
+            "Standard Patents (R) - Applications received",
+            "Standard Patents (R) - Patents granted",
+            "Standard Patents (R) - Processing applications within ten days (calculated from the date of receipt of application)",
+            "Standard Patents (R) - Applications pending - first stage (the pending applications refer to those applications pending for issuing first examination report on formal requirements)",
+            "Standard Patents (R) - Applications pending - second stage (the pending applications refer to those applications pending for issuing first examination report on formal requirements)",
+            "Short-term Patents - Applications received",
+            "Short-term Patents - Patents granted",
+            "Short-term Patents - Processing applications within ten days (calculated from the date of receipt of application)",
+            "Short-term Patents - Applications pending (the pending applications refer to those applications pending for issuing first examination report on formal requirements)",
+            "Designs - Applications received",
+            "Designs - Applications received (number of designs)",
+            "Designs - Designs registered",
+            "Designs - Processing applications within ten days (calculated from the date of receipt of application)",
+            "Designs - Applications pending (the pending applications refer to those applications pending for issuing first examination report on formal requirements)",
+        ]
+        matched = 0
+        for label in labels:
+            result = match_metric_pattern(label)
+            if result:
+                matched += 1
+        assert matched == 19, f"Only {matched}/19 rows matched patterns"
+
+
+# ============================================================
+# Connector Metric Search Index Tests
+# ============================================================
+
+class TestConnectorMetricSearchIndex:
+    """Test metric search index creation."""
+
+    def test_build_metric_search_text(self):
+        from app.workers.build_connector_search_index import _build_metric_search_text
+        # Simulated row: id, metric_name, metric_description, unit, geography,
+        # time_period, category, dimension, source_url, retrieved_at,
+        # confidence_score, dataset_name, portal, access_type
+        row = (
+            "uuid-123",
+            "trademark_applications_received",
+            "Number of trademark applications received",
+            "count",
+            "Hong Kong",
+            None,
+            "trademarks",
+            "applications",
+            "https://example.org/data.csv",
+            "2025-06-01",
+            0.85,
+            "HK IP Statistics",
+            "data.gov.hk",
+            "csv",
+        )
+        text = _build_metric_search_text(row)
+        assert "trademark_applications_received" in text
+        assert "trademarks" in text
+        assert "Hong Kong" in text
+        assert "count" in text
+        assert "data.gov.hk" in text
+        assert "HK IP Statistics" in text
+
+
+# ============================================================
+# find_data Connector Metric Integration Tests
+# ============================================================
+
+class TestFindDataConnectorMetrics:
+    """Test that find_data includes connector_metrics."""
+
+    def test_group_results_includes_connector_metrics(self):
+        from app.workers.find_data import group_results
+        results = [
+            {
+                "object_type": "connector_metric",
+                "object_id": "metric-001",
+                "title": "trademark_applications_received",
+                "content": "Number of trademark applications received",
+                "score": 0.9,
+                "availability": "obtainable",
+                "geography": "Hong Kong",
+                "metadata": {
+                    "unit": "count",
+                    "category": "trademarks",
+                    "dimension": "applications",
+                    "dataset_name": "HK IP Statistics",
+                    "portal": "data.gov.hk",
+                    "retrieved_at": "2025-06-01T10:00:00Z",
+                },
+            },
+        ]
+        groups = group_results(results, limit=10)
+        assert len(groups["connector_metrics"]) == 1
+        assert groups["connector_metrics"][0]["data_status"] == "official_metric"
+        assert groups["connector_metrics"][0]["data_status_label"] == "official synced dataset metric"
+
+    def test_format_item_connector_metric(self):
+        from app.workers.find_data import format_find_data_item
+        row = {
+            "object_type": "connector_metric",
+            "object_id": "metric-001",
+            "title": "standard_patents_granted",
+            "content": "Number of standard patents granted",
+            "score": 0.85,
+            "availability": "obtainable",
+            "geography": "Hong Kong",
+            "metadata": {
+                "unit": "count",
+                "category": "standard_patents",
+                "dimension": "grants",
+                "dataset_name": "HK IP Statistics",
+                "portal": "data.gov.hk",
+                "retrieved_at": "2025-06-01T10:00:00Z",
+            },
+        }
+        item = format_find_data_item(row)
+        assert item["data_status"] == "official_metric"
+        assert item["metric_name"] == "standard_patents_granted"
+        assert item["category"] == "standard_patents"
+        assert item["portal"] == "data.gov.hk"
+        assert item["retrieved_at"] == "2025-06-01T10:00:00Z"
+
+    def test_normalize_includes_connector_metrics(self):
+        from app.services.research_task import normalize_find_data_results
+        tool_result = {
+            "ok": True,
+            "data": {
+                "closest_variables": [],
+                "relevant_reports": [],
+                "source_links": [],
+                "relevant_organizations": [],
+                "connector_datasets": [],
+                "connector_metrics": [
+                    {"title": "trademark_applications_received", "data_status": "official_metric"},
+                ],
+                "connector_candidates": [],
+            },
+        }
+        result = normalize_find_data_results(tool_result)
+        assert len(result["connector_metrics"]) == 1
+        assert result["connector_metrics"][0]["data_status"] == "official_metric"
+
+    def test_evidence_packet_includes_connector_metrics(self):
+        from app.services.research_task import EvidencePacketBuilder, ResearchTaskPlan
+        builder = EvidencePacketBuilder()
+        plan = ResearchTaskPlan(query="HK patents", task_type="find_data")
+        retrieved = {
+            "closest_variables": [],
+            "relevant_reports": [],
+            "source_links": [],
+            "relevant_organizations": [],
+            "connector_datasets": [],
+            "connector_metrics": [
+                {
+                    "title": "standard_patents_granted",
+                    "metric_name": "standard_patents_granted",
+                    "unit": "count",
+                    "category": "standard_patents",
+                    "geography": "Hong Kong",
+                    "dataset_name": "HK IP Statistics",
+                    "portal": "data.gov.hk",
+                    "retrieved_at": "2025-06-01T10:00:00Z",
+                },
+            ],
+            "connector_candidates": [],
+            "limitations": [],
+        }
+        packet = builder.build("HK patents", plan, retrieved)
+        assert "connector_metrics" in packet
+        assert len(packet["connector_metrics"]) == 1
+        assert packet["connector_metrics"][0]["metric_name"] == "standard_patents_granted"
+        assert packet["connector_metrics"][0]["data_status_label"] == "official synced dataset metric"
+
+
+# ============================================================
+# data.gov.hk Discovery Ranking Tests
+# ============================================================
+
+class TestDataGovHKDiscoveryRanking:
+    """Test discovery candidate ranking logic."""
+
+    def test_compute_relevance_score_high_value_provider(self):
+        from app.workers.datagovhk_expand_discovery import compute_relevance_score
+        ds = {
+            "title": "Patent Statistics",
+            "notes": "Patent application data",
+            "organization": {"title": "Intellectual Property Department"},
+            "resources": [{"format": "CSV", "url": "https://example.org/data.csv"}],
+        }
+        score = compute_relevance_score(ds, "patent")
+        assert score >= 0.5  # High value provider + keyword + format
+
+    def test_compute_relevance_score_low_value(self):
+        from app.workers.datagovhk_expand_discovery import compute_relevance_score
+        ds = {
+            "title": "Weather Data",
+            "notes": "Temperature readings",
+            "organization": {"title": "Observatory"},
+            "resources": [{"format": "CSV", "url": "https://example.org/weather.csv"}],
+        }
+        score = compute_relevance_score(ds, "patent")
+        assert score < 0.3  # Low relevance
+
+    def test_compute_sync_priority_with_direct_download(self):
+        from app.workers.datagovhk_expand_discovery import compute_sync_priority
+        ds = {
+            "title": "Innovation Fund Data",
+            "notes": "ITF investment portfolio",
+            "organization": {"title": "Innovation and Technology Commission"},
+            "resources": [{"format": "CSV", "url": "https://example.org/data.csv"}],
+        }
+        score, reasons = compute_sync_priority(ds, 0.6)
+        assert score >= 0.7
+        assert any("Direct download" in r for r in reasons)
+        assert any("Official provider" in r for r in reasons)
+
+    def test_has_direct_download_csv(self):
+        from app.workers.datagovhk_expand_discovery import has_direct_download
+        ds = {"resources": [{"format": "CSV", "url": "https://example.org/data.csv"}]}
+        assert has_direct_download(ds) == "https://example.org/data.csv"
+
+    def test_has_direct_download_none(self):
+        from app.workers.datagovhk_expand_discovery import has_direct_download
+        ds = {"resources": [{"format": "HTML", "url": "https://example.org/page"}]}
+        assert has_direct_download(ds) is None
+
+    def test_extract_formats(self):
+        from app.workers.datagovhk_expand_discovery import extract_formats
+        ds = {"resources": [
+            {"format": "CSV"},
+            {"format": "csv"},
+            {"format": "JSON"},
+        ]}
+        fmts = extract_formats(ds)
+        assert "CSV" in fmts
+        assert "JSON" in fmts
