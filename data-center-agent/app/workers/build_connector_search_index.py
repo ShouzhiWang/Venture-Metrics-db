@@ -133,7 +133,7 @@ def build_connector_search_index(*, rebuild: bool = False, dry_run: bool = False
             })
             counts["organization"] += 1
 
-        # Connector dataset metrics
+        # Connector dataset metrics (include both active and needs_review)
         metric_rows = conn.execute(text(
             "SELECT m.id, m.metric_name, m.metric_description, m.unit, "
             "m.geography, m.time_period, m.category, m.dimension, "
@@ -141,7 +141,7 @@ def build_connector_search_index(*, rebuild: bool = False, dry_run: bool = False
             "cd.name as dataset_name, cd.portal, cd.access_type "
             "FROM connector_dataset_metrics m "
             "JOIN connector_datasets cd ON m.dataset_id = cd.id "
-            "WHERE m.status = 'active'"
+            "WHERE m.status IN ('active', 'needs_review')"
         )).fetchall()
 
         for row in metric_rows:

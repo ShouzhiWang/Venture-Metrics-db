@@ -298,65 +298,177 @@ def extract_metrics_from_snapshot(
             {"sid": snapshot_id},
         ).fetchall()
 
-        for row_id, row_json_raw in rows:
-            row_json = json.loads(row_json_raw) if isinstance(row_json_raw, str) else row_json_raw
-            label = str(row_json.get("Unnamed: 0", "")).strip()
+        # Detect dataset structure from first row
+        first_raw = rows[0][1] if rows else {}
+        first_row = json.loads(first_raw) if isinstance(first_raw, str) else (first_raw if isinstance(first_raw, dict) else {})
 
-            if not label:
-                unmatched_rows.append({"row_id": str(row_id), "reason": "empty label", "row_json": row_json})
+        # Check if this is an IP statistics dataset (has "Unnamed: 0" label column)
+        has_unnamed_label = "Unnamed: 0" in first_row
+
+        if has_unnamed_label:
+            # Original IP statistics extraction
+            return _extract_ip_statistics(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography)
+        else:
+            # Generic column-based extraction
+            return _extract_generic_columns(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography)
+
+
+def _extract_ip_statistics(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography):
+    """Extract metrics from IP statistics format (label in 'Unnamed: 0', time periods as columns)."""
+    metrics = []
+    observations = []
+    unmatched_rows = []
+
+    for row_id, row_json_raw in rows:
+        row_json = json.loads(row_json_raw) if isinstance(row_json_raw, str) else row_json_raw
+        label = str(row_json.get("Unnamed: 0", "")).strip()
+
+        if not label:
+            unmatched_rows.append({"row_id": str(row_id), "reason": "empty label", "row_json": row_json})
+            continue
+
+        metric_def = match_metric_pattern(label)
+        if not metric_def:
+            unmatched_rows.append({"row_id": str(row_id), "reason": "no pattern match", "label": label, "row_json": row_json})
+            continue
+
+        existing_metric = next((m for m in metrics if m["metric_name"] == metric_def["metric_name"]), None)
+        if not existing_metric:
+            metric_entry = {
+                "dataset_id": dataset_id,
+                "snapshot_id": snapshot_id,
+                "metric_name": metric_def["metric_name"],
+                "metric_description": metric_def["metric_description"],
+                "unit": metric_def["unit"],
+                "geography": geography,
+                "category": metric_def["category"],
+                "dimension": metric_def["dimension"],
+                "source_url": source_url,
+                "retrieved_at": retrieved_at,
+                "confidence_score": 0.85,
+                "status": "active",
+            }
+            metrics.append(metric_entry)
+            existing_metric = metric_entry
+
+        for col_name, raw_value in row_json.items():
+            if col_name == "Unnamed: 0":
                 continue
 
-            metric_def = match_metric_pattern(label)
-            if not metric_def:
-                unmatched_rows.append({"row_id": str(row_id), "reason": "no pattern match", "label": label, "row_json": row_json})
+            display_value, numeric_value = parse_value(raw_value)
+            if display_value is None:
                 continue
 
-            # Create metric definition (one per unique metric_name)
-            existing_metric = next((m for m in metrics if m["metric_name"] == metric_def["metric_name"]), None)
-            if not existing_metric:
-                metric_entry = {
-                    "dataset_id": dataset_id,
-                    "snapshot_id": snapshot_id,
-                    "metric_name": metric_def["metric_name"],
-                    "metric_description": metric_def["metric_description"],
-                    "unit": metric_def["unit"],
-                    "geography": geography,
-                    "category": metric_def["category"],
-                    "dimension": metric_def["dimension"],
-                    "source_url": source_url,
-                    "retrieved_at": retrieved_at,
-                    "confidence_score": 0.85,
-                    "status": "active",
-                }
-                metrics.append(metric_entry)
-                existing_metric = metric_entry
+            time_info = classify_time_period(col_name)
+            time_period = time_info["time_period"] if time_info else col_name.strip()
 
-            # Extract observations from each time-period column
-            for col_name, raw_value in row_json.items():
-                if col_name == "Unnamed: 0":
-                    continue
+            observations.append({
+                "metric_name": metric_def["metric_name"],
+                "dataset_id": dataset_id,
+                "snapshot_id": snapshot_id,
+                "value": display_value,
+                "value_numeric": numeric_value,
+                "time_period": time_period,
+                "geography": geography,
+                "unit": metric_def["unit"],
+                "dimension": metric_def["dimension"],
+                "row_json": row_json,
+                "confidence_score": 0.85 if numeric_value is not None else 0.6,
+                "status": "active" if numeric_value is not None else "needs_review",
+            })
 
-                display_value, numeric_value = parse_value(raw_value)
-                if display_value is None:
-                    continue
+    return {
+        "metrics": metrics,
+        "observations": observations,
+        "unmatched_rows": unmatched_rows,
+        "summary": {
+            "total_rows": len(rows),
+            "metrics_extracted": len(metrics),
+            "observations_extracted": len(observations),
+            "unmatched_rows": len(unmatched_rows),
+        },
+    }
 
-                time_info = classify_time_period(col_name)
-                time_period = time_info["time_period"] if time_info else col_name.strip()
 
-                observations.append({
-                    "metric_name": metric_def["metric_name"],
-                    "dataset_id": dataset_id,
-                    "snapshot_id": snapshot_id,
-                    "value": display_value,
-                    "value_numeric": numeric_value,
-                    "time_period": time_period,
-                    "geography": geography,
-                    "unit": metric_def["unit"],
-                    "dimension": metric_def["dimension"],
-                    "row_json": row_json,
-                    "confidence_score": 0.85 if numeric_value is not None else 0.6,
-                    "status": "active" if numeric_value is not None else "needs_review",
-                })
+def _extract_generic_columns(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography):
+    """Extract metrics from generic column-based datasets.
+
+    Each row becomes a metric. Each numeric/value column becomes an observation.
+    Works for: venture fund, registrations in force, agent filings, search stats.
+    """
+    metrics = []
+    observations = []
+    unmatched_rows = []
+
+    # Detect label column (first non-numeric column)
+    first_raw = rows[0][1] if rows else {}
+    first_row_json = json.loads(first_raw) if isinstance(first_raw, str) else (first_raw if isinstance(first_raw, dict) else {})
+    label_col = None
+    value_cols = []
+
+    for col, val in first_row_json.items():
+        _, numeric = parse_value(val)
+        if label_col is None and numeric is None:
+            label_col = col
+        elif numeric is not None:
+            value_cols.append(col)
+
+    if not label_col:
+        # Fallback: use first column
+        label_col = list(first_row_json.keys())[0] if first_row_json else "row"
+        value_cols = [c for c in first_row_json.keys() if c != label_col]
+
+    for row_id, row_json_raw in rows:
+        row_json = json.loads(row_json_raw) if isinstance(row_json_raw, str) else row_json_raw
+        label = str(row_json.get(label_col, "")).strip()
+
+        if not label:
+            unmatched_rows.append({"row_id": str(row_id), "reason": "empty label", "row_json": row_json})
+            continue
+
+        # Create metric name from label (normalize)
+        metric_name = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
+        if len(metric_name) > 80:
+            metric_name = metric_name[:80]
+
+        # Create metric definition
+        metric_entry = {
+            "dataset_id": dataset_id,
+            "snapshot_id": snapshot_id,
+            "metric_name": metric_name,
+            "metric_description": label,
+            "unit": "count",
+            "geography": geography,
+            "category": "generic",
+            "dimension": label_col,
+            "source_url": source_url,
+            "retrieved_at": retrieved_at,
+            "confidence_score": 0.7,  # Lower confidence for generic extraction
+            "status": "needs_review",
+        }
+        metrics.append(metric_entry)
+
+        # Extract observations from value columns
+        for col_name in value_cols:
+            raw_value = row_json.get(col_name)
+            display_value, numeric_value = parse_value(raw_value)
+            if display_value is None:
+                continue
+
+            observations.append({
+                "metric_name": metric_name,
+                "dataset_id": dataset_id,
+                "snapshot_id": snapshot_id,
+                "value": display_value,
+                "value_numeric": numeric_value,
+                "time_period": col_name.strip(),
+                "geography": geography,
+                "unit": "count",
+                "dimension": col_name.strip(),
+                "row_json": row_json,
+                "confidence_score": 0.7 if numeric_value is not None else 0.5,
+                "status": "needs_review",
+            })
 
     return {
         "metrics": metrics,
