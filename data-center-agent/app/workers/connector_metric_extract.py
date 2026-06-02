@@ -301,16 +301,32 @@ def extract_metrics_from_snapshot(
         # Detect dataset structure from first row
         first_raw = rows[0][1] if rows else {}
         first_row = json.loads(first_raw) if isinstance(first_raw, str) else (first_raw if isinstance(first_raw, dict) else {})
+        columns = list(first_row.keys())
 
-        # Check if this is an IP statistics dataset (has "Unnamed: 0" label column)
-        has_unnamed_label = "Unnamed: 0" in first_row
-
-        if has_unnamed_label:
-            # Original IP statistics extraction
+        # Strategy 1: IP statistics (has "Unnamed: 0" label column with time-period columns)
+        if "Unnamed: 0" in first_row:
             return _extract_ip_statistics(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography)
-        else:
-            # Generic column-based extraction
-            return _extract_generic_columns(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography)
+
+        # Strategy 2: Year-by-column transpose (Year/Year of Registration as first col, numeric category columns)
+        # These datasets have years as rows and categories (Nice Classes, totals) as columns
+        first_col = columns[0] if columns else ""
+        is_year_col = any(kw in first_col.lower() for kw in ("year", "registration year"))
+        remaining_cols = columns[1:] if len(columns) > 1 else []
+        has_category_cols = any(
+            any(kw in c.lower() for kw in ("nice class", "total", "collective", "certification", "registrations in force"))
+            for c in remaining_cols
+        )
+
+        if is_year_col and has_category_cols and len(remaining_cols) >= 2:
+            return _extract_year_by_column(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography, columns)
+
+        # Strategy 3: Company/entity records (ITC Venture Fund style)
+        has_company = any(kw in " ".join(columns).lower() for kw in ("investee", "company", "business nature"))
+        if has_company:
+            return _extract_entity_records(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography, columns)
+
+        # Strategy 4: Generic column-based extraction (fallback)
+        return _extract_generic_columns(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography)
 
 
 def _extract_ip_statistics(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography):
@@ -386,6 +402,186 @@ def _extract_ip_statistics(rows, dataset_id, snapshot_id, source_url, retrieved_
             "metrics_extracted": len(metrics),
             "observations_extracted": len(observations),
             "unmatched_rows": len(unmatched_rows),
+        },
+    }
+
+
+def _extract_year_by_column(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography, all_columns):
+    """Extract metrics from year-by-column datasets.
+
+    Structure: Year | Category 1 | Category 2 | ...
+    Each category column becomes a metric. Each year row becomes an observation.
+
+    Examples:
+    - TM Registrations by Origin/Class: Year | Nice Class 1 | Nice Class 2 | ...
+    - TM in Force by Year: Year of Registration | Total Registrations | Total Classes
+    - Collective Marks: Year of Registration | Collective | Certification
+    """
+    metrics = []
+    observations = []
+
+    year_col = all_columns[0]
+    category_cols = all_columns[1:]
+
+    # Create one metric per category column
+    for col in category_cols:
+        # Normalize column name to metric name
+        metric_name = re.sub(r"[^a-z0-9]+", "_", col.lower()).strip("_")
+        if len(metric_name) > 80:
+            metric_name = metric_name[:80]
+
+        # Determine unit
+        unit = "count"
+        if "class" in col.lower() and "nice" in col.lower():
+            unit = "count"
+        elif "percentage" in col.lower() or "%" in col.lower():
+            unit = "percent"
+
+        metric_entry = {
+            "dataset_id": dataset_id,
+            "snapshot_id": snapshot_id,
+            "metric_name": metric_name,
+            "metric_description": col,
+            "unit": unit,
+            "geography": geography,
+            "category": "ip_statistics",
+            "dimension": col,
+            "source_url": source_url,
+            "retrieved_at": retrieved_at,
+            "confidence_score": 0.85,
+            "status": "active",
+        }
+        metrics.append(metric_entry)
+
+    # Extract observations from each row (year)
+    for row_id, row_json_raw in rows:
+        row_json = json.loads(row_json_raw) if isinstance(row_json_raw, str) else row_json_raw
+        year_val = row_json.get(year_col)
+        if year_val is None:
+            continue
+        year_str = str(year_val).strip()
+
+        for col in category_cols:
+            raw_value = row_json.get(col)
+            display_value, numeric_value = parse_value(raw_value)
+            if display_value is None:
+                continue
+
+            metric_name = re.sub(r"[^a-z0-9]+", "_", col.lower()).strip("_")[:80]
+
+            observations.append({
+                "metric_name": metric_name,
+                "dataset_id": dataset_id,
+                "snapshot_id": snapshot_id,
+                "value": display_value,
+                "value_numeric": numeric_value,
+                "time_period": year_str,
+                "geography": geography,
+                "unit": "count",
+                "dimension": col,
+                "row_json": row_json,
+                "confidence_score": 0.85 if numeric_value is not None else 0.6,
+                "status": "active" if numeric_value is not None else "needs_review",
+            })
+
+    return {
+        "metrics": metrics,
+        "observations": observations,
+        "unmatched_rows": [],
+        "summary": {
+            "total_rows": len(rows),
+            "metrics_extracted": len(metrics),
+            "observations_extracted": len(observations),
+            "unmatched_rows": 0,
+        },
+    }
+
+
+def _extract_entity_records(rows, dataset_id, snapshot_id, source_url, retrieved_at, geography, all_columns):
+    """Extract metrics from entity-record datasets (ITC Venture Fund style).
+
+    Each row is an entity (company, investment). Key attributes become observations.
+    Creates one metric per entity and one observation per key attribute.
+    """
+    metrics = []
+    observations = []
+
+    # Detect key columns
+    label_col = None
+    value_cols = []
+    for col in all_columns:
+        col_lower = col.lower()
+        if any(kw in col_lower for kw in ("company", "investee", "name")):
+            label_col = col
+        elif any(kw in col_lower for kw in ("amount", "investment", "date", "nature", "partner")):
+            value_cols.append(col)
+
+    if not label_col:
+        label_col = all_columns[0]
+        value_cols = all_columns[1:]
+
+    for row_id, row_json_raw in rows:
+        row_json = json.loads(row_json_raw) if isinstance(row_json_raw, str) else row_json_raw
+        entity_name = str(row_json.get(label_col, "")).strip()
+        if not entity_name:
+            continue
+
+        # Create metric for this entity
+        metric_name = re.sub(r"[^a-z0-9]+", "_", entity_name.lower()).strip("_")
+        if len(metric_name) > 80:
+            metric_name = metric_name[:80]
+
+        metric_entry = {
+            "dataset_id": dataset_id,
+            "snapshot_id": snapshot_id,
+            "metric_name": metric_name,
+            "metric_description": entity_name,
+            "unit": "entity",
+            "geography": geography,
+            "category": "innovation_funding",
+            "dimension": "entity_record",
+            "source_url": source_url,
+            "retrieved_at": retrieved_at,
+            "confidence_score": 0.8,
+            "status": "active",
+        }
+        metrics.append(metric_entry)
+
+        # Create observations for key attributes
+        for col in value_cols:
+            raw_value = row_json.get(col)
+            if raw_value is None:
+                continue
+            display_value = str(raw_value).strip()
+            if not display_value or display_value.lower() == "nan":
+                continue
+
+            _, numeric_value = parse_value(display_value)
+
+            observations.append({
+                "metric_name": metric_name,
+                "dataset_id": dataset_id,
+                "snapshot_id": snapshot_id,
+                "value": display_value,
+                "value_numeric": numeric_value,
+                "time_period": col,
+                "geography": geography,
+                "unit": "attribute",
+                "dimension": col,
+                "row_json": row_json,
+                "confidence_score": 0.8 if numeric_value is not None else 0.7,
+                "status": "active",
+            })
+
+    return {
+        "metrics": metrics,
+        "observations": observations,
+        "unmatched_rows": [],
+        "summary": {
+            "total_rows": len(rows),
+            "metrics_extracted": len(metrics),
+            "observations_extracted": len(observations),
+            "unmatched_rows": 0,
         },
     }
 
