@@ -627,3 +627,252 @@ class TestRealExcelFiles:
         hku_tto = next((o for o in orgs if "HKU" in o.get("description", "")), None)
         assert hku_tto is not None
         assert hku_tto["geography"] == "Hong Kong"
+
+
+# ============================================================
+# Synced-Over-Metadata Prioritization Tests
+# ============================================================
+
+class TestSyncedOverMetadataPriority:
+    """Test that synced connector datasets appear before metadata-only candidates."""
+
+    def _make_search_results(self):
+        """Create mock search results with mixed synced and metadata-only connectors."""
+        return [
+            # Synced connector dataset
+            {
+                "object_type": "connector_dataset",
+                "object_id": "synced-001",
+                "title": "HK Patent Statistics CSV",
+                "source_url": "https://data.gov.hk/patents.csv",
+                "availability": "obtainable",
+                "score": 0.9,
+                "metadata": {
+                    "access_type": "csv",
+                    "portal": "data.gov.hk",
+                    "topic": "patents_ip",
+                    "row_count": 1500,
+                    "column_count": 12,
+                    "retrieved_at": "2025-06-01T10:00:00Z",
+                    "snapshot_id": "snap-001",
+                },
+            },
+            # Metadata-only connector dataset (portal)
+            {
+                "object_type": "connector_dataset",
+                "object_id": "meta-001",
+                "title": "IPD Online Search Portal",
+                "source_url": "https://ipd.gov.hk/search",
+                "availability": "metadata_only",
+                "score": 0.7,
+                "metadata": {
+                    "access_type": "portal",
+                    "portal": "ipd.gov.hk",
+                    "topic": "patents_ip",
+                },
+            },
+            # Connector candidate (always metadata-only)
+            {
+                "object_type": "connector_candidate",
+                "object_id": "cand-001",
+                "title": "HKTISC Patent Search",
+                "source_url": "https://hktisc.hkpc.org",
+                "availability": "pending_review",
+                "score": 0.6,
+                "metadata": {
+                    "source_kind": "search_portal",
+                    "ecosystem_category": "patents_ip",
+                },
+            },
+            # Regular variable (should not be affected)
+            {
+                "object_type": "variable",
+                "object_id": "var-001",
+                "title": "Patent Applications Count",
+                "score": 0.8,
+                "metadata": {},
+            },
+        ]
+
+    def test_synced_appears_before_metadata_only(self):
+        """Synced connector datasets must appear before metadata-only ones."""
+        from app.workers.find_data import group_results
+        results = self._make_search_results()
+        groups = group_results(results, limit=10)
+
+        connector_datasets = groups["connector_datasets"]
+        assert len(connector_datasets) >= 2
+
+        # First should be synced
+        assert connector_datasets[0]["data_status"] == "synced"
+        assert connector_datasets[0]["data_status_label"] == "synced dataset"
+        # Second should be metadata-only
+        assert connector_datasets[1]["data_status"] == "metadata_only"
+        assert connector_datasets[1]["data_status_label"] == "source candidate, not yet synced"
+
+    def test_synced_dataset_has_snapshot_metadata(self):
+        """Synced datasets must include row_count, column_count, retrieved_at."""
+        from app.workers.find_data import group_results
+        results = self._make_search_results()
+        groups = group_results(results, limit=10)
+
+        synced = groups["connector_datasets"][0]
+        assert synced["row_count"] == 1500
+        assert synced["column_count"] == 12
+        assert synced["retrieved_at"] == "2025-06-01T10:00:00Z"
+        assert synced["snapshot_id"] == "snap-001"
+        assert synced["source_url"] == "https://data.gov.hk/patents.csv"
+
+    def test_metadata_only_labeled_correctly(self):
+        """Metadata-only candidates must be labeled 'source candidate, not yet synced'."""
+        from app.workers.find_data import group_results
+        results = self._make_search_results()
+        groups = group_results(results, limit=10)
+
+        # Connector candidates section
+        candidates = groups["connector_candidates"]
+        assert len(candidates) >= 1
+        assert candidates[0]["data_status_label"] == "source candidate, not yet synced"
+
+    def test_limit_respected_for_connectors(self):
+        """Limit should be respected for connector results."""
+        from app.workers.find_data import group_results
+        results = self._make_search_results()
+        groups = group_results(results, limit=1)
+
+        # Only 1 connector dataset should appear (synced first)
+        assert len(groups["connector_datasets"]) == 1
+        assert groups["connector_datasets"][0]["data_status"] == "synced"
+
+    def test_variables_unaffected_by_connector_priority(self):
+        """Regular variables should not be affected by connector prioritization."""
+        from app.workers.find_data import group_results
+        results = self._make_search_results()
+        groups = group_results(results, limit=10)
+
+        assert len(groups["variables"]) == 1
+        assert groups["variables"][0]["title"] == "Patent Applications Count"
+
+    def test_format_item_enriches_synced_with_snapshot(self):
+        """format_find_data_item should add snapshot metadata for synced datasets."""
+        from app.workers.find_data import format_find_data_item
+        row = {
+            "object_type": "connector_dataset",
+            "object_id": "synced-001",
+            "title": "Test Dataset",
+            "availability": "obtainable",
+            "metadata": {
+                "access_type": "csv",
+                "portal": "data.gov.hk",
+                "row_count": 500,
+                "column_count": 8,
+                "retrieved_at": "2025-06-01T10:00:00Z",
+                "snapshot_id": "snap-002",
+            },
+        }
+        item = format_find_data_item(row)
+        assert item["data_status"] == "synced"
+        assert item["data_status_label"] == "synced dataset"
+        assert item["row_count"] == 500
+        assert item["column_count"] == 8
+        assert item["retrieved_at"] == "2025-06-01T10:00:00Z"
+        assert item["snapshot_id"] == "snap-002"
+
+    def test_format_item_labels_metadata_only(self):
+        """format_find_data_item should label metadata-only datasets correctly."""
+        from app.workers.find_data import format_find_data_item
+        row = {
+            "object_type": "connector_dataset",
+            "object_id": "meta-001",
+            "title": "Portal Only",
+            "availability": "metadata_only",
+            "metadata": {
+                "access_type": "portal",
+                "portal": "ipd.gov.hk",
+            },
+        }
+        item = format_find_data_item(row)
+        assert item["data_status"] == "metadata_only"
+        assert item["data_status_label"] == "source candidate, not yet synced"
+        assert item.get("row_count") is None
+
+    def test_format_item_candidate_labeled(self):
+        """Connector candidates should be labeled as source candidates."""
+        from app.workers.find_data import format_find_data_item
+        row = {
+            "object_type": "connector_candidate",
+            "object_id": "cand-001",
+            "title": "Some Portal",
+            "availability": "pending_review",
+            "metadata": {
+                "source_kind": "search_portal",
+                "ecosystem_category": "patents_ip",
+            },
+        }
+        item = format_find_data_item(row)
+        assert item["data_status"] == "metadata_only"
+        assert item["data_status_label"] == "source candidate, not yet synced"
+
+    def test_normalize_preserves_connector_sections(self):
+        """normalize_find_data_results should preserve connector_datasets and connector_candidates."""
+        from app.services.research_task import normalize_find_data_results
+        tool_result = {
+            "ok": True,
+            "data": {
+                "closest_variables": [],
+                "relevant_reports": [],
+                "source_links": [],
+                "relevant_organizations": [],
+                "connector_datasets": [
+                    {"title": "Synced DS", "data_status": "synced"},
+                    {"title": "Meta DS", "data_status": "metadata_only"},
+                ],
+                "connector_candidates": [
+                    {"title": "Portal Candidate"},
+                ],
+            },
+        }
+        result = normalize_find_data_results(tool_result)
+        assert len(result["connector_datasets"]) == 2
+        assert result["connector_datasets"][0]["data_status"] == "synced"
+        assert len(result["connector_candidates"]) == 1
+
+    def test_evidence_packet_includes_connector_sections(self):
+        """EvidencePacketBuilder should include connector_datasets and connector_candidates."""
+        from app.services.research_task import EvidencePacketBuilder, ResearchTaskPlan
+        builder = EvidencePacketBuilder()
+        plan = ResearchTaskPlan(query="HK patents", task_type="find_data")
+        retrieved = {
+            "closest_variables": [],
+            "relevant_reports": [],
+            "source_links": [],
+            "relevant_organizations": [],
+            "connector_datasets": [
+                {
+                    "title": "HK Patent CSV",
+                    "source_url": "https://data.gov.hk/patents.csv",
+                    "data_status": "synced",
+                    "data_status_label": "synced dataset",
+                    "row_count": 1500,
+                    "column_count": 12,
+                    "retrieved_at": "2025-06-01T10:00:00Z",
+                },
+            ],
+            "connector_candidates": [
+                {
+                    "title": "IPD Portal",
+                    "source_url": "https://ipd.gov.hk",
+                    "source_kind": "search_portal",
+                    "data_status_label": "source candidate, not yet synced",
+                },
+            ],
+            "limitations": [],
+        }
+        packet = builder.build("HK patents", plan, retrieved)
+        assert "connector_datasets" in packet
+        assert "connector_candidates" in packet
+        assert len(packet["connector_datasets"]) == 1
+        assert packet["connector_datasets"][0]["data_status"] == "synced"
+        assert packet["connector_datasets"][0]["row_count"] == 1500
+        assert len(packet["connector_candidates"]) == 1
+        assert packet["connector_candidates"][0]["data_status_label"] == "source candidate, not yet synced"

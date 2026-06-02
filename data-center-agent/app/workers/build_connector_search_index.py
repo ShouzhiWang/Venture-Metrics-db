@@ -47,6 +47,23 @@ def build_connector_search_index(*, rebuild: bool = False, dry_run: bool = False
                 counts["connector_dataset"] += 1
                 continue
 
+            # For synced datasets, include snapshot metadata (row_count, column_count, retrieved_at)
+            ds_metadata = {"access_type": row[8], "portal": row[7], "topic": row[4]}
+            availability = "unclear"
+            if row[9] == "synced":
+                availability = "obtainable"
+                # Fetch latest snapshot metadata
+                snap_row = conn.execute(text(
+                    "SELECT row_count, column_count, retrieved_at, id "
+                    "FROM connector_snapshots WHERE dataset_id = :did "
+                    "ORDER BY retrieved_at DESC LIMIT 1"
+                ), {"did": str(ds_id)}).first()
+                if snap_row:
+                    ds_metadata["row_count"] = snap_row[0]
+                    ds_metadata["column_count"] = snap_row[1]
+                    ds_metadata["retrieved_at"] = str(snap_row[2]) if snap_row[2] else None
+                    ds_metadata["snapshot_id"] = str(snap_row[3]) if snap_row[3] else None
+
             _upsert_search_row(conn, {
                 "object_type": "connector_dataset",
                 "object_id": str(ds_id),
@@ -55,8 +72,8 @@ def build_connector_search_index(*, rebuild: bool = False, dry_run: bool = False
                 "search_text": search_text,
                 "geography": row[3],
                 "source_url": row[6],
-                "availability": "obtainable" if row[9] == "synced" else "unclear",
-                "metadata": {"access_type": row[8], "portal": row[7], "topic": row[4]},
+                "availability": availability,
+                "metadata": ds_metadata,
             })
             counts["connector_dataset"] += 1
 

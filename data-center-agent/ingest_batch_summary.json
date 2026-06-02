@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-05-28T22:46:30.936072",
+  "total_on_disk": 139,
+  "already_ingested": 79,
+  "new_attempted": 60,
+  "success": 60,
+  "failed": 0,
+  "failures": []
+}

@@ -165,6 +165,12 @@ class EvidencePacketBuilder:
         reports = [self._report(item) for item in retrieved.get("relevant_reports", []) or []]
         sources = [self._source(item) for item in retrieved.get("source_links", []) or []]
         organizations = [self._organization(item) for item in retrieved.get("relevant_organizations", []) or []]
+
+        # Connector datasets: synced first, then metadata-only (already sorted by find_data)
+        connector_datasets = [self._connector_dataset(item) for item in retrieved.get("connector_datasets", []) or []]
+        # Connector candidates: always metadata-only portal candidates
+        connector_candidates = [self._connector_candidate(item) for item in retrieved.get("connector_candidates", []) or []]
+
         # Geography mismatch warning
         geo_warnings = []
         if target_geo:
@@ -179,6 +185,10 @@ class EvidencePacketBuilder:
             "reports": reports,
             "sources": sources,
             "organizations": organizations,
+            # Synced connector datasets — lead with these in answers
+            "connector_datasets": connector_datasets,
+            # Metadata-only portal candidates — mention as provenance/context only
+            "connector_candidates": connector_candidates,
             "evidence_quotes": [item.get("evidence_quote") for item in variables if item.get("evidence_quote")],
             "source_urls": sorted({item.get("source_url") for item in variables + reports + sources if item.get("source_url")}),
             "availability_labels": sorted({item.get("availability") for item in variables + sources if item.get("availability")}),
@@ -186,6 +196,38 @@ class EvidencePacketBuilder:
             "time_coverage": sorted({item.get("time_period") for item in variables if item.get("time_period")}),
             "confidence_scores": [item.get("confidence_score") for item in variables if item.get("confidence_score") is not None],
             "limitations": list(retrieved.get("limitations") or []) + geo_warnings,
+        }
+
+    def _connector_dataset(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Format a synced connector dataset for the evidence packet."""
+        return {
+            "id": item.get("object_id") or item.get("id"),
+            "name": item.get("title"),
+            "source_url": item.get("source_url"),
+            "portal": item.get("portal"),
+            "access_type": item.get("access_type"),
+            "geography": item.get("geographic_coverage") or item.get("geography"),
+            "data_status": item.get("data_status", "metadata_only"),
+            "data_status_label": item.get("data_status_label", "source candidate, not yet synced"),
+            "row_count": item.get("row_count"),
+            "column_count": item.get("column_count"),
+            "retrieved_at": item.get("retrieved_at"),
+            "snapshot_id": item.get("snapshot_id"),
+            "score": item.get("score"),
+        }
+
+    def _connector_candidate(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Format a metadata-only connector candidate for the evidence packet."""
+        return {
+            "id": item.get("object_id") or item.get("id"),
+            "name": item.get("title"),
+            "source_url": item.get("source_url"),
+            "portal": item.get("portal"),
+            "source_kind": item.get("source_kind"),
+            "ecosystem_category": item.get("ecosystem_category"),
+            "geography": item.get("geographic_coverage") or item.get("geography"),
+            "data_status_label": "source candidate, not yet synced",
+            "score": item.get("score"),
         }
 
     def _variable(self, item: dict[str, Any], target_geography: str | None = None) -> dict[str, Any]:
@@ -742,6 +784,10 @@ def normalize_find_data_results(tool_result: dict[str, Any]) -> dict[str, Any]:
         "relevant_reports": data.get("relevant_reports") or [],
         "source_links": data.get("source_links") or [],
         "relevant_organizations": data.get("relevant_organizations") or [],
+        # Connector datasets synced first, then metadata-only — already sorted by find_data
+        "connector_datasets": data.get("connector_datasets") or [],
+        # Connector candidates are always metadata-only portals
+        "connector_candidates": data.get("connector_candidates") or [],
         "limitations": [item for item in [data.get("warning")] if item],
     }
 

@@ -249,6 +249,23 @@ def rebuild_search_index() -> dict:
 
         for row in ds_rows:
             search_text = " ".join(str(v) for v in row[1:] if v)
+
+            # For synced datasets, include snapshot metadata
+            ds_metadata = {"access_type": row[8], "portal": row[7], "topic": row[5]}
+            availability = "metadata_only"
+            if row[9] == "synced":
+                availability = "obtainable"
+                snap_row = conn.execute(text(
+                    "SELECT row_count, column_count, retrieved_at, id "
+                    "FROM connector_snapshots WHERE dataset_id = :did "
+                    "ORDER BY retrieved_at DESC LIMIT 1"
+                ), {"did": str(row[0])}).first()
+                if snap_row:
+                    ds_metadata["row_count"] = snap_row[0]
+                    ds_metadata["column_count"] = snap_row[1]
+                    ds_metadata["retrieved_at"] = str(snap_row[2]) if snap_row[2] else None
+                    ds_metadata["snapshot_id"] = str(snap_row[3]) if snap_row[3] else None
+
             conn.execute(text(
                 """
                 INSERT INTO search_index (object_type, object_id, title, content, search_text,
@@ -268,8 +285,8 @@ def rebuild_search_index() -> dict:
                 "search_text": search_text,
                 "geography": row[3],
                 "source_url": row[6],
-                "availability": "obtainable" if row[9] == "synced" else "metadata_only",
-                "metadata": json.dumps({"access_type": row[8], "portal": row[7], "topic": row[5]}),
+                "availability": availability,
+                "metadata": json.dumps(ds_metadata),
             })
         counts["connector_datasets"] = len(ds_rows)
 

@@ -110,26 +110,46 @@ def is_broad_query(lowered_query: str) -> bool:
 
 
 def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
+    """Group search results with synced connector datasets prioritized over metadata-only candidates.
+
+    Rules:
+    1. Synced datasets (with snapshots) appear before metadata-only portal candidates.
+    2. connector_datasets = synced datasets with row_count, column_count, retrieved_at, source_url.
+    3. connector_candidates = metadata-only sources labeled "source candidate, not yet synced".
+    """
     grouped = {
         "variables": [], "datasets": [], "reports": [], "sources": [],
         "organizations": [], "connector_datasets": [], "connector_candidates": [],
     }
     seen_sources: set[str] = set()
+
+    # Phase 1: Collect connector items separately for priority sorting
+    synced_connectors: list[dict] = []
+    metadata_only_connectors: list[dict] = []
+
     for row in results:
         item = format_find_data_item(row)
         object_type = row["object_type"]
+
         if object_type == "variable" and len(grouped["variables"]) < limit:
             grouped["variables"].append(item)
         elif object_type == "dataset" and len(grouped["datasets"]) < limit:
             grouped["datasets"].append(item)
-        elif object_type == "connector_dataset" and len(grouped["connector_datasets"]) < limit:
-            grouped["connector_datasets"].append(item)
-        elif object_type == "connector_candidate" and len(grouped["connector_candidates"]) < limit:
-            grouped["connector_candidates"].append(item)
+        elif object_type == "connector_dataset":
+            # Check if this dataset has a synced snapshot
+            if item.get("data_status") == "synced":
+                synced_connectors.append(item)
+            else:
+                metadata_only_connectors.append(item)
+        elif object_type == "connector_candidate":
+            # Candidates are always metadata-only
+            item["data_status_label"] = "source candidate, not yet synced"
+            metadata_only_connectors.append(item)
         elif object_type == "report" and len(grouped["reports"]) < limit:
             grouped["reports"].append(item)
         elif object_type == "organization" and len(grouped["organizations"]) < limit:
             grouped["organizations"].append(item)
+
         source_key = row.get("source_url") or row.get("source_id") or row.get("object_id")
         if source_key and source_key not in seen_sources and len(grouped["sources"]) < limit:
             seen_sources.add(source_key)
@@ -144,6 +164,25 @@ def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
             )
         if object_type == "source" and len(grouped["sources"]) < limit and source_key not in seen_sources:
             grouped["sources"].append(item)
+
+    # Phase 2: Merge synced first, then metadata-only, respecting limit
+    grouped["connector_datasets"] = synced_connectors[:limit]
+    remaining = limit - len(grouped["connector_datasets"])
+    if remaining > 0:
+        # Add metadata-only connector datasets after synced ones
+        for item in metadata_only_connectors:
+            if len(grouped["connector_datasets"]) >= limit:
+                break
+            if item.get("object_type") == "connector_dataset":
+                item["data_status_label"] = "source candidate, not yet synced"
+                grouped["connector_datasets"].append(item)
+
+    # connector_candidates are pure metadata-only portal/org candidates
+    grouped["connector_candidates"] = [
+        item for item in metadata_only_connectors
+        if item.get("object_type") == "connector_candidate"
+    ][:limit]
+
     return grouped
 
 
@@ -176,6 +215,17 @@ def format_find_data_item(row: dict) -> dict:
         item["source_kind"] = metadata.get("source_kind")
         item["ecosystem_category"] = metadata.get("ecosystem_category")
         item["data_status"] = "synced" if row.get("availability") == "obtainable" else "metadata_only"
+
+        # Enrich synced datasets with snapshot metadata (row_count, column_count, retrieved_at)
+        if item["data_status"] == "synced":
+            item["row_count"] = metadata.get("row_count")
+            item["column_count"] = metadata.get("column_count")
+            item["retrieved_at"] = metadata.get("retrieved_at")
+            item["snapshot_id"] = metadata.get("snapshot_id")
+            item["data_status_label"] = "synced dataset"
+        else:
+            item["data_status_label"] = "source candidate, not yet synced"
+
     if obj_type == "organization":
         item["organization_type"] = metadata.get("organization_type")
         item["parent_organization"] = metadata.get("parent_organization")
