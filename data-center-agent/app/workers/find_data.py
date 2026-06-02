@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 from app.llm.embedding_client import EmbeddingClient
 from app.models.search import SuggestedClarification
@@ -35,6 +38,7 @@ def find_data(
     time_range: str | None = None,
     client: EmbeddingClient | None = None,
     search_fn=None,
+    live_search: bool = True,
 ) -> dict:
     intent = parse_query_intent(query, geography=geography, time_range=time_range, public_only=public_only)
     filters = {
@@ -54,7 +58,8 @@ def find_data(
     )
     groups = group_results(search["results"], limit=limit)
     has_results = any(len(group) > 0 for group in groups.values())
-    return {
+
+    result = {
         "query": query,
         "parsed_intent": intent,
         "search_mode": search["mode"],
@@ -71,6 +76,32 @@ def find_data(
             item.model_dump() for item in suggest_clarifications(query, intent, has_results=has_results)
         ],
     }
+
+    # Real-time data.gov.hk search for innovation/IP/HK data queries
+    if live_search:
+        try:
+            from app.workers.datagovhk_live_search import search_live, should_trigger_live_search
+            if should_trigger_live_search(query):
+                live = search_live(query, limit=limit)
+                result["live_api_results"] = {
+                    "source": live["source"],
+                    "retrieved_at": live["retrieved_at"],
+                    "total_available": live["total_available"],
+                    "latency_ms": live["latency_ms"],
+                    "results": live["results"],
+                    "error": live.get("error"),
+                }
+                # Merge live results into connector_datasets if not already present
+                existing_urls = {cd.get("source_url") for cd in result["connector_datasets"]}
+                for live_ds in live["results"]:
+                    if live_ds.get("source_url") not in existing_urls:
+                        live_ds["data_status"] = "live_api_result"
+                        live_ds["data_status_label"] = "live from data.gov.hk API"
+                        result["connector_datasets"].append(live_ds)
+        except Exception as exc:
+            logger.debug("Live data.gov.hk search skipped: %s", exc)
+
+    return result
 
 
 def parse_query_intent(query: str, *, geography: str | None = None, time_range: str | None = None, public_only: bool = False) -> dict:
@@ -244,6 +275,14 @@ def format_find_data_item(row: dict) -> dict:
         item["retrieved_at"] = metadata.get("retrieved_at")
         item["data_status"] = "official_metric"
         item["data_status_label"] = "official synced dataset metric"
+    # Live API results
+    if metadata.get("freshness") == "real-time":
+        item["data_status"] = "live_api_result"
+        item["data_status_label"] = f"live from {metadata.get('portal', 'external')} API"
+        item["freshness"] = "real-time"
+        item["last_modified"] = metadata.get("last_modified")
+        item["download_url"] = metadata.get("download_url")
+        item["provider"] = metadata.get("provider")
     return item
 
 
