@@ -479,6 +479,15 @@ def _normalize_tool_results(executed: list[dict[str, Any]]) -> tuple[dict[str, A
             results["relevant_reports"].extend(data.get("relevant_reports") or [])
             results["relevant_organizations"].extend(data.get("relevant_organizations") or [])
             results["source_links"].extend(data.get("source_links") or [])
+            results["connector_datasets"].extend(data.get("connector_datasets") or [])
+            results["connector_metrics"].extend(data.get("connector_metrics") or [])
+            results["connector_candidates"].extend(data.get("connector_candidates") or [])
+            results["tavily_candidates"] = data.get("tavily_candidates")
+            results["live_api_results"] = {
+                key: value
+                for key, value in data.items()
+                if key.startswith("live_api_results") and isinstance(value, dict)
+            }
             limitations.extend(_limitations_from_data(data, _result_count(results)))
         elif name == "semantic_search":
             rows = data.get("results") or []
@@ -507,6 +516,10 @@ def _result_count(results: dict[str, Any]) -> int:
         + len(results.get("relevant_reports") or [])
         + len(results.get("relevant_organizations") or [])
         + len(results.get("source_links") or [])
+        + len(results.get("connector_datasets") or [])
+        + len(results.get("connector_metrics") or [])
+        + len(results.get("connector_candidates") or [])
+        + len((results.get("tavily_candidates") or {}).get("results") or [])
     )
 
 
@@ -739,7 +752,18 @@ def _llm_error_response(code: str, message: str) -> dict[str, Any]:
 
 
 def _empty_results() -> dict[str, Any]:
-    return {"closest_variables": [], "relevant_reports": [], "relevant_organizations": [], "source_links": [], "comparison": {}}
+    return {
+        "closest_variables": [],
+        "relevant_reports": [],
+        "relevant_organizations": [],
+        "source_links": [],
+        "connector_datasets": [],
+        "connector_metrics": [],
+        "connector_candidates": [],
+        "tavily_candidates": None,
+        "live_api_results": {},
+        "comparison": {},
+    }
 
 
 def _auth_required_response() -> dict[str, Any]:

@@ -84,6 +84,10 @@ function VariableDetail({ data }: { data: VariableResult }) {
       <Field label="Data source" value={data.data_source} />
       <Field label="Geography" value={data.geographic_coverage} />
       <Field label="Time coverage" value={data.temporal_coverage} />
+      <Field label="Confidence" value={typeof data.confidence_score === "number" ? data.confidence_score.toFixed(2) : undefined} />
+      <Field label="Review status" value={data.review_status} />
+      <Field label="Page" value={data.page_number} />
+      <Field label="Source report" value={data.source_report_title} />
       {data.evidence_quote && (
         <div className="drawer-field">
           <span className="drawer-label">Evidence</span>
@@ -100,8 +104,10 @@ function ReportDetail({ data }: { data: ReportResult }) {
   return (
     <>
       <Field label="Publisher" value={data.publisher} />
+      <Field label="Source organization" value={data.source_organization} />
       <Field label="Year" value={data.report_year} />
       <Field label="Geography" value={data.geography || data.geographic_coverage} />
+      <Field label="Summary" value={data.summary} />
       {data.why_it_matched && (
         <div className="drawer-field">
           <span className="drawer-label">Why it matched</span>
@@ -113,6 +119,14 @@ function ReportDetail({ data }: { data: ReportResult }) {
           <span className="drawer-label">Matched variables</span>
           <span className="drawer-value">
             {data.matched_variables.map(v => v.raw_variable_name || v.title).filter(Boolean).join(", ")}
+          </span>
+        </div>
+      )}
+      {data.chunks && data.chunks.length > 0 && (
+        <div className="drawer-field">
+          <span className="drawer-label">Relevant chunks</span>
+          <span className="drawer-value">
+            {data.chunks.map(chunk => chunk.title || chunk.evidence_quote || chunk.why_it_matched).filter(Boolean).slice(0, 4).join(" | ")}
           </span>
         </div>
       )}
@@ -136,12 +150,28 @@ function OrgDetail({ data }: { data: OrganizationResult }) {
 function SourceDetail({ data }: { data: SourceLink }) {
   return (
     <>
+      <Field label="Result type" value={data.object_type || data.connector_type || data.source_type} />
+      <Field label="Connector" value={data.connector_name} />
       {data.availability && (
         <div className="drawer-field">
           <span className="drawer-label">Availability</span>
           <div style={{ marginTop: 4 }}>
             <AvailabilityBadge value={data.availability} />
           </div>
+        </div>
+      )}
+      <Field label="Score" value={typeof data.score === "number" ? data.score.toFixed(3) : undefined} />
+      <Field label="Page" value={data.page_number} />
+      {data.why_it_matched && (
+        <div className="drawer-field">
+          <span className="drawer-label">Why it matched</span>
+          <blockquote className="drawer-evidence">{data.why_it_matched}</blockquote>
+        </div>
+      )}
+      {data.evidence_quote && (
+        <div className="drawer-field">
+          <span className="drawer-label">Evidence</span>
+          <blockquote className="drawer-evidence">{data.evidence_quote}</blockquote>
         </div>
       )}
       <LinkField label="Source URL" href={data.source_url} />

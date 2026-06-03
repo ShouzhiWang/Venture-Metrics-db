@@ -37,12 +37,29 @@ declare global {
 }
 
 const EXAMPLES = [
-  "Singapore VC deal count and median round values",
-  "Compare seed vs Series A funding in Southeast Asia",
-  "UK SME use of external finance",
-  "Singapore digital economy share of GDP",
-  "Government VC investment share in funding rounds",
-  "India startup ecosystem funding by stage",
+  "Find reports related to innovation policy and R&D investment",
+  "Search internal reports for green finance indicators",
+  "Singapore GDP and employment data",
+  "World Bank R&D expenditure China Singapore comparison",
+  "Hong Kong patent trends in clean energy",
+  "Recent university research on AI patents",
+  "Find papers about green finance and carbon markets",
+  "What variables are available for measuring regional innovation?",
+  "Find datasets or indicators related to FDI, trade, and R&D",
+  "Build a research brief on clean energy innovation in Asia",
+];
+
+const CAPABILITIES = [
+  "Internal Report Database",
+  "Semantic Search Index",
+  "Codebook Extraction",
+  "Report Reader",
+  "data.gov.hk",
+  "data.gov.sg",
+  "World Bank",
+  "OpenAlex",
+  "Crossref",
+  "Tavily fallback",
 ];
 
 const DATA_PROJECT_CONTEXT_KEY = "dataProjectContext";
@@ -657,15 +674,16 @@ function DataDiscoveryPage({
             <div className="thread-scroll">
               {!hasTurns && (
                 <div className="thread-empty">
-                  <p>Start a research thread with a metric, geography, source, organization, or definition.</p>
-                  <div className="example-chips">
+                  <div className="search-intro">
+                    <div>
+                      <h2>Research across reports, data APIs, papers, and extracted variables.</h2>
+                      <p>Start with a research question or pick a preset that exercises a specific platform capability.</p>
+                    </div>
+                    <CapabilityStatusPanel />
+                  </div>
+                  <div className="demo-query-grid">
                     {EXAMPLES.map(ex => (
-                      <button
-                        key={ex}
-                        type="button"
-                        className="chip"
-                        onClick={() => void runQuery(ex)}
-                      >
+                      <button key={ex} type="button" onClick={() => void runQuery(ex)}>
                         {ex}
                       </button>
                     ))}
@@ -753,8 +771,118 @@ function countStructuredResults(results: ChatResponse["results"]) {
     results.closest_variables.length +
     results.relevant_reports.length +
     results.relevant_organizations.length +
-    results.source_links.length
+    results.source_links.length +
+    (results.connector_datasets?.length || 0) +
+    (results.connector_metrics?.length || 0) +
+    (results.connector_candidates?.length || 0) +
+    (results.tavily_candidates?.results?.length || 0)
   );
+}
+
+function CapabilityStatusPanel() {
+  return (
+    <div className="capability-status-panel" aria-label="Available platform capabilities">
+      {CAPABILITIES.map(name => (
+        <span key={name}>{name}</span>
+      ))}
+    </div>
+  );
+}
+
+function LoadingSearchStages({ query }: { query: string }) {
+  const lowered = query.toLowerCase();
+  const stages = [
+    "Searching internal report database...",
+    "Running semantic search over indexed chunks...",
+    "Checking extracted variables and codebook entries...",
+  ];
+  if (/(singapore|\bsg\b|gdp|trade|employment)/i.test(lowered)) stages.push("Querying data.gov.sg live data...");
+  if (/(hong kong|\bhk\b|patent|trademark|\bip\b)/i.test(lowered)) stages.push("Querying data.gov.hk live data...");
+  if (/(gdp|r&d|trade|fdi|development|indicator|employment)/i.test(lowered)) stages.push("Querying World Bank live data...");
+  if (/(research|publication|paper|journal|university|patent|academic|literature)/i.test(lowered)) {
+    stages.push("Looking up academic publications via OpenAlex...");
+    stages.push("Checking Crossref metadata...");
+  }
+  stages.push("Expanding with fallback web search if trusted sources are thin...");
+  return (
+    <div className="loading-stages" aria-label="Search stages">
+      {stages.slice(0, 7).map((stage, index) => (
+        <div key={stage} className={index === 0 ? "active" : undefined}>
+          <span />
+          {stage}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SearchPath({ response }: { response: ChatResponse }) {
+  const path = buildSearchPath(response);
+  if (path.length === 0) return null;
+  return (
+    <div className="search-path-panel" aria-label="Sources used">
+      <span>Sources used</span>
+      <ol>
+        {path.map((item, index) => (
+          <li key={`${item}-${index}`}>{item}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function ExpansionNotice({ response }: { response: ChatResponse }) {
+  const connectors = buildSearchPath(response).filter(item => !["Internal Reports", "Semantic Index", "Codebook Extraction"].includes(item));
+  const hasTavily = (response.results.tavily_candidates?.results?.length || 0) > 0;
+  if (connectors.length === 0 && !hasTavily) return null;
+  return (
+    <div className="expansion-notice">
+      Local database had limited matches, so I expanded the search using live connectors.
+      <span>Searched locally: Internal Reports, Semantic Index, Codebook Extraction.</span>
+      <span>Activated: {connectors.join(", ") || "none"}. Fallback web search: {hasTavily ? "used" : "not used"}.</span>
+    </div>
+  );
+}
+
+function buildSearchPath(response: ChatResponse): string[] {
+  const results = response.results;
+  const path = new Set<string>();
+  if (results.relevant_reports.length > 0) path.add("Internal Reports");
+  if (results.source_links.length > 0) path.add("Semantic Index");
+  if (results.closest_variables.length > 0 || (results.connector_metrics?.length || 0) > 0) path.add("Codebook Extraction");
+  for (const tool of response.tool_calls || []) {
+    if (tool.name === "find_data") {
+      path.add("Internal Reports");
+      path.add("Semantic Index");
+    }
+    if (tool.name === "semantic_search") path.add("Semantic Index");
+    if (tool.name === "compare_concepts_auto") path.add("Codebook Extraction");
+  }
+  for (const item of results.connector_datasets || []) {
+    const label = connectorPathLabel(`${item.portal || ""} ${item.provider || ""} ${item.source_url || ""} ${item.data_status_label || ""}`);
+    if (label) path.add(label);
+  }
+  for (const item of results.connector_candidates || []) {
+    const label = connectorPathLabel(`${item.portal || ""} ${item.provider || ""} ${item.source_url || ""} ${item.data_status_label || ""}`);
+    if (label) path.add(label);
+  }
+  for (const live of Object.values(results.live_api_results || {})) {
+    const label = connectorPathLabel(live.source || "");
+    if (label) path.add(label);
+  }
+  if ((results.tavily_candidates?.results?.length || 0) > 0) path.add("Tavily fallback");
+  return [...path];
+}
+
+function connectorPathLabel(text: string): string | undefined {
+  const value = text.toLowerCase();
+  if (value.includes("data.gov.hk")) return "data.gov.hk";
+  if (value.includes("data.gov.sg")) return "data.gov.sg";
+  if (value.includes("world bank") || value.includes("worldbank")) return "World Bank";
+  if (value.includes("openalex")) return "OpenAlex";
+  if (value.includes("crossref")) return "Crossref";
+  if (value.includes("tavily")) return "Tavily fallback";
+  return undefined;
 }
 
 function EmptySearchNextSteps({
@@ -1005,6 +1133,7 @@ function ResearchTurn({
         <div className="assistant-turn-head">
           <span className="turn-label">Assistant</span>
         </div>
+        <LoadingSearchStages query={turn.query || ""} />
         <AgentActivityTimeline isLoading defaultCollapsed={false} />
       </article>
     );
@@ -1043,6 +1172,9 @@ function ResearchTurn({
       </div>
 
       <AnswerSummary response={response} loading={Boolean(turn.loading && !(response.assistant_message || response.message))} />
+
+      <SearchPath response={response} />
+      <ExpansionNotice response={response} />
 
       {((turn.loading || (response.tool_trace && response.tool_trace.length > 0))) && (
         <AgentActivityTimeline

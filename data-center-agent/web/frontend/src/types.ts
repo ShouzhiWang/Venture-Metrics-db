@@ -27,6 +27,10 @@ export type VariableResult = {
   report_id?: string;
   source_id?: string;
   score?: number;
+  confidence_score?: number;
+  review_status?: string;
+  page_number?: string | number;
+  source_report_title?: string;
 };
 
 export type ReportResult = {
@@ -43,6 +47,9 @@ export type ReportResult = {
   why_it_matched?: string;
   score?: number;
   matched_variables?: VariableResult[];
+  summary?: string;
+  source_organization?: string;
+  chunks?: SourceLink[];
 };
 
 export type OrganizationResult = {
@@ -67,6 +74,62 @@ export type SourceLink = {
   source_url?: string;
   availability?: string;
   local_path?: string;
+  object_type?: string;
+  score?: number;
+  why_it_matched?: string;
+  evidence_quote?: string;
+  page_number?: string | number;
+  connector_name?: string;
+  connector_type?: string;
+  source_type?: string;
+};
+
+export type ConnectorDatasetResult = SourceLink & {
+  portal?: string;
+  provider?: string;
+  source_kind?: string;
+  ecosystem_category?: string;
+  data_status?: string;
+  data_status_label?: string;
+  row_count?: number;
+  column_count?: number;
+  retrieved_at?: string;
+  last_modified?: string;
+  download_url?: string;
+  access_type?: string;
+  freshness?: string;
+  definition?: string;
+  data_source?: string;
+};
+
+export type ConnectorMetricResult = SourceLink & {
+  metric_name?: string;
+  metric_description?: string;
+  dataset_name?: string;
+  portal?: string;
+  provider?: string;
+  category?: string;
+  dimension?: string;
+  retrieved_at?: string;
+  data_status_label?: string;
+};
+
+export type TavilyCandidates = {
+  source?: string;
+  query?: string;
+  total?: number;
+  note?: string;
+  results?: ConnectorDatasetResult[];
+};
+
+export type LiveApiResultSet = {
+  source?: string;
+  retrieved_at?: string;
+  total_available?: number;
+  total_results?: number;
+  latency_ms?: number;
+  results?: ConnectorDatasetResult[];
+  error?: string;
 };
 
 export type AgentEvent = {
@@ -117,6 +180,11 @@ export type ChatResponse = {
     relevant_reports: ReportResult[];
     relevant_organizations: OrganizationResult[];
     source_links: SourceLink[];
+    connector_datasets?: ConnectorDatasetResult[];
+    connector_metrics?: ConnectorMetricResult[];
+    connector_candidates?: ConnectorDatasetResult[];
+    tavily_candidates?: TavilyCandidates | null;
+    live_api_results?: Record<string, LiveApiResultSet>;
     comparison: Record<string, unknown>;
   };
   limitations: string[];

@@ -16,16 +16,21 @@ export function ReportCard({ report, onViewEvidence, onAuthRequired, projectId, 
 
   return (
     <article className="result-card">
+      <div className="badge-row">
+        <span className="source-badge">Internal DB</span>
+        <span className="source-badge muted">Report Reader</span>
+      </div>
       <h4>{title}</h4>
 
       <div className="card-meta">
-        {report.publisher && <span className="meta-chip">{report.publisher}</span>}
+        {(report.publisher || report.source_organization) && <span className="meta-chip">{report.publisher || report.source_organization}</span>}
         {report.report_year && <span className="meta-chip">{report.report_year}</span>}
         {geo && <span className="meta-chip">{geo}</span>}
+        {typeof report.score === "number" && <span className="meta-chip">Score {report.score.toFixed(2)}</span>}
       </div>
 
-      {report.why_it_matched && (
-        <p className="card-def">{report.why_it_matched}</p>
+      {(report.summary || report.why_it_matched) && (
+        <p className="card-def">{report.summary || report.why_it_matched}</p>
       )}
 
       <div className="card-actions">

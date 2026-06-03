@@ -26,6 +26,7 @@ export function VariableCard({ variable, onViewEvidence, onAuthRequired, project
       )}
 
       <div className="card-meta">
+        <span className="meta-chip">Report Variable</span>
         {variable.data_source && (
           <span className="meta-chip">{variable.data_source}</span>
         )}
@@ -35,7 +36,39 @@ export function VariableCard({ variable, onViewEvidence, onAuthRequired, project
         {variable.temporal_coverage && (
           <span className="meta-chip">{variable.temporal_coverage}</span>
         )}
+        {typeof variable.confidence_score === "number" && (
+          <span className="meta-chip">Confidence {Math.round(variable.confidence_score * 100)}%</span>
+        )}
+        {variable.review_status && (
+          <span className="meta-chip">{variable.review_status}</span>
+        )}
+        {variable.page_number && (
+          <span className="meta-chip">Page {variable.page_number}</span>
+        )}
       </div>
+
+      {(variable.measurement_method || variable.evidence_quote || variable.source_report_title) && (
+        <dl className="variable-facts">
+          {variable.measurement_method && (
+            <>
+              <dt>Measurement</dt>
+              <dd>{variable.measurement_method}</dd>
+            </>
+          )}
+          {variable.source_report_title && (
+            <>
+              <dt>Report</dt>
+              <dd>{variable.source_report_title}</dd>
+            </>
+          )}
+          {variable.evidence_quote && (
+            <>
+              <dt>Evidence</dt>
+              <dd>{variable.evidence_quote}</dd>
+            </>
+          )}
+        </dl>
+      )}
 
       <div className="card-actions">
         <button
