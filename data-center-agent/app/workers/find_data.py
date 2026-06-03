@@ -124,6 +124,83 @@ def find_data(
         except Exception as exc:
             logger.debug("Live data.gov.sg search skipped: %s", exc)
 
+    # Real-time World Bank search for economic/development data queries
+    if live_search:
+        try:
+            from app.workers.sync_worldbank import search_live as wb_search_live
+            # Trigger on economic/development/innovation topics
+            wb_triggers = {"gdp", "economic", "trade", "investment", "export", "import",
+                           "unemployment", "employment", "education", "r&d", "research",
+                           "patent", "innovation", "business", "development", "poverty",
+                           "population", "gdp per capita", "gni", "fdi", "indicator"}
+            if any(t in query.lower() for t in wb_triggers):
+                wb_live = wb_search_live(query, limit=limit)
+                if wb_live.get("ok") and wb_live.get("results"):
+                    result["live_api_results_wb"] = {
+                        "source": wb_live["source"],
+                        "retrieved_at": wb_live["fetched_at"],
+                        "total_available": wb_live["total_results"],
+                        "results": wb_live["results"],
+                    }
+                    existing_urls = {cd.get("source_url") for cd in result["connector_datasets"]}
+                    for live_ds in wb_live["results"]:
+                        if live_ds.get("source_url") not in existing_urls:
+                            live_ds["data_status"] = "live_api_result"
+                            live_ds["data_status_label"] = "live from World Bank API"
+                            result["connector_datasets"].append(live_ds)
+        except Exception as exc:
+            logger.debug("Live World Bank search skipped: %s", exc)
+
+    # Real-time OpenAlex search for research/academic data queries
+    if live_search:
+        try:
+            from app.workers.sync_openalex import search_live as oa_search_live
+            oa_triggers = {"research", "publication", "paper", "journal", "academic",
+                           "university", "institution", "scholar", "citation", "h-index",
+                           "patent", "innovation", "science", "technology", "literature"}
+            if any(t in query.lower() for t in oa_triggers):
+                oa_live = oa_search_live(query, limit=limit)
+                if oa_live.get("ok") and oa_live.get("results"):
+                    result["live_api_results_oa"] = {
+                        "source": oa_live["source"],
+                        "retrieved_at": oa_live["fetched_at"],
+                        "total_available": oa_live["total_results"],
+                        "results": oa_live["results"],
+                    }
+                    existing_urls = {cd.get("source_url") for cd in result["connector_datasets"]}
+                    for live_ds in oa_live["results"]:
+                        if live_ds.get("source_url") not in existing_urls:
+                            live_ds["data_status"] = "live_api_result"
+                            live_ds["data_status_label"] = "live from OpenAlex API"
+                            result["connector_datasets"].append(live_ds)
+        except Exception as exc:
+            logger.debug("Live OpenAlex search skipped: %s", exc)
+
+    # Real-time Crossref search for scholarly works queries
+    if live_search:
+        try:
+            from app.workers.sync_crossref import search_live as cr_search_live
+            cr_triggers = {"paper", "publication", "doi", "journal", "article",
+                           "scholarly", "funder", "funding", "grant", "research",
+                           "literature", "review", "meta-analysis"}
+            if any(t in query.lower() for t in cr_triggers):
+                cr_live = cr_search_live(query, limit=limit)
+                if cr_live.get("ok") and cr_live.get("results"):
+                    result["live_api_results_cr"] = {
+                        "source": cr_live["source"],
+                        "retrieved_at": cr_live["fetched_at"],
+                        "total_available": cr_live["total_results"],
+                        "results": cr_live["results"],
+                    }
+                    existing_urls = {cd.get("source_url") for cd in result["connector_datasets"]}
+                    for live_ds in cr_live["results"]:
+                        if live_ds.get("source_url") not in existing_urls:
+                            live_ds["data_status"] = "live_api_result"
+                            live_ds["data_status_label"] = "live from Crossref API"
+                            result["connector_datasets"].append(live_ds)
+        except Exception as exc:
+            logger.debug("Live Crossref search skipped: %s", exc)
+
     return result
 
 
