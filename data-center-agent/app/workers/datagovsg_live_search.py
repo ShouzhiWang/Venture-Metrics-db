@@ -93,15 +93,16 @@ def _search_datasets(query: str, max_pages: int = MAX_PAGES) -> list[dict]:
     client.close()
 
     # Filter by keyword relevance
+    stop_words = {"the", "a", "an", "in", "of", "for", "and", "or", "to", "is",
+                  "on", "at", "by", "with", "from", "that", "this", "it", "as",
+                  "data", "singapore", "sg", "statistics", "dataset", "information"}
+    query_words = {w for w in query_lower.split() if len(w) >= 3 and w not in stop_words}
     matches = []
     for ds in all_datasets:
         name = (ds.get("name") or "").lower()
         agency = (ds.get("managedByAgencyName") or "").lower()
-        # Simple keyword matching
-        score = 0
-        for word in query_lower.split():
-            if len(word) >= 3 and (word in name or word in agency):
-                score += 1
+        # Require at least one non-trivial keyword match
+        score = sum(1 for word in query_words if word in name or word in agency)
         if score > 0:
             ds["_relevance"] = score
             matches.append(ds)

@@ -326,39 +326,61 @@ def sync_ecosystem_indicators(
 def search_live(query: str, limit: int = 10) -> dict:
     """Live search for World Bank indicators matching a query.
 
-    Results are filtered for relevance — indicators must share at least one
-    keyword (excluding stop words) with the query, or be in ECOSYSTEM_INDICATORS.
+    The WB indicator search API is unreliable (returns poverty indicators for
+    most queries). Strategy: always include relevant ECOSYSTEM_INDICATORS first,
+    then try the API search with keyword filtering as a supplement.
     """
-    result = list_indicators(search=query, page=1)
-    indicators = result.get("indicators", [])
+    lowered = query.lower()
 
-    # Build a relevance filter from query keywords
-    stop_words = {"the", "a", "an", "in", "of", "for", "and", "or", "to", "is",
-                  "on", "at", "by", "with", "from", "that", "this", "it", "as",
-                  "are", "was", "were", "be", "been", "has", "have", "had", "do",
-                  "does", "did", "will", "would", "could", "should", "may", "might",
-                  "shall", "can", "need", "dare", "ought", "used", "about", "how",
-                  "what", "when", "where", "which", "who", "whom", "whose", "why",
-                  "not", "no", "nor", "so", "up", "out", "if", "then", "than",
-                  "too", "very", "just", "but", "also", "more", "most", "some",
-                  "any", "all", "each", "every", "both", "few", "other", "another"}
-    query_words = {w for w in query.lower().split() if len(w) > 2 and w not in stop_words}
-
+    # Phase 1: Always include matching ecosystem indicators
     matches = []
-    for ind in indicators:
-        ind_id = ind.get("id", "")
-        ind_name = ind.get("name", "").lower()
-        # Always include ecosystem indicators
-        if ind_id in ECOSYSTEM_INDICATORS:
-            matches.append(_format_indicator(ind))
+    seen_ids = set()
+    for ind_id, ind_name in ECOSYSTEM_INDICATORS.items():
+        name_lower = ind_name.lower()
+        # Check if any query keyword matches the indicator name
+        stop_words = {"the", "a", "an", "in", "of", "for", "and", "or", "to", "is",
+                      "on", "at", "by", "with", "from", "that", "this", "it", "as",
+                      "are", "was", "were", "be", "been", "has", "have", "had", "do",
+                      "does", "did", "will", "would", "could", "should", "may", "might",
+                      "shall", "can", "need", "dare", "ought", "used", "about", "how",
+                      "what", "when", "where", "which", "who", "whom", "whose", "why",
+                      "not", "no", "nor", "so", "up", "out", "if", "then", "than",
+                      "too", "very", "just", "but", "also", "more", "most", "some",
+                      "any", "all", "each", "every", "both", "few", "other", "another",
+                      "data", "statistics", "trends", "comparison", "analysis"}
+        query_words = {w for w in lowered.split() if len(w) > 2 and w not in stop_words}
+        if query_words and any(w in name_lower for w in query_words):
+            matches.append({
+                "indicator_id": ind_id,
+                "name": ind_name,
+                "source": "World Bank",
+                "topics": [],
+                "source_url": f"https://data.worldbank.org/indicator/{ind_id}",
+                "api_url": f"{BASE_URL}/country/all/indicator/{ind_id}?format=json",
+                "geography": "Global",
+                "data_status_label": "live from World Bank API",
+                "freshness": "real-time",
+            })
+            seen_ids.add(ind_id)
             if len(matches) >= limit:
                 break
-            continue
-        # For other indicators, require at least one query keyword match
-        if query_words and any(w in ind_name for w in query_words):
-            matches.append(_format_indicator(ind))
-            if len(matches) >= limit:
-                break
+
+    # Phase 2: Supplement with API search (filtered for relevance)
+    if len(matches) < limit:
+        try:
+            result = list_indicators(search=query, page=1)
+            for ind in result.get("indicators", []):
+                ind_id = ind.get("id", "")
+                if ind_id in seen_ids:
+                    continue
+                ind_name = ind.get("name", "").lower()
+                if query_words and any(w in ind_name for w in query_words):
+                    matches.append(_format_indicator(ind))
+                    seen_ids.add(ind_id)
+                    if len(matches) >= limit:
+                        break
+        except Exception:
+            pass  # API search is supplementary, not critical
 
     return {
         "ok": True,

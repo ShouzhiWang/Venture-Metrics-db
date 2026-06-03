@@ -36,6 +36,16 @@ LIVE_SEARCH_TRIGGERS = {
     "open data", "hong kong data", "hk data",
 }
 
+# Normalize common variants for CKAN search
+_CKAN_SYNONYMS = {
+    "trademark": "trade mark",
+    "trade mark": "trade mark",
+    "ip": "intellectual property",
+    "intellectual property": "intellectual property",
+    "r&d": "research",
+    "sme": "small and medium enterprise",
+}
+
 
 def should_trigger_live_search(query: str) -> bool:
     """Determine if a query should trigger a live data.gov.hk search."""
@@ -68,8 +78,12 @@ def search_live(query: str, limit: int = MAX_RESULTS) -> dict[str, Any]:
         (t for t in LIVE_SEARCH_TRIGGERS if t in lowered),
         key=len, reverse=True,
     )
+    # Normalize triggers to CKAN-friendly terms (e.g., "trademark" → "trade mark")
+    normalized = []
+    for t in matched_triggers[:3]:
+        normalized.append(_CKAN_SYNONYMS.get(t, t))
     # Build a concise search query from matched triggers
-    search_query = " ".join(matched_triggers[:3]) if matched_triggers else query
+    search_query = " ".join(normalized) if normalized else query
 
     try:
         with httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=True) as client:
