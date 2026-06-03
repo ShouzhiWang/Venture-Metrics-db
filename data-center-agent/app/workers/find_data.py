@@ -201,6 +201,30 @@ def find_data(
         except Exception as exc:
             logger.debug("Live Crossref search skipped: %s", exc)
 
+    # Tavily web discovery fallback — triggers when DB + APIs returned thin results
+    if live_search:
+        try:
+            # Count how many live API results we got
+            live_count = sum(1 for k in result if k.startswith("live_api_results"))
+            total_datasets = len(result.get("connector_datasets", []))
+
+            # Only trigger Tavily if we have very few results from all sources
+            if total_datasets < 3 and live_count < 2:
+                from app.workers.tavily_discovery import search_live as tavily_search
+                tavily_result = tavily_search(query, limit=min(limit, 5))
+                if tavily_result.get("ok") and tavily_result.get("results"):
+                    result["tavily_candidates"] = {
+                        "source": "Tavily (web discovery fallback)",
+                        "query": query,
+                        "total": tavily_result["total_results"],
+                        "results": tavily_result["results"],
+                        "note": "These are candidate sources from web search, not validated data. "
+                                "Store as external_source_candidates for review before ingestion.",
+                    }
+                    # Don't merge into connector_datasets — they're candidates, not validated
+        except Exception as exc:
+            logger.debug("Tavily fallback skipped: %s", exc)
+
     return result
 
 
