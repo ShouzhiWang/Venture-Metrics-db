@@ -101,6 +101,29 @@ def find_data(
         except Exception as exc:
             logger.debug("Live data.gov.hk search skipped: %s", exc)
 
+    # Real-time data.gov.sg search for Singapore data queries
+    if live_search:
+        try:
+            from app.workers.datagovsg_live_search import search_live as sg_search_live, should_trigger_live_search as sg_should_trigger
+            if sg_should_trigger(query):
+                sg_live = sg_search_live(query, limit=limit)
+                if sg_live.get("ok"):
+                    result["live_api_results_sg"] = {
+                        "source": sg_live["source"],
+                        "retrieved_at": sg_live["fetched_at"],
+                        "total_available": sg_live["total_results"],
+                        "results": sg_live["results"],
+                    }
+                    # Merge live results into connector_datasets
+                    existing_urls = {cd.get("source_url") for cd in result["connector_datasets"]}
+                    for live_ds in sg_live.get("results", []):
+                        if live_ds.get("source_url") not in existing_urls:
+                            live_ds["data_status"] = "live_api_result"
+                            live_ds["data_status_label"] = "live from data.gov.sg API"
+                            result["connector_datasets"].append(live_ds)
+        except Exception as exc:
+            logger.debug("Live data.gov.sg search skipped: %s", exc)
+
     return result
 
 
