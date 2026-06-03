@@ -82,6 +82,21 @@ def _expand_clarification_response(message: str, history: list[dict[str, str]]) 
     return message
 
 
+def _is_clarification_followup(history: list[dict[str, str]]) -> bool:
+    """Check if the last assistant message in history was a clarification question."""
+    for h in reversed(history):
+        if h.get("role") == "assistant":
+            content = (h.get("content") or "").lower()
+            # Check for clarification patterns
+            clarification_signals = [
+                "what specific", "which part", "what time", "what type",
+                "please confirm", "clarif", "narrow", "refine",
+                "which", "what kind", "do you want",
+            ]
+            return any(s in content for s in clarification_signals)
+    return False
+
+
 def _planning_message_for_focus(message: str, context: dict[str, Any]) -> str:
     """Augment the planner prompt only; user-visible message stays unchanged."""
     augmented = message
@@ -126,6 +141,70 @@ def handle_chat(
     trace = trace or AgentTraceCollector()
     trace.planning_started()
     deterministic_plan = plan_query(message, context)
+    # Skip clarification if user is responding to a previous clarification question
+    is_followup = _is_clarification_followup(history)
+    if is_followup and deterministic_plan["action"] == "ask_clarification":
+        # User is answering a clarification — force find_data and skip clarification entirely
+        filters = deterministic_plan.get("extracted_filters") or {}
+        find_data_args = {
+            "query": message,
+            "limit": 8,
+            "public_only": bool(filters.get("public_only", False)),
+            "geography": filters.get("geography"),
+            "time_range": filters.get("time_range"),
+        }
+        find_data_args = {k: v for k, v in find_data_args.items() if v is not None}
+        trace.planning_complete(deterministic_plan.get("intent", "find_data"), ["find_data"])
+        executed = _execute_tool_calls(
+            [{"name": "find_data", "args": find_data_args}],
+            tool_caller or call_demo_tool,
+            trace=trace,
+        )
+        results, limitations, response_type = _normalize_tool_results(executed)
+        trace.rank_results(_aggregate_counts(results))
+
+        # Generate LLM synthesis if available
+        assistant_message = ""
+        if response_type != "no_results":
+            try:
+                llm = llm_client or DemoLLMClient()
+                assistant_message = llm.synthesize(
+                    message=message,
+                    history=history,
+                    plan=deterministic_plan,
+                    tool_results=[item["result"] for item in executed],
+                    normalized_results=results,
+                    limitations=limitations,
+                )
+            except Exception:
+                pass
+
+        if not assistant_message:
+            parts = []
+            if results.get("connector_datasets"):
+                parts.append(f"{len(results['connector_datasets'])} data sources")
+            if results.get("closest_variables"):
+                parts.append(f"{len(results['closest_variables'])} variables")
+            if results.get("relevant_reports"):
+                parts.append(f"{len(results['relevant_reports'])} reports")
+            if results.get("relevant_organizations"):
+                parts.append(f"{len(results['relevant_organizations'])} organizations")
+            assistant_message = f"Found {', '.join(parts)}." if parts else "No results found for this query."
+
+        return attach_tool_trace({
+            "type": response_type,
+            "message": assistant_message,
+            "assistant_message": assistant_message,
+            "intent": deterministic_plan.get("intent", "find_data"),
+            "clarifying_questions": [],
+            "clarification_ui": {},
+            "refinement_chips": [],
+            "follow_up_queries": [],
+            "tool_calls": [{"name": item["name"], "args": item["args"], "status": item["status"]} for item in executed],
+            "results": results,
+            "limitations": limitations,
+        }, trace)
+
     if deterministic_plan["action"] == "ask_clarification":
         try:
             llm = llm_client or DemoLLMClient()
