@@ -46,6 +46,10 @@ def should_trigger_live_search(query: str) -> bool:
 def search_live(query: str, limit: int = MAX_RESULTS) -> dict[str, Any]:
     """Query the data.gov.hk CKAN API in real-time.
 
+    Extracts key domain terms from the query for better CKAN matching.
+    CKAN's full-text search is literal — long natural language queries
+    often return 0 results. Extracting keywords improves recall.
+
     Returns:
         {
             "results": [...],  # formatted results matching find_data structure
@@ -58,9 +62,18 @@ def search_live(query: str, limit: int = MAX_RESULTS) -> dict[str, Any]:
     """
     start_time = datetime.now(timezone.utc)
 
+    # Extract key terms for CKAN search — use trigger keywords that appear in query
+    lowered = query.lower()
+    matched_triggers = sorted(
+        (t for t in LIVE_SEARCH_TRIGGERS if t in lowered),
+        key=len, reverse=True,
+    )
+    # Build a concise search query from matched triggers
+    search_query = " ".join(matched_triggers[:3]) if matched_triggers else query
+
     try:
         with httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=True) as client:
-            resp = client.get(CKAN_API, params={"q": query, "rows": limit})
+            resp = client.get(CKAN_API, params={"q": search_query, "rows": limit})
             resp.raise_for_status()
             data = resp.json()
     except Exception as exc:

@@ -324,23 +324,41 @@ def sync_ecosystem_indicators(
 
 
 def search_live(query: str, limit: int = 10) -> dict:
-    """Live search for World Bank indicators matching a query."""
+    """Live search for World Bank indicators matching a query.
+
+    Results are filtered for relevance — indicators must share at least one
+    keyword (excluding stop words) with the query, or be in ECOSYSTEM_INDICATORS.
+    """
     result = list_indicators(search=query, page=1)
     indicators = result.get("indicators", [])
 
+    # Build a relevance filter from query keywords
+    stop_words = {"the", "a", "an", "in", "of", "for", "and", "or", "to", "is",
+                  "on", "at", "by", "with", "from", "that", "this", "it", "as",
+                  "are", "was", "were", "be", "been", "has", "have", "had", "do",
+                  "does", "did", "will", "would", "could", "should", "may", "might",
+                  "shall", "can", "need", "dare", "ought", "used", "about", "how",
+                  "what", "when", "where", "which", "who", "whom", "whose", "why",
+                  "not", "no", "nor", "so", "up", "out", "if", "then", "than",
+                  "too", "very", "just", "but", "also", "more", "most", "some",
+                  "any", "all", "each", "every", "both", "few", "other", "another"}
+    query_words = {w for w in query.lower().split() if len(w) > 2 and w not in stop_words}
+
     matches = []
-    for ind in indicators[:limit]:
-        matches.append({
-            "indicator_id": ind["id"],
-            "name": ind["name"],
-            "source": ind.get("source", "World Bank"),
-            "topics": ind.get("topics", []),
-            "source_url": f"https://data.worldbank.org/indicator/{ind['id']}",
-            "api_url": f"{BASE_URL}/country/all/indicator/{ind['id']}?format=json",
-            "geography": "Global",
-            "data_status_label": "live from World Bank API",
-            "freshness": "real-time",
-        })
+    for ind in indicators:
+        ind_id = ind.get("id", "")
+        ind_name = ind.get("name", "").lower()
+        # Always include ecosystem indicators
+        if ind_id in ECOSYSTEM_INDICATORS:
+            matches.append(_format_indicator(ind))
+            if len(matches) >= limit:
+                break
+            continue
+        # For other indicators, require at least one query keyword match
+        if query_words and any(w in ind_name for w in query_words):
+            matches.append(_format_indicator(ind))
+            if len(matches) >= limit:
+                break
 
     return {
         "ok": True,
@@ -349,6 +367,21 @@ def search_live(query: str, limit: int = 10) -> dict:
         "total_results": len(matches),
         "results": matches,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _format_indicator(ind: dict) -> dict:
+    """Format a World Bank indicator for the find_data pipeline."""
+    return {
+        "indicator_id": ind.get("id"),
+        "name": ind.get("name"),
+        "source": ind.get("source", "World Bank"),
+        "topics": ind.get("topics", []),
+        "source_url": f"https://data.worldbank.org/indicator/{ind['id']}",
+        "api_url": f"{BASE_URL}/country/all/indicator/{ind['id']}?format=json",
+        "geography": "Global",
+        "data_status_label": "live from World Bank API",
+        "freshness": "real-time",
     }
 
 

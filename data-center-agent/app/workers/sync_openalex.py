@@ -294,9 +294,28 @@ def sync_top_institutions(
 
 
 def search_live(query: str, limit: int = 10) -> dict:
-    """Live search for OpenAlex institutions and concepts."""
+    """Live search for OpenAlex institutions and works.
+
+    Extracts key domain terms from the query for better matching.
+    OpenAlex's semantic search can return tangentially related results
+    for long natural language queries.
+    """
+    # Extract key terms for OpenAlex search
+    stop_words = {"the", "a", "an", "in", "of", "for", "and", "or", "to", "is",
+                  "on", "at", "by", "with", "from", "that", "this", "it", "as",
+                  "are", "was", "were", "be", "been", "has", "have", "had", "do",
+                  "does", "did", "will", "would", "could", "should", "may", "might",
+                  "shall", "can", "need", "dare", "ought", "used", "about", "how",
+                  "what", "when", "where", "which", "who", "whom", "whose", "why",
+                  "not", "no", "nor", "so", "up", "out", "if", "then", "than",
+                  "too", "very", "just", "but", "also", "more", "most", "some",
+                  "any", "all", "each", "every", "both", "few", "other", "another"}
+    words = [w for w in query.lower().split() if len(w) > 2 and w not in stop_words]
+    # Use top 4 keywords for OpenAlex search
+    search_query = " ".join(words[:4]) if words else query
+
     institutions = search_institutions(query, limit=min(limit, 5))
-    works_result = search_works(query=query, limit=min(limit, 5))
+    works_result = search_works(query=search_query, limit=min(limit, 5))
 
     results = []
     for inst in institutions:
