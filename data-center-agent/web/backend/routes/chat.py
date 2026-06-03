@@ -59,6 +59,29 @@ class ResearchTaskRequest(BaseModel):
 CHAT_TOOL_NAMES = SAFE_WEB_TOOLS - {"submit_feedback"}
 
 
+def _expand_clarification_response(message: str, history: list[dict[str, str]]) -> str:
+    """If the message looks like a short clarification answer, combine it with the previous user query.
+
+    When a user selects a clarification option like "R&D / patents" or "Latest available",
+    the frontend sends it as a standalone message. This function detects that pattern and
+    prepends the previous user message for context.
+    """
+    # Clarification options are typically short (< 80 chars) and don't contain geography/topic context
+    if len(message) > 80:
+        return message
+    # Find the last user message in history
+    prev_user_msgs = [h["content"] for h in history if h.get("role") == "user"]
+    if not prev_user_msgs:
+        return message
+    prev = prev_user_msgs[-1].strip()
+    if not prev or len(prev) < 10:
+        return message
+    # If the previous message is much longer, this is likely a clarification response
+    if len(prev) > len(message) * 2:
+        return f"{prev} — {message}"
+    return message
+
+
 def _planning_message_for_focus(message: str, context: dict[str, Any]) -> str:
     """Augment the planner prompt only; user-visible message stays unchanged."""
     augmented = message
@@ -97,6 +120,8 @@ def handle_chat(
     message = (payload.get("message") or "").strip()
     context = payload.get("context") or {}
     history = _sanitize_history(payload.get("history") or [])
+    # If this looks like a clarification response (short option), combine with previous query
+    message = _expand_clarification_response(message, history)
     plan_message = _planning_message_for_focus(message, context)
     trace = trace or AgentTraceCollector()
     trace.planning_started()
