@@ -109,10 +109,38 @@ def handle_chat(
         except (DemoLLMConfigError, DemoLLMResponseError, DemoLLMProviderError) as exc:
             trace.warning("Clarification planning fallback", str(exc))
             plan = deterministic_plan
-        plan["tool_calls"] = []
         plan["clarifying_questions"] = plan.get("clarifying_questions") or deterministic_plan.get("clarifying_questions") or []
-        trace.planning_complete(plan["intent"], [])
-        return attach_tool_trace(_clarification_response(plan), trace)
+
+        # Run find_data even when asking clarification — show results alongside questions
+        filters = plan.get("filters") if isinstance(plan.get("filters"), dict) else {}
+        find_data_args = {
+            "query": message,
+            "limit": 8,
+            "public_only": bool(filters.get("public_only", False)),
+            "geography": filters.get("geography"),
+            "time_range": filters.get("time_range"),
+        }
+        find_data_args = {k: v for k, v in find_data_args.items() if v is not None}
+        tool_results = _execute_tool_calls(
+            [{"name": "find_data", "args": find_data_args}],
+            tool_caller or call_demo_tool,
+            trace=trace,
+        )
+        executed = tool_results
+        results, limitations, response_type = _normalize_tool_results(executed)
+        trace.rank_results(_aggregate_counts(results))
+
+        # Merge clarification into the response
+        clarification_response = _clarification_response(plan)
+        clarification_response["results"] = results
+        clarification_response["limitations"] = limitations
+        clarification_response["type"] = response_type if _result_count(results) > 0 else "clarification"
+        clarification_response["tool_calls"] = [
+            {"name": item["name"], "args": item["args"], "status": item["status"]}
+            for item in executed
+        ]
+        trace.planning_complete(plan["intent"], ["find_data"])
+        return attach_tool_trace(clarification_response, trace)
     try:
         llm = llm_client or DemoLLMClient()
         plan = _validate_plan(llm.plan(message=plan_message, history=history, safe_tools=CHAT_TOOL_NAMES), message)

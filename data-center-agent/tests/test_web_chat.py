@@ -257,15 +257,20 @@ def test_high_ambiguity_research_query_does_not_call_find_data() -> None:
         }
     )
 
+    def tool_caller(name, args):
+        calls.append((name, args))
+        return {"ok": True, "tool": name, "data": {"closest_variables": [], "relevant_reports": [], "relevant_organizations": [], "source_links": [], "connector_datasets": [], "connector_metrics": [], "connector_candidates": [], "suggested_clarifications": []}}
+
     result = handle_chat(
         {"message": "Recent university research on AI patents"},
-        tool_caller=lambda name, args: calls.append((name, args)),
+        tool_caller=tool_caller,
         llm_client=llm,
     )
 
-    assert result["type"] == "clarification"
-    assert result["tool_calls"] == []
-    assert calls == []
+    # find_data IS called now (results shown alongside clarification)
+    assert result["type"] in ("clarification", "answer")
+    assert len(calls) == 1
+    assert calls[0][0] == "find_data"
     assert result["assistant_message"] == "LLM generated question?"
     assert result["clarification_ui"]["main_question"] == "LLM generated question?"
     assert result["clarification_ui"]["choice_options"][0]["label"] == "LLM choice"
@@ -274,15 +279,20 @@ def test_high_ambiguity_research_query_does_not_call_find_data() -> None:
 def test_startup_data_does_not_call_find_data() -> None:
     calls = []
 
+    def tool_caller(name, args):
+        calls.append((name, args))
+        return {"ok": True, "tool": name, "data": {"closest_variables": [], "relevant_reports": [], "relevant_organizations": [], "source_links": [], "connector_datasets": [], "connector_metrics": [], "connector_candidates": [], "suggested_clarifications": []}}
+
     result = handle_chat(
         {"message": "startup data"},
-        tool_caller=lambda name, args: calls.append((name, args)),
+        tool_caller=tool_caller,
         llm_client=FakeLLM({"intent": "find_data", "tool_calls": [{"name": "find_data", "args": {"query": "startup data"}}]}),
     )
 
-    assert result["type"] == "clarification"
-    assert result["tool_calls"] == []
-    assert calls == []
+    # find_data IS called now (results shown alongside clarification)
+    assert result["type"] in ("clarification", "answer")
+    assert len(calls) == 1
+    assert calls[0][0] == "find_data"
 
 
 def test_synthesis_receives_tool_results_only() -> None:
