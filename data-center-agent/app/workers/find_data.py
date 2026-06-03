@@ -97,6 +97,7 @@ def find_data(
                     if live_ds.get("source_url") not in existing_urls:
                         live_ds["data_status"] = "live_api_result"
                         live_ds["data_status_label"] = "live from data.gov.hk API"
+                        live_ds.setdefault("title", live_ds.get("name") or live_ds.get("title"))
                         result["connector_datasets"].append(live_ds)
         except Exception as exc:
             logger.debug("Live data.gov.hk search skipped: %s", exc)
@@ -120,6 +121,7 @@ def find_data(
                         if live_ds.get("source_url") not in existing_urls:
                             live_ds["data_status"] = "live_api_result"
                             live_ds["data_status_label"] = "live from data.gov.sg API"
+                            live_ds.setdefault("title", live_ds.get("name") or live_ds.get("title"))
                             result["connector_datasets"].append(live_ds)
         except Exception as exc:
             logger.debug("Live data.gov.sg search skipped: %s", exc)
@@ -147,6 +149,7 @@ def find_data(
                         if live_ds.get("source_url") not in existing_urls:
                             live_ds["data_status"] = "live_api_result"
                             live_ds["data_status_label"] = "live from World Bank API"
+                            live_ds.setdefault("title", live_ds.get("name"))
                             result["connector_datasets"].append(live_ds)
         except Exception as exc:
             logger.debug("Live World Bank search skipped: %s", exc)
@@ -172,6 +175,7 @@ def find_data(
                         if live_ds.get("source_url") not in existing_urls:
                             live_ds["data_status"] = "live_api_result"
                             live_ds["data_status_label"] = "live from OpenAlex API"
+                            live_ds.setdefault("title", live_ds.get("name") or live_ds.get("title"))
                             result["connector_datasets"].append(live_ds)
         except Exception as exc:
             logger.debug("Live OpenAlex search skipped: %s", exc)

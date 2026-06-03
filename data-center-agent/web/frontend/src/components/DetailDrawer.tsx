@@ -148,6 +148,7 @@ function OrgDetail({ data }: { data: OrganizationResult }) {
 }
 
 function SourceDetail({ data }: { data: SourceLink }) {
+  const ext = data as Record<string, unknown>;
   return (
     <>
       <Field label="Result type" value={data.object_type || data.connector_type || data.source_type} />
@@ -174,7 +175,20 @@ function SourceDetail({ data }: { data: SourceLink }) {
           <blockquote className="drawer-evidence">{data.evidence_quote}</blockquote>
         </div>
       )}
+      {/* Connector dataset extended fields */}
+      <Field label="Portal" value={ext.portal as string} />
+      <Field label="Provider" value={ext.provider as string} />
+      <Field label="Access type" value={ext.access_type as string} />
+      <Field label="Data status" value={(ext.data_status_label || ext.data_status) as string} />
+      <Field label="Freshness" value={ext.freshness as string} />
+      <Field label="Definition" value={ext.definition as string} />
+      <Field label="Data source" value={ext.data_source as string} />
+      {typeof ext.row_count === "number" && <Field label="Rows" value={ext.row_count} />}
+      {typeof ext.column_count === "number" && <Field label="Columns" value={ext.column_count} />}
+      <Field label="Retrieved" value={ext.retrieved_at as string} />
+      <Field label="Last modified" value={ext.last_modified as string} />
       <LinkField label="Source URL" href={data.source_url} />
+      <LinkField label="Download URL" href={ext.download_url as string} />
       {data.local_path && <Field label="Local file" value={data.local_path} />}
     </>
   );

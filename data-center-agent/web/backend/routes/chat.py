@@ -566,6 +566,9 @@ def _aggregate_counts(results: dict[str, Any]) -> dict[str, int]:
         "report_count": len(results.get("relevant_reports") or []),
         "source_count": len(results.get("source_links") or []),
         "organization_count": len(results.get("relevant_organizations") or []),
+        "connector_dataset_count": len(results.get("connector_datasets") or []),
+        "connector_metric_count": len(results.get("connector_metrics") or []),
+        "connector_candidate_count": len(results.get("connector_candidates") or []),
     }
 
 
@@ -687,11 +690,29 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
     reports = data.get("relevant_reports") or []
     organizations = data.get("relevant_organizations") or []
     sources = data.get("source_links") or []
-    count = len(variables) + len(reports) + len(organizations)
+    connector_datasets = data.get("connector_datasets") or []
+    connector_metrics = data.get("connector_metrics") or []
+    connector_candidates = data.get("connector_candidates") or []
+    tavily_candidates = data.get("tavily_candidates")
+    live_api_results = {
+        key: value
+        for key, value in data.items()
+        if key.startswith("live_api_results") and isinstance(value, dict)
+    }
+    count = len(variables) + len(reports) + len(organizations) + len(connector_datasets)
     response_type = "answer" if count else "no_results"
+    parts = []
+    if variables:
+        parts.append(f"{len(variables)} variable matches")
+    if reports:
+        parts.append(f"{len(reports)} reports")
+    if organizations:
+        parts.append(f"{len(organizations)} organizations")
+    if connector_datasets:
+        parts.append(f"{len(connector_datasets)} data sources")
     message_text = (
-        f"Found {len(variables)} variable matches, {len(reports)} reports, and {len(organizations)} organizations."
-        if count
+        f"Found {', '.join(parts)}."
+        if parts
         else "I could not find strong matches yet."
     )
     return {
@@ -709,6 +730,11 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
             "relevant_reports": reports,
             "relevant_organizations": organizations,
             "source_links": sources,
+            "connector_datasets": connector_datasets,
+            "connector_metrics": connector_metrics,
+            "connector_candidates": connector_candidates,
+            "tavily_candidates": tavily_candidates,
+            "live_api_results": live_api_results,
             "comparison": {},
         },
         "limitations": _limitations_from_data(data, count),
@@ -731,10 +757,9 @@ def _comparison_response(message: str, plan: dict[str, Any], tool_result: dict[s
         "refinement_chips": [],
         "tool_calls": [{"name": "compare_concepts_auto", "args": {}, "status": "ok"}],
         "results": {
+            **_empty_results(),
             "closest_variables": data.get("closest_variables", []),
             "relevant_reports": data.get("selected_reports", []),
-            "relevant_organizations": [],
-            "source_links": [],
             "comparison": data.get("comparison", {}),
         },
         "limitations": data.get("limitations", []),
