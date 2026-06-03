@@ -443,7 +443,11 @@ def _specificity(lowered: str, detected: dict[str, Any], missing: list[str], int
     if _asks_for_dataset(lowered) and ("output_format" in missing or "unit_of_analysis" in missing or "geography" in missing):
         return "high"
     if "time_range" in missing and _asks_trends(lowered) and not detected.get("metric_type"):
-        return "high"
+        # Only ask clarification if the query is truly vague (no geography AND no domain)
+        if not detected.get("geography") and not detected.get("domain_topic"):
+            return "high"
+        # Has enough context — search with defaults, let results speak
+        return "medium"
     if "domain_topic" in missing:
         return "high"
     if detected.get("comparison_target") == "country":
