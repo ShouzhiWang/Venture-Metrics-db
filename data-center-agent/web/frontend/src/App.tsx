@@ -23,6 +23,7 @@ import {
 } from "./api";
 import { AgentActivityTimeline } from "./components/AgentActivityTimeline";
 import { AnswerSummary } from "./components/AnswerSummary";
+import { ClarificationRefinementPanel } from "./components/ClarificationRefinementPanel";
 import { ResultSections } from "./components/ResultSections";
 import { CompactResultPreview, pickResultPreviews, type PreviewUnion } from "./components/ResultPreview";
 import { EvidenceWorkspacePanel } from "./components/EvidenceWorkspacePanel";
@@ -1149,6 +1150,12 @@ function ResearchTurn({
   }
 
   const questions = sanitizeClarifyingQuestions(turn.clarifying_questions || response.clarifying_questions || []);
+  const hasClarificationUi = Boolean(
+    response.clarification_ui?.main_question ||
+    response.clarification_ui?.choice_options?.length ||
+    response.clarification_ui?.optional_fields?.length ||
+    response.clarification_ui?.suggested_searches?.length
+  );
   const isClarification = response.type === "clarification";
   const isError = response.type === "error";
   const total = countStructuredResults(response.results);
@@ -1184,12 +1191,24 @@ function ResearchTurn({
         />
       )}
 
-      {!turn.loading && questions.length > 0 && isClarification && (
-        <NarrowSearchPanel variant="clarify" questions={questions} baseQuery={turn.query} onChoose={onChooseClarification} />
+      {!turn.loading && (questions.length > 0 || hasClarificationUi) && isClarification && (
+        <ClarificationRefinementPanel
+          variant="clarify"
+          ui={response.clarification_ui}
+          questions={questions}
+          baseQuery={turn.query}
+          onRun={onChooseClarification}
+        />
       )}
 
-      {!turn.loading && questions.length > 0 && !isClarification && !emptyStructured && (
-        <NarrowSearchPanel variant="narrow" questions={questions} baseQuery={turn.query} onChoose={onChooseClarification} />
+      {!turn.loading && (questions.length > 0 || hasClarificationUi) && !isClarification && !emptyStructured && (
+        <ClarificationRefinementPanel
+          variant="narrow"
+          ui={response.clarification_ui}
+          questions={questions}
+          baseQuery={turn.query}
+          onRun={onChooseClarification}
+        />
       )}
 
       {!turn.loading && isError && (

@@ -125,6 +125,7 @@ class QueryPlan:
     detected: dict[str, Any]
     missing_dimensions: list[str] = field(default_factory=list)
     clarifying_questions: list[dict[str, Any]] = field(default_factory=list)
+    clarification_ui: dict[str, Any] = field(default_factory=dict)
     refinement_chips: list[dict[str, Any]] = field(default_factory=list)
     inferred_query: str = ""
     should_run_tool: bool = False
@@ -144,6 +145,21 @@ class QueryPlan:
             "unit_of_analysis": self.detected.get("unit_of_analysis"),
         }
         return data
+
+
+class PreSearchPlanner:
+    """Deterministic pre-retrieval planner for gating ambiguous research queries."""
+
+    def plan(
+        self,
+        user_message: str,
+        project_context: dict[str, Any] | None = None,
+        recent_thread_context: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        context = dict(project_context or {})
+        if recent_thread_context:
+            context["recent_thread_context"] = recent_thread_context[-6:]
+        return plan_query(user_message, context)
 
 
 def plan_query(query: str, context: dict | None = None) -> dict[str, Any]:
@@ -171,6 +187,7 @@ def plan_query(query: str, context: dict | None = None) -> dict[str, Any]:
         "low": "search_directly",
     }[specificity]
     questions = _select_questions(lowered, missing, detected, intent, action)
+    clarification_ui = _clarification_ui(text, lowered, missing, detected, intent, action)
     refinement_chips = _refinement_chips(missing, detected, intent) if action == "search_with_refinement" else []
     tool_calls = _tool_calls(text, intent, detected) if action != "ask_clarification" and text else []
     return QueryPlan(
@@ -181,6 +198,7 @@ def plan_query(query: str, context: dict | None = None) -> dict[str, Any]:
         detected=detected,
         missing_dimensions=missing,
         clarifying_questions=questions,
+        clarification_ui=clarification_ui,
         refinement_chips=refinement_chips,
         inferred_query=_inferred_query(text, inferred_bits),
         should_run_tool=action != "ask_clarification",
@@ -196,6 +214,51 @@ def refined_query(base_query: str, option: str) -> str:
     if not selection or selection.lower() in base.lower():
         return base
     return f"{base}, {selection}"
+
+
+def build_refined_query(
+    base_query: str,
+    *,
+    choice: str | None = None,
+    fields: dict[str, str] | None = None,
+    query_append: str | None = None,
+    defaults_used: bool = False,
+) -> str:
+    base = " ".join((base_query or "").split())
+    parts: list[str] = []
+    if choice:
+        parts.append(choice.strip())
+    fields = fields or {}
+    geography = fields.get("geography")
+    university = fields.get("university")
+    time_period = fields.get("time_period")
+    output_format = fields.get("output_format")
+    availability = fields.get("availability")
+    if geography:
+        parts.append(f"in {geography.strip()}")
+    if university:
+        parts.append(f"for {university.strip()}")
+    if time_period:
+        parts.append(_time_phrase(time_period.strip()))
+    if query_append:
+        parts.append(query_append.strip())
+
+    subject = " ".join(parts).strip()
+    if not subject:
+        subject = base
+    elif not choice and base and base.lower() not in subject.lower() and subject.lower() not in base.lower():
+        subject = f"{subject} related to {base}"
+
+    suffixes = []
+    if output_format:
+        suffixes.append(f"output as {output_format.strip().lower()}")
+    if availability:
+        suffixes.append(availability.strip().lower())
+    if defaults_used:
+        suffixes.append("using default assumptions")
+    if suffixes:
+        subject = f"{subject}, {', '.join(suffixes)}"
+    return subject or base
 
 
 def _detect_intent(lowered: str, detected: dict[str, Any]) -> str:
@@ -371,6 +434,8 @@ def _asks_trends(lowered: str) -> bool:
 def _specificity(lowered: str, detected: dict[str, Any], missing: list[str], intent: str) -> str:
     if intent == "unknown" or not lowered:
         return "high"
+    if _high_ambiguity_research_query(lowered, detected):
+        return "high"
     if _very_broad(lowered, detected, missing):
         return "high"
     if _asks_for_dataset(lowered) and detected.get("output_format") == "excel" and detected.get("geography") and detected.get("metric_type"):
@@ -408,6 +473,17 @@ def _very_broad(lowered: str, detected: dict[str, Any], missing: list[str]) -> b
         return True
     word_count = len(compact.split())
     return word_count <= 3 and len(missing) >= 2 and not detected.get("metric_type")
+
+
+def _high_ambiguity_research_query(lowered: str, detected: dict[str, Any]) -> bool:
+    compact = " ".join(lowered.split())
+    if compact in {"recent university research on ai patents", "university research on ai patents"}:
+        return True
+    if "between " in lowered or any(name in lowered for name in ("stanford", "mit", "berkeley", "cmu", "harvard", "princeton")):
+        return False
+    has_research = any(term in lowered for term in ("research", "publication", "paper", "academic", "university"))
+    has_patent_ai = "patent" in lowered and (" ai " in f" {lowered} " or "artificial intelligence" in lowered)
+    return has_research and has_patent_ai and not detected.get("geography") and not detected.get("output_format")
 
 
 def _select_questions(
@@ -454,6 +530,137 @@ def _question(dimension: str) -> dict[str, Any]:
         "question": template["question"],
         "options": list(template["options"]),
     }
+
+
+def _clarification_ui(
+    query: str,
+    lowered: str,
+    missing: list[str],
+    detected: dict[str, Any],
+    intent: str,
+    action: str,
+) -> dict[str, Any]:
+    if action == "search_directly":
+        return {"main_question": "", "choice_options": [], "optional_fields": [], "suggested_searches": []}
+
+    choices: list[dict[str, str]]
+    fields: list[dict[str, Any]]
+    if _high_ambiguity_research_query(lowered, detected):
+        main_question = "Which angle do you want to focus on?"
+        choices = _choice_options([
+            "University AI patent filings",
+            "Research papers about AI patents",
+            "University-owned patents",
+            "Tech transfer / licensing",
+            "Spin-offs and commercialization",
+            "Broad overview",
+        ])
+        fields = [
+            _field("geography"),
+            _field("university"),
+            _field("time_period"),
+            _field("output_format"),
+        ]
+    elif _asks_for_dataset(lowered) or intent in {"create_excel", "build_table"}:
+        main_question = "What kind of output do you want to create?"
+        choices = _choice_options(["Table", "Excel workbook", "Source list", "Research brief", "Raw dataset if available"])
+        fields = [_field("geography"), _field("time_period"), _field("availability")]
+    elif detected.get("domain_topic") == "startup funding" or "funding" in lowered or "vc" in lowered:
+        main_question = "Which funding metric do you want?"
+        choices = _choice_options(["Funding amount", "Deal count", "Median/average round size", "Stage breakdown", "Sector breakdown", "Exits"])
+        fields = []
+        if "geography" in missing:
+            fields.append(_field("geography"))
+        fields.extend([_field("time_period"), _field("output_format"), _field("availability")])
+    elif detected.get("domain_topic") == "innovation" or "innovation ecosystem" in lowered:
+        main_question = "Which part of the innovation ecosystem do you want to study?"
+        choices = _choice_options([
+            "Funding / capital",
+            "Talent / universities",
+            "R&D / patents",
+            "Government support",
+            "Startup organizations",
+            "Markets / demand",
+            "Broad overview",
+        ])
+        fields = []
+        if "geography" in missing:
+            fields.append(_field("geography"))
+        fields.extend([_field("time_period"), _field("output_format")])
+    else:
+        question = _question(missing[0]) if missing else _question("domain_topic")
+        main_question = question["question"]
+        choices = [{"label": str(option), "value": str(option).lower()} for option in question.get("options", [])]
+        fields = [_field(dimension) for dimension in missing if dimension in {"geography", "time_range", "output_format", "availability"}]
+
+    return {
+        "main_question": main_question,
+        "choice_options": choices,
+        "optional_fields": _dedupe_fields(fields),
+        "suggested_searches": [
+            {"label": "Broader overview", "query_append": "broader overview, key metrics and trends"},
+            {"label": "Official statistics and publications", "query_append": "official statistics and publications"},
+            {"label": "Organizations and programs", "query_append": "organizations and programs"},
+        ],
+        "defaults": _defaults_for(query, lowered, detected),
+    }
+
+
+def _choice_options(labels: list[str]) -> list[dict[str, str]]:
+    return [{"label": label, "value": label[0].lower() + label[1:]} for label in labels]
+
+
+def _field(name: str) -> dict[str, Any]:
+    if name in {"geography", "country_region"}:
+        return {"name": "geography", "label": "Country/region", "type": "text", "placeholder": "e.g. Hong Kong, Singapore, China"}
+    if name == "university":
+        return {"name": "university", "label": "University", "type": "text", "placeholder": "e.g. HKUST, NUS, Tsinghua"}
+    if name in {"time_range", "time_period"}:
+        return {"name": "time_period", "label": "Time period", "type": "text_or_chips", "options": ["Last 3 years", "Last 5 years", "Since 2020"]}
+    if name == "output_format":
+        return {"name": "output_format", "label": "Output", "type": "single_select", "options": ["Answer", "Table", "Excel", "Source list"]}
+    if name == "availability":
+        return {"name": "availability", "label": "Availability", "type": "single_select", "options": ["Public/obtainable only", "Include private sources", "Show both, clearly labeled"]}
+    return {"name": name, "label": name.replace("_", " ").title(), "type": "text"}
+
+
+def _dedupe_fields(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen = set()
+    out = []
+    for field in fields:
+        name = field.get("name")
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        out.append(field)
+    return out
+
+
+def _defaults_for(query: str, lowered: str, detected: dict[str, Any]) -> dict[str, Any]:
+    if _high_ambiguity_research_query(lowered, detected):
+        return {
+            "choice": "Broad overview",
+            "fields": {"geography": "global / all available", "time_period": "Last 5 years", "output_format": "Answer"},
+            "label": "Run with defaults",
+        }
+    return {
+        "choice": "Broad overview",
+        "fields": {
+            "geography": detected.get("geography") or "all available",
+            "time_period": detected.get("time_range") or "latest available",
+            "output_format": detected.get("output_format") or "Answer",
+        },
+        "label": "Run with defaults",
+    }
+
+
+def _time_phrase(value: str) -> str:
+    lowered = value.lower()
+    if lowered.startswith("since ") or lowered.startswith("last ") or lowered.startswith("past "):
+        return lowered
+    if re.fullmatch(r"(?:19|20)\d{2}", value):
+        return f"in {value}"
+    return value
 
 
 def _tool_calls(query: str, intent: str, detected: dict[str, Any]) -> list[dict[str, Any]]:

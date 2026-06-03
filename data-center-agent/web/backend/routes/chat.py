@@ -101,9 +101,18 @@ def handle_chat(
     trace = trace or AgentTraceCollector()
     trace.planning_started()
     deterministic_plan = plan_query(message, context)
-    if deterministic_plan["action"] == "ask_clarification" and _should_preempt_with_clarification(message, deterministic_plan):
-        trace.planning_complete(deterministic_plan["intent"], [])
-        return attach_tool_trace(_clarification_response(deterministic_plan), trace)
+    if deterministic_plan["action"] == "ask_clarification":
+        try:
+            llm = llm_client or DemoLLMClient()
+            llm_plan = _validate_plan(llm.plan(message=plan_message, history=history, safe_tools=CHAT_TOOL_NAMES), message)
+            plan = _merge_planner_metadata(llm_plan, deterministic_plan)
+        except (DemoLLMConfigError, DemoLLMResponseError, DemoLLMProviderError) as exc:
+            trace.warning("Clarification planning fallback", str(exc))
+            plan = deterministic_plan
+        plan["tool_calls"] = []
+        plan["clarifying_questions"] = plan.get("clarifying_questions") or deterministic_plan.get("clarifying_questions") or []
+        trace.planning_complete(plan["intent"], [])
+        return attach_tool_trace(_clarification_response(plan), trace)
     try:
         llm = llm_client or DemoLLMClient()
         plan = _validate_plan(llm.plan(message=plan_message, history=history, safe_tools=CHAT_TOOL_NAMES), message)
@@ -135,6 +144,7 @@ def handle_chat(
                 "assistant_message": assistant_message,
                 "intent": plan["intent"],
                 "clarifying_questions": plan["clarifying_questions"],
+                "clarification_ui": plan.get("clarification_ui") or {},
                 "refinement_chips": [],
                 "tool_calls": [],
                 "results": _empty_results(),
@@ -155,6 +165,7 @@ def handle_chat(
                 "clarifying_questions": plan.get("clarifying_questions") or [
                     {"question": "What metric, geography, or source type should I search for?", "options": []}
                 ],
+                "clarification_ui": plan.get("clarification_ui") or {},
                 "refinement_chips": [],
                 "tool_calls": [],
                 "results": _empty_results(),
@@ -170,6 +181,23 @@ def handle_chat(
         return attach_tool_trace(_error_response(message, plan, failed["result"], tool_calls=executed), trace)
 
     results, limitations, response_type = _normalize_tool_results(executed)
+    if _should_expand_with_find_data(message, plan, results, executed):
+        trace.fallback(
+            "Expanded beyond local comparison",
+            "Local comparison returned no evidence, so the search was expanded through live data and research connectors.",
+        )
+        expansion_call = {
+            "name": "find_data",
+            "args": _find_data_expansion_args(message, plan),
+        }
+        expansion = _execute_tool_calls([expansion_call], tool_caller, trace=trace)
+        expansion_failed = next((item for item in expansion if item["status"] != "ok"), None)
+        if expansion_failed:
+            error = expansion_failed.get("result", {}).get("error", {})
+            trace.warning("Expansion search failed", str(error.get("message") or "find_data expansion failed"))
+        else:
+            executed.extend(expansion)
+            results, limitations, response_type = _normalize_tool_results(executed)
     trace.rank_results(_aggregate_counts(results))
     for item in limitations:
         trace.warning("Search limitation", item)
@@ -213,6 +241,7 @@ def handle_chat(
             "assistant_message": assistant_message,
             "intent": plan["intent"],
             "clarifying_questions": clarifying_questions,
+            "clarification_ui": plan.get("clarification_ui") or {},
             "refinement_chips": plan.get("refinement_chips") or [],
             "follow_up_queries": follow_up_queries,
             "tool_calls": [{"name": item["name"], "args": item["args"], "status": item["status"]} for item in executed],
@@ -235,6 +264,7 @@ def handle_chat_deterministic(payload: dict[str, Any], tool_caller=call_demo_too
             "assistant_message": "I need one or two details before searching.",
             "intent": plan["intent"],
             "clarifying_questions": plan["clarifying_questions"],
+            "clarification_ui": plan.get("clarification_ui") or {},
             "refinement_chips": [],
             "tool_calls": [],
             "results": _empty_results(),
@@ -296,19 +326,23 @@ def _validate_plan(plan: dict[str, Any], message: str) -> dict[str, Any]:
         "ambiguity_level": plan.get("ambiguity_level") if isinstance(plan.get("ambiguity_level"), str) else "medium",
         "assistant_message": plan.get("assistant_message") if isinstance(plan.get("assistant_message"), str) else "",
         "clarifying_questions": _sanitize_questions(questions),
+        "clarification_ui": _sanitize_clarification_ui(plan.get("clarification_ui")),
         "tool_calls": _sanitize_tool_calls(tool_calls, message, filters),
         "filters": filters,
     }
 
 
 def _clarification_response(plan: dict[str, Any]) -> dict[str, Any]:
-    assistant_message = "Before I search, I need one detail." if len(plan.get("clarifying_questions") or []) == 1 else "Before I search, I need a couple of details."
+    ui = plan.get("clarification_ui") if isinstance(plan.get("clarification_ui"), dict) else {}
+    main_question = ui.get("main_question") if isinstance(ui.get("main_question"), str) else ""
+    assistant_message = main_question or ("Before I search, I need one detail." if len(plan.get("clarifying_questions") or []) == 1 else "Before I search, I need a couple of details.")
     return {
         "type": "clarification",
         "message": assistant_message,
         "assistant_message": assistant_message,
         "intent": plan["intent"],
         "clarifying_questions": _sanitize_questions(plan.get("clarifying_questions") or []),
+        "clarification_ui": ui,
         "refinement_chips": [],
         "tool_calls": [],
         "results": _empty_results(),
@@ -340,6 +374,7 @@ def _merge_planner_metadata(llm_plan: dict[str, Any], planner: dict[str, Any]) -
     merged["detected"] = planner.get("detected") or {}
     merged["missing_dimensions"] = planner.get("missing_dimensions") or []
     merged["inferred_query"] = planner.get("inferred_query") or ""
+    merged["clarification_ui"] = merged.get("clarification_ui") or planner.get("clarification_ui") or {}
     merged["should_run_tool"] = planner.get("should_run_tool")
     refinement_questions = planner.get("refinement_chips") or []
     if merged.get("intent") == "unknown":
@@ -381,6 +416,72 @@ def _sanitize_questions(questions: list[Any]) -> list[dict[str, Any]]:
             cleaned_item["dimension"] = item["dimension"].strip()
         cleaned.append(cleaned_item)
     return cleaned
+
+
+def _sanitize_clarification_ui(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, Any] = {}
+    if isinstance(value.get("main_question"), str):
+        out["main_question"] = value["main_question"].strip()
+
+    choices = []
+    for item in value.get("choice_options") if isinstance(value.get("choice_options"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        option_value = item.get("value")
+        if isinstance(label, str) and isinstance(option_value, str) and label.strip() and option_value.strip():
+            choices.append({"label": _short_label(label), "value": option_value.strip()})
+    out["choice_options"] = choices[:8]
+
+    fields = []
+    allowed_types = {"text", "text_or_chips", "single_select"}
+    for item in value.get("optional_fields") if isinstance(value.get("optional_fields"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        label = item.get("label")
+        field_type = item.get("type")
+        if not (isinstance(name, str) and isinstance(label, str) and field_type in allowed_types):
+            continue
+        field: dict[str, Any] = {"name": name.strip(), "label": label.strip(), "type": field_type}
+        if isinstance(item.get("placeholder"), str):
+            field["placeholder"] = item["placeholder"].strip()
+        if isinstance(item.get("options"), list):
+            field["options"] = [str(option).strip() for option in item["options"][:8] if str(option).strip()]
+        fields.append(field)
+    out["optional_fields"] = fields[:6]
+
+    searches = []
+    for item in value.get("suggested_searches") if isinstance(value.get("suggested_searches"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        label = item.get("label")
+        query_append = item.get("query_append")
+        if isinstance(label, str) and isinstance(query_append, str) and label.strip() and query_append.strip():
+            searches.append({"label": _short_label(label), "query_append": query_append.strip()})
+    out["suggested_searches"] = searches[:4]
+
+    defaults = value.get("defaults")
+    if isinstance(defaults, dict):
+        clean_defaults: dict[str, Any] = {}
+        if isinstance(defaults.get("label"), str):
+            clean_defaults["label"] = _short_label(defaults["label"])
+        if isinstance(defaults.get("choice"), str):
+            clean_defaults["choice"] = defaults["choice"].strip()
+        if isinstance(defaults.get("fields"), dict):
+            clean_defaults["fields"] = {str(k): str(v) for k, v in defaults["fields"].items() if v is not None}
+        out["defaults"] = clean_defaults
+    return out
+
+
+def _short_label(value: str) -> str:
+    cleaned = " ".join(value.split())
+    for sep in (" — ", " - "):
+        if sep in cleaned:
+            cleaned = cleaned.split(sep)[-1]
+    return cleaned[:64]
 
 
 def _sanitize_tool_calls(tool_calls: list[Any], message: str, filters: dict[str, Any]) -> list[dict[str, Any]]:
@@ -466,6 +567,51 @@ def _aggregate_counts(results: dict[str, Any]) -> dict[str, int]:
         "source_count": len(results.get("source_links") or []),
         "organization_count": len(results.get("relevant_organizations") or []),
     }
+
+
+def _should_expand_with_find_data(
+    message: str,
+    plan: dict[str, Any],
+    results: dict[str, Any],
+    executed: list[dict[str, Any]],
+) -> bool:
+    if any(item.get("name") == "find_data" for item in executed):
+        return False
+    if _result_count(results) > 0:
+        return False
+    tool_names = {str(item.get("name")) for item in executed}
+    if not (tool_names & {"compare_concepts_auto", "semantic_search"}):
+        return False
+    text = f"{message} {plan.get('intent') or ''}".lower()
+    external_research_terms = (
+        "research",
+        "publication",
+        "paper",
+        "journal",
+        "academic",
+        "university",
+        "stanford",
+        "mit",
+        "berkeley",
+        "cmu",
+        "harvard",
+        "princeton",
+        "patent",
+        "doi",
+    )
+    return any(term in text for term in external_research_terms)
+
+
+def _find_data_expansion_args(message: str, plan: dict[str, Any]) -> dict[str, Any]:
+    filters = plan.get("filters") if isinstance(plan.get("filters"), dict) else {}
+    args = {
+        "query": message,
+        "limit": 8,
+        "public_only": bool(filters.get("public_only", False)),
+        "geography": filters.get("geography"),
+        "time_range": filters.get("time_range"),
+    }
+    return {key: value for key, value in args.items() if value is not None}
 
 
 def _normalize_tool_results(executed: list[dict[str, Any]]) -> tuple[dict[str, Any], list[str], str]:
@@ -554,6 +700,7 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
         "assistant_message": message_text,
         "intent": plan["intent"],
         "clarifying_questions": _questions_from_data(data, message),
+        "clarification_ui": plan.get("clarification_ui") or {},
         "refinement_chips": plan.get("refinement_chips") or [],
         "follow_up_queries": [],
         "tool_calls": [{"name": "find_data", "args": {}, "status": "ok"}],
@@ -580,6 +727,7 @@ def _comparison_response(message: str, plan: dict[str, Any], tool_result: dict[s
         "assistant_message": data.get("comparison", {}).get("summary") or "Comparison results are available.",
         "intent": "compare_concepts",
         "clarifying_questions": [{"question": q, "options": []} for q in data.get("clarifying_questions", [])],
+        "clarification_ui": plan.get("clarification_ui") or {},
         "refinement_chips": [],
         "tool_calls": [{"name": "compare_concepts_auto", "args": {}, "status": "ok"}],
         "results": {
@@ -605,6 +753,7 @@ def _organization_response(message: str, plan: dict[str, Any], tool_result: dict
         "assistant_message": f"Found {len(organizations)} organization matches." if organizations else "I could not find matching organizations yet.",
         "intent": "find_organizations",
         "clarifying_questions": [],
+        "clarification_ui": plan.get("clarification_ui") or {},
         "refinement_chips": [],
         "tool_calls": [{"name": "semantic_search", "args": {"object_types": ["organization"]}, "status": "ok"}],
         "results": {
@@ -725,6 +874,7 @@ def _error_response(
         "assistant_message": message_text,
         "intent": plan.get("intent", "unknown"),
         "clarifying_questions": [],
+        "clarification_ui": plan.get("clarification_ui") or {},
         "refinement_chips": [],
         "tool_calls": [
             {"name": item["name"], "args": item["args"], "status": item["status"]}
@@ -743,6 +893,7 @@ def _llm_error_response(code: str, message: str) -> dict[str, Any]:
         "assistant_message": message,
         "intent": "unknown",
         "clarifying_questions": [],
+        "clarification_ui": {},
         "refinement_chips": [],
         "tool_calls": [],
         "results": _empty_results(),
@@ -773,6 +924,7 @@ def _auth_required_response() -> dict[str, Any]:
         "assistant_message": "Login is required to use data discovery.",
         "intent": "unknown",
         "clarifying_questions": [],
+        "clarification_ui": {},
         "refinement_chips": [],
         "tool_calls": [],
         "results": _empty_results(),

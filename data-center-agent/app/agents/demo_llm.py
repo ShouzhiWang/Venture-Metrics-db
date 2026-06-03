@@ -191,8 +191,11 @@ Rules:
 - Prefer compare_concepts_auto for comparison, comparability, definition differences, and "how do reports define" questions.
 - Prefer semantic_search with object_types ["organization"] for organizations, associations, accelerators, incubators, agencies, directories, or ecosystem groups.
 - Ask clarifying questions when the query is too broad to run a useful search.
+- For high ambiguity, return no tool_calls and generate clarification_ui. Do not search first.
 - For broad data queries, one useful search is allowed if the topic is clear; include follow-up questions in clarifying_questions.
 - Never request ingestion, extraction, embedding jobs, deletion, migrations, shell commands, or filesystem access.
+- clarification_ui.choice_options labels must be short human labels, not full rewritten queries.
+- Use optional_fields for free-form inputs such as country/region, university, time period, output format, and availability.
 
 JSON shape:
 {{
@@ -200,6 +203,18 @@ JSON shape:
   "ambiguity_level": "low|medium|high",
   "assistant_message": "short natural message or clarification",
   "clarifying_questions": [{{"question": "string", "options": ["optional"]}}],
+  "clarification_ui": {{
+    "main_question": "focused question",
+    "choice_options": [{{"label": "Short label", "value": "semantic choice value"}}],
+    "optional_fields": [
+      {{"name": "geography", "label": "Country/region", "type": "text", "placeholder": "e.g. Hong Kong, Singapore, China"}},
+      {{"name": "university", "label": "University", "type": "text", "placeholder": "e.g. HKUST, NUS, Tsinghua"}},
+      {{"name": "time_period", "label": "Time period", "type": "text_or_chips", "options": ["Last 3 years", "Last 5 years", "Since 2020"]}},
+      {{"name": "output_format", "label": "Output", "type": "single_select", "options": ["Answer", "Table", "Excel", "Source list"]}}
+    ],
+    "suggested_searches": [{{"label": "Broader overview", "query_append": "broader overview, key metrics and trends"}}],
+    "defaults": {{"label": "Run with defaults", "choice": "Broad overview", "fields": {{"time_period": "Last 5 years", "output_format": "Answer"}}}}
+  }},
   "tool_calls": [{{"name": "find_data", "args": {{"query": "user query", "limit": 8, "public_only": false}}}}],
   "filters": {{"geography": null, "time_range": null, "public_only": false}}
 }}

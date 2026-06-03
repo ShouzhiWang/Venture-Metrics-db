@@ -102,6 +102,72 @@ def test_chat_compare_query_routes_to_compare_concepts_auto() -> None:
     assert result["results"]["comparison"]["comparability"] == "medium"
 
 
+def test_empty_academic_comparison_expands_to_find_data_connectors() -> None:
+    calls = []
+
+    def fake_tool(name, args):
+        calls.append((name, args))
+        if name == "compare_concepts_auto":
+            return {
+                "ok": True,
+                "data": {
+                    "status": "no_results",
+                    "comparison": {},
+                    "selected_reports": [],
+                    "closest_variables": [],
+                    "limitations": ["No comparable local reports."],
+                    "clarifying_questions": [],
+                    "metadata": {},
+                },
+            }
+        if name == "find_data":
+            return {
+                "ok": True,
+                "data": {
+                    "closest_variables": [],
+                    "relevant_reports": [],
+                    "relevant_organizations": [],
+                    "source_links": [],
+                    "connector_datasets": [
+                        {
+                            "title": "AI patent research publication",
+                            "portal": "OpenAlex",
+                            "source_url": "https://openalex.org/example",
+                            "data_status_label": "live from OpenAlex API",
+                        }
+                    ],
+                    "connector_metrics": [],
+                    "connector_candidates": [],
+                    "tavily_candidates": {
+                        "source": "Tavily (web discovery fallback)",
+                        "results": [{"title": "University patent office source", "source_url": "https://example.edu/patents"}],
+                    },
+                    "suggested_clarifications": [],
+                },
+            }
+        raise AssertionError(name)
+
+    llm = FakeLLM(
+        {
+            "intent": "compare_concepts",
+            "clarifying_questions": [],
+            "tool_calls": [{"name": "compare_concepts_auto", "args": {"query": "Compare AI patent research between Stanford and peer universities"}}],
+            "filters": {},
+        }
+    )
+
+    result = handle_chat(
+        {"message": "Compare AI patent research between Stanford and peer universities"},
+        tool_caller=fake_tool,
+        llm_client=llm,
+    )
+
+    assert [call[0] for call in calls] == ["compare_concepts_auto", "find_data"]
+    assert result["type"] == "answer"
+    assert result["results"]["connector_datasets"][0]["portal"] == "OpenAlex"
+    assert result["results"]["tavily_candidates"]["results"][0]["title"] == "University patent office source"
+
+
 def test_chat_organization_query_routes_to_organization_search() -> None:
     calls = []
 
@@ -170,7 +236,53 @@ def test_chat_plan_without_tool_or_question_does_not_answer_from_memory() -> Non
 
     assert result["type"] == "clarification"
     assert result["tool_calls"] == []
-    assert result["limitations"] == ["no_tool_call_selected"]
+    assert result["results"] == _empty_results()
+
+
+def test_high_ambiguity_research_query_does_not_call_find_data() -> None:
+    calls = []
+    llm = FakeLLM(
+        {
+            "intent": "find_data",
+            "assistant_message": "Pick a research angle before I search.",
+            "clarifying_questions": [],
+            "clarification_ui": {
+                "main_question": "LLM generated question?",
+                "choice_options": [{"label": "LLM choice", "value": "LLM generated value"}],
+                "optional_fields": [],
+                "suggested_searches": [{"label": "LLM suggestion", "query_append": "LLM append"}],
+            },
+            "tool_calls": [{"name": "find_data", "args": {"query": "Recent university research on AI patents"}}],
+            "filters": {},
+        }
+    )
+
+    result = handle_chat(
+        {"message": "Recent university research on AI patents"},
+        tool_caller=lambda name, args: calls.append((name, args)),
+        llm_client=llm,
+    )
+
+    assert result["type"] == "clarification"
+    assert result["tool_calls"] == []
+    assert calls == []
+    assert result["assistant_message"] == "LLM generated question?"
+    assert result["clarification_ui"]["main_question"] == "LLM generated question?"
+    assert result["clarification_ui"]["choice_options"][0]["label"] == "LLM choice"
+
+
+def test_startup_data_does_not_call_find_data() -> None:
+    calls = []
+
+    result = handle_chat(
+        {"message": "startup data"},
+        tool_caller=lambda name, args: calls.append((name, args)),
+        llm_client=FakeLLM({"intent": "find_data", "tool_calls": [{"name": "find_data", "args": {"query": "startup data"}}]}),
+    )
+
+    assert result["type"] == "clarification"
+    assert result["tool_calls"] == []
+    assert calls == []
 
 
 def test_synthesis_receives_tool_results_only() -> None:

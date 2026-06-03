@@ -4,6 +4,36 @@ export type ClarifyingQuestion = {
   options?: string[];
 };
 
+export type ClarificationChoiceOption = {
+  label: string;
+  value: string;
+};
+
+export type ClarificationOptionalField = {
+  name: string;
+  label: string;
+  type: "text" | "text_or_chips" | "single_select";
+  placeholder?: string;
+  options?: string[];
+};
+
+export type ClarificationSuggestedSearch = {
+  label: string;
+  query_append: string;
+};
+
+export type ClarificationUi = {
+  main_question?: string;
+  choice_options?: ClarificationChoiceOption[];
+  optional_fields?: ClarificationOptionalField[];
+  suggested_searches?: ClarificationSuggestedSearch[];
+  defaults?: {
+    label?: string;
+    choice?: string;
+    fields?: Record<string, string>;
+  };
+};
+
 export type FollowUpQuery = {
   label: string;
   query: string;
@@ -168,6 +198,7 @@ export type ChatResponse = {
   saved_result_id?: string;
   intent: string;
   clarifying_questions: ClarifyingQuestion[];
+  clarification_ui?: ClarificationUi;
   refinement_chips?: ClarifyingQuestion[];
   follow_up_queries?: FollowUpQuery[];
   tool_calls?: {
