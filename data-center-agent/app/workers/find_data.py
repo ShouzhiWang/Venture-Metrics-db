@@ -12,6 +12,11 @@ from app.models.search import SuggestedClarification
 from app.utils.logging import configure_logging
 from app.workers.semantic_search import semantic_search
 
+CHUNK_RESULT_LIMIT = 6
+TAVILY_RESULT_LIMIT = 5
+LIVE_CONNECTOR_RESULT_LIMIT = 5
+RELEVANCE_LEVELS = ("direct", "partial", "contextual", "irrelevant")
+
 
 KNOWN_GEOGRAPHIES = (
     "Singapore",
@@ -39,6 +44,7 @@ def find_data(
     client: EmbeddingClient | None = None,
     search_fn=None,
     live_search: bool = True,
+    tavily_search_fn=None,
 ) -> dict:
     intent = parse_query_intent(query, geography=geography, time_range=time_range, public_only=public_only)
     filters = {
@@ -47,10 +53,10 @@ def find_data(
         "time_range": intent.get("time_range"),
     }
     search_callable = search_fn or semantic_search
+    object_types = search_object_types(intent, query)
     search = search_callable(
         query,
-        object_types=["variable", "dataset", "report", "source", "organization",
-                       "connector_dataset", "connector_candidate", "connector_metric"],
+        object_types=object_types,
         limit=max(limit * 3, 20),
         hybrid=True,
         client=client,
@@ -69,20 +75,28 @@ def find_data(
         "connector_datasets": groups["connector_datasets"],
         "connector_metrics": groups["connector_metrics"],
         "relevant_reports": groups["reports"],
+        "relevant_chunks": groups["chunks"],
         "source_links": groups["sources"],
         "relevant_organizations": groups["organizations"],
         "connector_candidates": groups["connector_candidates"],
         "suggested_clarifications": [
             item.model_dump() for item in suggest_clarifications(query, intent, has_results=has_results)
         ],
+        "retrieval_config": {
+            "object_types": object_types,
+            "chunk_result_limit": CHUNK_RESULT_LIMIT,
+            "tavily_result_limit": min(limit, TAVILY_RESULT_LIMIT),
+            "live_connector_result_limit": min(limit, LIVE_CONNECTOR_RESULT_LIMIT),
+        },
     }
+    annotate_result_quality(result, query, intent)
 
     # Real-time data.gov.hk search for innovation/IP/HK data queries
     if live_search:
         try:
             from app.workers.datagovhk_live_search import search_live, should_trigger_live_search
             if should_trigger_live_search(query):
-                live = search_live(query, limit=limit)
+                live = search_live(query, limit=min(limit, LIVE_CONNECTOR_RESULT_LIMIT))
                 result["live_api_results"] = {
                     "source": live["source"],
                     "retrieved_at": live["retrieved_at"],
@@ -99,6 +113,7 @@ def find_data(
                         live_ds["data_status_label"] = "live from data.gov.hk API"
                         live_ds.setdefault("title", live_ds.get("name") or live_ds.get("title"))
                         result["connector_datasets"].append(live_ds)
+                annotate_result_quality(result, query, intent)
         except Exception as exc:
             logger.debug("Live data.gov.hk search skipped: %s", exc)
 
@@ -107,7 +122,7 @@ def find_data(
         try:
             from app.workers.datagovsg_live_search import search_live as sg_search_live, should_trigger_live_search as sg_should_trigger
             if sg_should_trigger(query):
-                sg_live = sg_search_live(query, limit=limit)
+                sg_live = sg_search_live(query, limit=min(limit, LIVE_CONNECTOR_RESULT_LIMIT))
                 if sg_live.get("ok"):
                     result["live_api_results_sg"] = {
                         "source": sg_live["source"],
@@ -123,6 +138,7 @@ def find_data(
                             live_ds["data_status_label"] = "live from data.gov.sg API"
                             live_ds.setdefault("title", live_ds.get("name") or live_ds.get("title"))
                             result["connector_datasets"].append(live_ds)
+                    annotate_result_quality(result, query, intent)
         except Exception as exc:
             logger.debug("Live data.gov.sg search skipped: %s", exc)
 
@@ -136,7 +152,7 @@ def find_data(
                            "patent", "innovation", "business", "development", "poverty",
                            "population", "gdp per capita", "gni", "fdi", "indicator"}
             if any(t in query.lower() for t in wb_triggers):
-                wb_live = wb_search_live(query, limit=limit)
+                wb_live = wb_search_live(query, limit=min(limit, LIVE_CONNECTOR_RESULT_LIMIT))
                 if wb_live.get("ok") and wb_live.get("results"):
                     result["live_api_results_wb"] = {
                         "source": wb_live["source"],
@@ -151,6 +167,7 @@ def find_data(
                             live_ds["data_status_label"] = "live from World Bank API"
                             live_ds.setdefault("title", live_ds.get("name"))
                             result["connector_datasets"].append(live_ds)
+                    annotate_result_quality(result, query, intent)
         except Exception as exc:
             logger.debug("Live World Bank search skipped: %s", exc)
 
@@ -162,7 +179,7 @@ def find_data(
                            "university", "institution", "scholar", "citation", "h-index",
                            "patent", "innovation", "science", "technology", "literature"}
             if any(t in query.lower() for t in oa_triggers):
-                oa_live = oa_search_live(query, limit=limit)
+                oa_live = oa_search_live(query, limit=min(limit, LIVE_CONNECTOR_RESULT_LIMIT))
                 if oa_live.get("ok") and oa_live.get("results"):
                     result["live_api_results_oa"] = {
                         "source": oa_live["source"],
@@ -177,6 +194,7 @@ def find_data(
                             live_ds["data_status_label"] = "live from OpenAlex API"
                             live_ds.setdefault("title", live_ds.get("name") or live_ds.get("title"))
                             result["connector_datasets"].append(live_ds)
+                    annotate_result_quality(result, query, intent)
         except Exception as exc:
             logger.debug("Live OpenAlex search skipped: %s", exc)
 
@@ -188,7 +206,7 @@ def find_data(
                            "scholarly", "funder", "funding", "grant", "research",
                            "literature", "review", "meta-analysis"}
             if any(t in query.lower() for t in cr_triggers):
-                cr_live = cr_search_live(query, limit=limit)
+                cr_live = cr_search_live(query, limit=min(limit, LIVE_CONNECTOR_RESULT_LIMIT))
                 if cr_live.get("ok") and cr_live.get("results"):
                     result["live_api_results_cr"] = {
                         "source": cr_live["source"],
@@ -202,20 +220,19 @@ def find_data(
                             live_ds["data_status"] = "live_api_result"
                             live_ds["data_status_label"] = "live from Crossref API"
                             result["connector_datasets"].append(live_ds)
+                    annotate_result_quality(result, query, intent)
         except Exception as exc:
             logger.debug("Live Crossref search skipped: %s", exc)
 
-    # Tavily web discovery fallback — triggers when DB + APIs returned thin results
+    # Tavily web discovery fallback — triggers when DB + APIs returned weak evidence.
     if live_search:
         try:
-            # Count how many live API results we got
-            live_count = sum(1 for k in result if k.startswith("live_api_results"))
-            total_datasets = len(result.get("connector_datasets", []))
-
-            # Only trigger Tavily if we have very few results from all sources
-            if total_datasets < 3 and live_count < 2:
-                from app.workers.tavily_discovery import search_live as tavily_search
-                tavily_result = tavily_search(query, limit=min(limit, 5))
+            if should_run_tavily_fallback(result):
+                if tavily_search_fn is None:
+                    from app.workers.tavily_discovery import search_live as tavily_search
+                else:
+                    tavily_search = tavily_search_fn
+                tavily_result = tavily_search(query, limit=min(limit, TAVILY_RESULT_LIMIT))
                 if tavily_result.get("ok") and tavily_result.get("results"):
                     result["tavily_candidates"] = {
                         "source": "Tavily (web discovery fallback)",
@@ -226,10 +243,187 @@ def find_data(
                                 "Store as external_source_candidates for review before ingestion.",
                     }
                     # Don't merge into connector_datasets — they're candidates, not validated
+                    annotate_result_quality(result, query, intent)
         except Exception as exc:
             logger.debug("Tavily fallback skipped: %s", exc)
 
     return result
+
+
+def search_object_types(intent: dict, query: str) -> list[str]:
+    object_types = [
+        "variable",
+        "dataset",
+        "report",
+        "source",
+        "organization",
+        "connector_dataset",
+        "connector_candidate",
+        "connector_metric",
+    ]
+    if should_include_chunk_search(intent, query):
+        object_types.append("chunk")
+    return object_types
+
+
+def should_include_chunk_search(intent: dict, query: str) -> bool:
+    lowered = query.lower()
+    trend_terms = ("trend", "trends", "shift", "overview", "brief", "ecosystem", "latest", "recent", "why", "how")
+    return bool(intent.get("broad") or any(term in lowered for term in trend_terms))
+
+
+def should_run_tavily_fallback(result: dict) -> bool:
+    quality = result.get("evidence_quality") or {}
+    direct_or_partial = int(quality.get("direct", 0)) + int(quality.get("partial", 0))
+    if direct_or_partial > 0:
+        return False
+    return True
+
+
+def annotate_result_quality(result: dict, query: str, intent: dict) -> None:
+    summary = {level: 0 for level in RELEVANCE_LEVELS}
+    excluded = []
+
+    for key in (
+        "closest_variables",
+        "closest_datasets",
+        "connector_datasets",
+        "connector_metrics",
+        "relevant_reports",
+        "relevant_chunks",
+        "source_links",
+        "relevant_organizations",
+        "connector_candidates",
+    ):
+        for item in result.get(key) or []:
+            label = classify_relevance(item, query, intent)
+            item["relevance"] = label
+            summary[label] += 1
+            if label == "irrelevant":
+                excluded.append(
+                    {
+                        "title": item.get("title") or item.get("name"),
+                        "source_url": item.get("source_url") or item.get("url"),
+                        "reason": "No meaningful query terms matched this item.",
+                        "source_group": key,
+                    }
+                )
+
+    tavily = result.get("tavily_candidates") or {}
+    for item in tavily.get("results") or []:
+        label = classify_relevance(item, query, intent)
+        item["relevance"] = label
+        summary[label] += 1
+        if label == "irrelevant":
+            excluded.append(
+                {
+                    "title": item.get("title"),
+                    "source_url": item.get("url") or item.get("source_url"),
+                    "reason": "No meaningful query terms matched this external candidate.",
+                    "source_group": "tavily_candidates",
+                }
+            )
+
+    result["evidence_quality"] = {
+        **summary,
+        "direct_or_partial": summary["direct"] + summary["partial"],
+        "fallback_recommended": summary["direct"] + summary["partial"] == 0,
+    }
+    result["excluded_results"] = excluded[:10]
+
+
+def classify_relevance(item: dict, query: str, intent: dict) -> str:
+    text = item_search_text(item)
+    if not text:
+        return "irrelevant"
+    tokens = query_terms(query)
+    token_hits = sum(1 for token in tokens if token in text)
+    geo = (intent.get("geography") or "").strip().lower()
+    geo_match = bool(geo and geo in text)
+    source_status = str(item.get("data_status") or item.get("source_status") or "").lower()
+    is_internal = source_status not in {"live_api_result"} and not item.get("data_status_label", "").lower().startswith("live from")
+    score = float(item.get("score") or item.get("confidence_score") or 0)
+
+    if geo_match and token_hits >= 2:
+        return "direct"
+    if token_hits >= 3:
+        return "direct"
+    if geo_match and token_hits >= 1:
+        return "partial"
+    if token_hits >= 2:
+        return "partial"
+    if token_hits >= 1 and (is_internal or score >= 0.5):
+        return "contextual"
+    return "irrelevant"
+
+
+def item_search_text(item: dict) -> str:
+    parts = []
+    for key in (
+        "title",
+        "name",
+        "description",
+        "definition",
+        "snippet",
+        "content",
+        "why_it_matched",
+        "portal",
+        "publisher",
+        "geography",
+        "source_url",
+        "url",
+        "evidence_quote",
+    ):
+        value = item.get(key)
+        if value is not None:
+            parts.append(str(value))
+    metadata = item.get("metadata")
+    if isinstance(metadata, dict):
+        parts.append(json.dumps(metadata, ensure_ascii=True, default=str))
+    return " ".join(parts).lower()
+
+
+def query_terms(query: str) -> set[str]:
+    stop_words = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "about",
+        "data",
+        "dataset",
+        "datasets",
+        "source",
+        "sources",
+        "singapore",
+        "hong",
+        "kong",
+        "china",
+        "asia",
+        "what",
+        "which",
+        "need",
+        "show",
+        "find",
+        "latest",
+        "recent",
+    }
+    words = {
+        word
+        for word in re.findall(r"[a-z0-9]+", query.lower())
+        if len(word) >= 3 and word not in stop_words and not word.isdigit()
+    }
+    synonyms = {
+        "startup": {"startup", "startups", "venture", "vc", "entrepreneur", "entrepreneurship"},
+        "funding": {"funding", "investment", "capital", "deal", "deals", "financing"},
+        "founding": {"founding", "incorporation", "births", "formation", "new"},
+        "trend": {"trend", "trends", "growth", "decline", "shift", "change"},
+    }
+    expanded = set(words)
+    for word in list(words):
+        expanded.update(synonyms.get(word, set()))
+    return expanded
 
 
 def parse_query_intent(query: str, *, geography: str | None = None, time_range: str | None = None, public_only: bool = False) -> dict:
@@ -280,7 +474,7 @@ def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
     grouped = {
         "variables": [], "datasets": [], "reports": [], "sources": [],
         "organizations": [], "connector_datasets": [], "connector_candidates": [],
-        "connector_metrics": [],
+        "connector_metrics": [], "chunks": [],
     }
     seen_sources: set[str] = set()
 
@@ -308,6 +502,8 @@ def group_results(results: list[dict], *, limit: int) -> dict[str, list[dict]]:
             metadata_only_connectors.append(item)
         elif object_type == "report" and len(grouped["reports"]) < limit:
             grouped["reports"].append(item)
+        elif object_type == "chunk" and len(grouped["chunks"]) < min(limit, CHUNK_RESULT_LIMIT):
+            grouped["chunks"].append(item)
         elif object_type == "organization" and len(grouped["organizations"]) < limit:
             grouped["organizations"].append(item)
         elif object_type == "connector_metric" and len(grouped["connector_metrics"]) < limit:

@@ -308,11 +308,117 @@ def test_find_data_groups_results_and_passes_public_filter(monkeypatch) -> None:
 
     assert captured["filters"]["public_only"] is True
     assert "organization" in captured.get("object_types", ["organization"])
+    assert "chunk" in captured.get("object_types", [])
     assert result["closest_variables"][0]["title"] == "SME digital adoption rate"
     assert result["relevant_reports"][0]["title"] == "SME Digital Report"
     assert result["relevant_organizations"][0]["title"] == "Singapore Startup Association"
     assert result["source_links"][0]["source_url"] == "https://example.gov/report"
     assert result["suggested_clarifications"]
+
+
+def test_find_data_skips_tavily_when_direct_internal_evidence_exists() -> None:
+    calls = []
+
+    def fake_search(query, *, object_types, limit, hybrid, client=None, filters=None):
+        return {
+            "mode": "hybrid",
+            "results": [
+                {
+                    "object_type": "variable",
+                    "object_id": "var-1",
+                    "title": "Startup founding patterns",
+                    "snippet": "Startup founding patterns and trends",
+                    "score": 0.9,
+                    "availability": "public",
+                    "geography": "",
+                    "metadata": {},
+                }
+            ],
+        }
+
+    def fake_tavily(query, limit):
+        calls.append((query, limit))
+        return {"ok": True, "total_results": 0, "results": []}
+
+    result = find_data_worker.find_data(
+        "startup founding patterns",
+        search_fn=fake_search,
+        tavily_search_fn=fake_tavily,
+    )
+
+    assert calls == []
+    assert result["evidence_quality"]["direct_or_partial"] > 0
+
+
+def test_find_data_runs_tavily_when_only_irrelevant_connector_results_exist() -> None:
+    calls = []
+
+    def fake_search(query, *, object_types, limit, hybrid, client=None, filters=None):
+        return {
+            "mode": "hybrid",
+            "results": [
+                {
+                    "object_type": "connector_dataset",
+                    "object_id": "ds-1",
+                    "title": "Polytechnic enrolment figures",
+                    "snippet": "Course intake and enrolment",
+                    "score": 0.7,
+                    "availability": "obtainable",
+                    "geography": "",
+                    "source_url": "https://example.gov/enrolment",
+                    "metadata": {"portal": "data.gov.sg"},
+                }
+            ],
+        }
+
+    def fake_tavily(query, limit):
+        calls.append((query, limit))
+        return {
+            "ok": True,
+            "total_results": 1,
+            "results": [
+                {
+                    "title": "Startup founding trends report",
+                    "url": "https://example.com/startup-report",
+                    "snippet": "Startup founding trends and venture formation shifted in 2024.",
+                }
+            ],
+        }
+
+    result = find_data_worker.find_data(
+        "startup founding patterns",
+        search_fn=fake_search,
+        tavily_search_fn=fake_tavily,
+    )
+
+    assert calls == [("startup founding patterns", 5)]
+    assert result["connector_datasets"][0]["relevance"] == "irrelevant"
+    assert result["tavily_candidates"]["results"][0]["relevance"] in {"direct", "partial"}
+    assert result["evidence_quality"]["direct_or_partial"] > 0
+
+
+def test_find_data_caps_chunk_and_fallback_limits() -> None:
+    captured = {}
+
+    def fake_search(query, *, object_types, limit, hybrid, client=None, filters=None):
+        captured["object_types"] = object_types
+        return {"mode": "hybrid", "results": []}
+
+    def fake_tavily(query, limit):
+        captured["tavily_limit"] = limit
+        return {"ok": True, "total_results": 0, "results": []}
+
+    result = find_data_worker.find_data(
+        "startup ecosystem trends",
+        limit=25,
+        search_fn=fake_search,
+        tavily_search_fn=fake_tavily,
+    )
+
+    assert "chunk" in captured["object_types"]
+    assert captured["tavily_limit"] == 5
+    assert result["retrieval_config"]["chunk_result_limit"] == 6
+    assert result["retrieval_config"]["live_connector_result_limit"] == 5
 
 
 @pytest.mark.skipif(os.getenv("RUN_LOCAL_EMBEDDING_TESTS") != "1", reason="Local model download/load is an opt-in integration test.")

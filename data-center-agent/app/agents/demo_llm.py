@@ -504,7 +504,24 @@ When table_values_read items are present, you MUST use the actual computed
 values (rows_sample, aggregations, time_series) as your primary evidence.
 Cite specific numbers.  Do not ignore actual data in favor of metadata-only sources.
 
-## STEP 7: Return structured JSON
+## STEP 7: Fast-first evidence quality
+
+The evidence packet may include deterministic relevance labels:
+direct, partial, contextual, or irrelevant.  You MUST NOT use irrelevant
+items as primary support.  Prefer evidence in this order:
+1. direct internal variables, connector metrics, or table_values_read
+2. direct or partial report_chunk passages
+3. direct or partial external_candidate snippets
+4. contextual evidence only for directional background
+
+If exact structured values are unavailable but relevant report_chunk or
+external_candidate snippets exist, write a substantive directional answer
+from those snippets and clearly state that exact structured values were not
+found.  Do not let unrelated live connector results (for example school
+enrolment for a startup funding query) make the answer more conservative;
+exclude them and explain the mismatch only if useful.
+
+## STEP 8: Return structured JSON
 
 Return one JSON object with this exact schema:
 

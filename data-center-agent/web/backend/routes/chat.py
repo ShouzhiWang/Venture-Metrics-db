@@ -771,6 +771,7 @@ def _aggregate_counts(results: dict[str, Any]) -> dict[str, int]:
         "connector_dataset_count": len(results.get("connector_datasets") or []),
         "connector_metric_count": len(results.get("connector_metrics") or []),
         "connector_candidate_count": len(results.get("connector_candidates") or []),
+        "chunk_count": len(results.get("relevant_chunks") or []),
     }
 
 
@@ -829,9 +830,6 @@ def _enrich_with_source_reads(
     Returns a list of table/text packets from successfully read sources.
     Only reads sources that have a direct download URL (CSV/XLSX/JSON).
     """
-    from app.tools.source_reader import read_source
-    from app.tools.table_analyzer import analyze_table_for_query
-
     packets: list[dict[str, Any]] = []
     datasets = results.get("connector_datasets") or []
     metrics = results.get("connector_metrics") or []
@@ -839,6 +837,8 @@ def _enrich_with_source_reads(
     # Collect candidates with URLs — prefer live API results and synced datasets
     candidates: list[tuple[str, str, dict]] = []  # (url, title, metadata)
     for ds in datasets:
+        if ds.get("relevance") == "irrelevant":
+            continue
         url = ds.get("download_url") or ds.get("source_url") or ""
         title = ds.get("title") or ds.get("name") or "Dataset"
         if url and _is_data_url(url):
@@ -847,6 +847,11 @@ def _enrich_with_source_reads(
 
     # Sort by priority (live API first)
     candidates.sort(key=lambda x: x[2].get("priority", 99))
+    if not candidates:
+        return packets
+
+    from app.tools.source_reader import read_source
+    from app.tools.table_analyzer import analyze_table_for_query
 
     for url, title, meta in candidates[:max_sources]:
         try:
@@ -1013,6 +1018,7 @@ def _build_evidence_packet(
             snapshot_id=ds.get("snapshot_id"),
             access_type=ds.get("access_type") or metadata.get("access_type"),
             data_status_label=ds.get("data_status_label"),
+            relevance=ds.get("relevance"),
             metadata=metadata,
         )
 
@@ -1036,6 +1042,7 @@ def _build_evidence_packet(
             source_url=m.get("url") or "",
             source_status="synced_connector",
             values_available=bool(m.get("value")),
+            relevance=m.get("relevance"),
         )
 
     # Closest variables (internal DB)
@@ -1046,11 +1053,13 @@ def _build_evidence_packet(
             description=v.get("description") or v.get("definition") or "",
             source_name=v.get("report_title") or v.get("source") or "",
             source_url=v.get("report_url") or v.get("url") or "",
-            geography=v.get("geography") or "",
-            time_period=v.get("time_period") or v.get("year") or "",
+            geography=v.get("geography") or v.get("geographic_coverage") or "",
+            time_period=v.get("time_period") or v.get("year") or v.get("temporal_coverage") or "",
             unit=v.get("unit") or "",
             source_status="internal_structured",
             values_available=False,
+            relevance=v.get("relevance"),
+            evidence_quote=v.get("evidence_quote") or v.get("why_it_matched"),
         )
 
     # Relevant reports
@@ -1065,6 +1074,23 @@ def _build_evidence_packet(
             time_period=r.get("year") or r.get("time_period") or "",
             source_status="internal_structured",
             values_available=False,
+            relevance=r.get("relevance"),
+        )
+
+    # Relevant chunks: high-signal passages from indexed reports.
+    for c in results.get("relevant_chunks") or []:
+        _add_item(
+            "report_chunk",
+            title=c.get("title") or "Report passage",
+            description=c.get("snippet") or c.get("content") or c.get("why_it_matched") or "",
+            source_name=c.get("report_title") or c.get("source") or "",
+            source_url=c.get("url") or c.get("source_url") or "",
+            geography=c.get("geography") or "",
+            time_period=c.get("time_period") or c.get("year") or c.get("time_coverage") or "",
+            source_status="internal_chunk",
+            values_available=False,
+            relevance=c.get("relevance"),
+            evidence_quote=c.get("evidence_quote") or c.get("snippet") or c.get("why_it_matched"),
         )
 
     # Organizations
@@ -1078,6 +1104,7 @@ def _build_evidence_packet(
             geography=o.get("geography") or o.get("country") or "",
             source_status="internal_structured",
             values_available=False,
+            relevance=o.get("relevance"),
         )
 
     # Tavily / external candidates
@@ -1088,9 +1115,12 @@ def _build_evidence_packet(
             title=t.get("title") or "External source",
             description=t.get("snippet") or t.get("content") or "",
             source_name=t.get("source") or "",
-            source_url=t.get("url") or "",
+            source_url=t.get("url") or t.get("source_url") or "",
             source_status="external_candidate",
             values_available=False,
+            relevance=t.get("relevance"),
+            source_kind=t.get("source_kind"),
+            is_official=t.get("is_official"),
         )
 
     # Connector candidates (not yet ingested)
@@ -1103,10 +1133,15 @@ def _build_evidence_packet(
             source_url=c.get("url") or "",
             source_status="metadata_only",
             values_available=False,
+            relevance=c.get("relevance"),
         )
 
     # Source counts
-    internal_count = len(results.get("closest_variables") or []) + len(results.get("relevant_reports") or [])
+    internal_count = (
+        len(results.get("closest_variables") or [])
+        + len(results.get("relevant_reports") or [])
+        + len(results.get("relevant_chunks") or [])
+    )
     connector_count = len(results.get("connector_datasets") or []) + len(results.get("connector_metrics") or [])
     metadata_count = len(results.get("connector_candidates") or []) + len(results.get("source_links") or [])
     external_count = len((results.get("tavily_candidates") or {}).get("results") or [])
@@ -1171,6 +1206,8 @@ def _build_evidence_packet(
         "user_query": message,
         "interpreted_intent": interpreted_intent,
         "retrieved_items": items + source_read_items,
+        "evidence_quality": results.get("evidence_quality") or {},
+        "excluded_results": results.get("excluded_results") or [],
         "source_status_counts": {
             "internal_structured": internal_count,
             "synced_connector": connector_count,
@@ -1238,12 +1275,15 @@ def _normalize_tool_results(executed: list[dict[str, Any]]) -> tuple[dict[str, A
         if name == "find_data":
             results["closest_variables"].extend(data.get("closest_variables") or [])
             results["relevant_reports"].extend(data.get("relevant_reports") or [])
+            results["relevant_chunks"].extend(data.get("relevant_chunks") or [])
             results["relevant_organizations"].extend(data.get("relevant_organizations") or [])
             results["source_links"].extend(data.get("source_links") or [])
             results["connector_datasets"].extend(data.get("connector_datasets") or [])
             results["connector_metrics"].extend(data.get("connector_metrics") or [])
             results["connector_candidates"].extend(data.get("connector_candidates") or [])
             results["tavily_candidates"] = data.get("tavily_candidates")
+            results["evidence_quality"] = data.get("evidence_quality") or {}
+            results["excluded_results"].extend(data.get("excluded_results") or [])
             results["live_api_results"] = {
                 key: value
                 for key, value in data.items()
@@ -1275,6 +1315,7 @@ def _result_count(results: dict[str, Any]) -> int:
     return (
         len(results.get("closest_variables") or [])
         + len(results.get("relevant_reports") or [])
+        + len(results.get("relevant_chunks") or [])
         + len(results.get("relevant_organizations") or [])
         + len(results.get("source_links") or [])
         + len(results.get("connector_datasets") or [])
@@ -1300,6 +1341,7 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
     data = tool_result.get("data") or {}
     variables = data.get("closest_variables") or []
     reports = data.get("relevant_reports") or []
+    chunks = data.get("relevant_chunks") or []
     organizations = data.get("relevant_organizations") or []
     sources = data.get("source_links") or []
     connector_datasets = data.get("connector_datasets") or []
@@ -1311,13 +1353,15 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
         for key, value in data.items()
         if key.startswith("live_api_results") and isinstance(value, dict)
     }
-    count = len(variables) + len(reports) + len(organizations) + len(connector_datasets)
+    count = len(variables) + len(reports) + len(chunks) + len(organizations) + len(connector_datasets)
     response_type = "answer" if count else "no_results"
     parts = []
     if variables:
         parts.append(f"{len(variables)} variable matches")
     if reports:
         parts.append(f"{len(reports)} reports")
+    if chunks:
+        parts.append(f"{len(chunks)} passages")
     if organizations:
         parts.append(f"{len(organizations)} organizations")
     if connector_datasets:
@@ -1340,6 +1384,7 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
         "results": {
             "closest_variables": variables,
             "relevant_reports": reports,
+            "relevant_chunks": chunks,
             "relevant_organizations": organizations,
             "source_links": sources,
             "connector_datasets": connector_datasets,
@@ -1347,6 +1392,8 @@ def _find_data_response(message: str, plan: dict[str, Any], tool_result: dict[st
             "connector_candidates": connector_candidates,
             "tavily_candidates": tavily_candidates,
             "live_api_results": live_api_results,
+            "evidence_quality": data.get("evidence_quality") or {},
+            "excluded_results": data.get("excluded_results") or [],
             "comparison": {},
         },
         "limitations": _limitations_from_data(data, count),
@@ -1545,11 +1592,14 @@ def _empty_results() -> dict[str, Any]:
         "relevant_reports": [],
         "relevant_organizations": [],
         "source_links": [],
+        "relevant_chunks": [],
         "connector_datasets": [],
         "connector_metrics": [],
         "connector_candidates": [],
         "tavily_candidates": None,
         "live_api_results": {},
+        "evidence_quality": {},
+        "excluded_results": [],
         "comparison": {},
     }
 

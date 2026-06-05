@@ -512,6 +512,7 @@ def test_evidence_packet_item_types():
         "connector_metrics": [{"title": "GDP growth", "value": "3.5%", "unit": "%"}],
         "closest_variables": [_make_variable("VC deal count")],
         "relevant_reports": [{"title": "Startup Ecosystem Report"}],
+        "relevant_chunks": [{"title": "Funding trends passage", "snippet": "Deep tech startup investment rose."}],
         "relevant_organizations": [_make_organization("Enterprise Singapore")],
         "tavily_candidates": {"results": [{"title": "External article", "url": "https://example.com"}]},
         "connector_candidates": [{"title": "Candidate source"}],
@@ -523,6 +524,7 @@ def test_evidence_packet_item_types():
     assert "connector_dataset" in types
     assert "connector_metric" in types
     assert "report_variable" in types  # both variables and reports
+    assert "report_chunk" in types
     assert "organization" in types
     assert "external_candidate" in types
     assert "source_candidate" in types
@@ -575,6 +577,8 @@ def test_structured_synthesis_prompt_includes_evidence_packet():
     assert "Sector/topic guardrail" in prompt
     assert "what_evidence_measures" in prompt
     assert "what_is_not_supported" in prompt
+    assert "Fast-first evidence quality" in prompt
+    assert "report_chunk" in prompt
     # Check evidence packet is included
     assert "Singapore VC funding" in prompt
     assert "connector_dataset_1" in prompt
@@ -733,3 +737,54 @@ def test_evidence_packet_uses_resolved_url_from_connector_metadata():
     assert item["source_url"] == "https://static.data.gov.hk/ipd/trademark.csv"
     assert item["source_status"] == "synced_connector"
     assert item["values_available"] is True
+
+
+def test_evidence_packet_preserves_relevance_and_exclusions():
+    """Evidence packet exposes deterministic relevance labels and excluded noisy results."""
+    from web.backend.routes.chat import _build_evidence_packet
+    plan = {"detected": {"geography": "Singapore"}, "intent": "find_data"}
+    results = {
+        "connector_datasets": [
+            {
+                "title": "Polytechnic enrolment figures",
+                "description": "Course intake and enrolment",
+                "source_url": "https://example.gov/enrolment",
+                "data_status": "live_api_result",
+                "relevance": "irrelevant",
+            }
+        ],
+        "connector_metrics": [],
+        "closest_variables": [],
+        "relevant_reports": [],
+        "relevant_chunks": [
+            {
+                "title": "Startup funding passage",
+                "snippet": "Singapore startup funding and deep tech investment trends shifted in 2024.",
+                "source_url": "https://example.com/report",
+                "relevance": "direct",
+            }
+        ],
+        "relevant_organizations": [],
+        "tavily_candidates": {
+            "results": [
+                {
+                    "title": "Singapore startup ecosystem update",
+                    "url": "https://example.com/startups",
+                    "snippet": "Singapore startup funding trends show deep tech resilience.",
+                    "relevance": "partial",
+                }
+            ]
+        },
+        "connector_candidates": [],
+        "source_links": [],
+        "evidence_quality": {"direct": 1, "partial": 1, "irrelevant": 1},
+        "excluded_results": [{"title": "Polytechnic enrolment figures", "reason": "No meaningful query terms matched this item."}],
+    }
+    packet = _build_evidence_packet("Singapore startup funding trends", plan, results, [])
+
+    item_by_type = {item["type"]: item for item in packet["retrieved_items"]}
+    assert item_by_type["report_chunk"]["relevance"] == "direct"
+    assert item_by_type["external_candidate"]["relevance"] == "partial"
+    assert item_by_type["connector_dataset"]["relevance"] == "irrelevant"
+    assert packet["evidence_quality"]["direct"] == 1
+    assert packet["excluded_results"][0]["title"] == "Polytechnic enrolment figures"

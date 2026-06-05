@@ -29,7 +29,7 @@ METADATA_URL = f"{BASE_URL}/v2/public/api/datasets/{{dataset_id}}/metadata"
 DATASTORE_URL = "https://data.gov.sg/api/action/datastore_search"
 
 MAX_RESULTS = 10
-MAX_PAGES = 20  # Discover up to 200 datasets for matching
+MAX_PAGES = 5  # Keep live chat fallback bounded; deeper discovery belongs in offline sync.
 TIMEOUT_SECONDS = 15
 
 # Queries that should trigger a live data.gov.sg search
