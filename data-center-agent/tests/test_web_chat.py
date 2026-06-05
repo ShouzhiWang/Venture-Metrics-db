@@ -659,3 +659,77 @@ def test_structured_synthesis_preserves_source_metadata():
     assert item["source_status"] == "synced_connector"  # has row_count
     assert item["values_available"] is True
     assert item["geography"] == "Global"
+
+
+def test_evidence_packet_preserves_connector_source_url_and_status():
+    """Synced connector rows expose source_url/data_status to synthesis."""
+    from web.backend.routes.chat import _build_evidence_packet
+    plan = {"detected": {"geography": "Hong Kong", "domain_topic": "trademark registrations"}, "intent": "find_data"}
+    results = {
+        "connector_datasets": [
+            {
+                "title": "Hong Kong trademark registrations statistics",
+                "description": "Official IPD trademark registration statistics.",
+                "portal": "data.gov.hk",
+                "geography": "Hong Kong",
+                "source_url": "https://data.gov.hk/trademarks.csv",
+                "data_status": "synced",
+                "data_status_label": "synced dataset",
+                "row_count": 1200,
+                "column_count": 8,
+                "retrieved_at": "2026-01-01T00:00:00Z",
+                "snapshot_id": "snap-tm",
+                "metadata": {"topic": "patents_ip", "access_type": "csv"},
+            }
+        ],
+        "connector_metrics": [],
+        "closest_variables": [],
+        "relevant_reports": [],
+        "relevant_organizations": [],
+        "tavily_candidates": None,
+        "connector_candidates": [],
+        "source_links": [],
+    }
+    packet = _build_evidence_packet("trademark registrations Hong Kong", plan, results, [])
+    item = packet["retrieved_items"][0]
+    assert item["source_url"] == "https://data.gov.hk/trademarks.csv"
+    assert item["source_status"] == "synced_connector"
+    assert item["values_available"] is True
+    assert item["row_count"] == 1200
+    assert item["column_count"] == 8
+    assert item["snapshot_id"] == "snap-tm"
+    assert item["access_type"] == "csv"
+
+
+def test_evidence_packet_uses_resolved_url_from_connector_metadata():
+    """Resolved Hong Kong connector URLs are not dropped when nested in metadata."""
+    from web.backend.routes.chat import _build_evidence_packet
+    plan = {"detected": {"geography": "Hong Kong"}, "intent": "find_data"}
+    results = {
+        "connector_datasets": [
+            {
+                "title": "Trademark applications and registrations",
+                "description": "Resolved from the Hong Kong IPD data.gov.hk candidate.",
+                "geography": "Hong Kong",
+                "availability": "obtainable",
+                "metadata": {
+                    "portal": "data.gov.hk",
+                    "resolved_url": "https://static.data.gov.hk/ipd/trademark.csv",
+                    "access_type": "csv",
+                    "row_count": 800,
+                },
+            }
+        ],
+        "connector_metrics": [],
+        "closest_variables": [],
+        "relevant_reports": [],
+        "relevant_organizations": [],
+        "tavily_candidates": None,
+        "connector_candidates": [],
+        "source_links": [],
+    }
+    packet = _build_evidence_packet("trademark registrations Hong Kong", plan, results, [])
+    item = packet["retrieved_items"][0]
+    assert item["source_url"] == "https://static.data.gov.hk/ipd/trademark.csv"
+    assert item["source_status"] == "synced_connector"
+    assert item["values_available"] is True

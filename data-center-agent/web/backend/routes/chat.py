@@ -947,27 +947,73 @@ def _build_evidence_packet(
                 item[k] = v
         items.append(item)
 
+    def _connector_source_url(ds: dict[str, Any]) -> str:
+        metadata = ds.get("metadata") if isinstance(ds.get("metadata"), dict) else {}
+        return (
+            ds.get("source_url")
+            or ds.get("download_url")
+            or ds.get("url")
+            or metadata.get("source_url")
+            or metadata.get("download_url")
+            or metadata.get("resolved_url")
+            or metadata.get("original_candidate_url")
+            or ""
+        )
+
+    def _connector_source_status(ds: dict[str, Any]) -> str:
+        explicit_status = ds.get("data_status") or ds.get("source_status")
+        if explicit_status:
+            status = str(explicit_status)
+            if status in {"synced", "official_metric"}:
+                return "synced_connector"
+            return status
+        availability = ds.get("availability")
+        if availability == "obtainable":
+            return "synced_connector"
+        if availability == "metadata_only":
+            return "metadata_only"
+        if ds.get("row_count") is not None or ds.get("snapshot_id") or ds.get("retrieved_at"):
+            return "synced_connector"
+        return "metadata_only"
+
+    def _connector_values_available(ds: dict[str, Any], source_status: str) -> bool:
+        if ds.get("values_available") is not None:
+            return bool(ds.get("values_available"))
+        if source_status in {"synced", "synced_connector", "live_api_result", "official_metric"}:
+            return True
+        return ds.get("row_count") is not None or bool(ds.get("snapshot_id"))
+
     # Connector datasets
     for ds in results.get("connector_datasets") or []:
         ds_desc = ds.get("description") or ""
+        metadata = ds.get("metadata") if isinstance(ds.get("metadata"), dict) else {}
+        source_status = _connector_source_status(ds)
         # Detect if sector/topic filter appears in the dataset metadata
         sector_match = _detect_sector_in_text(
             interpreted_intent["sector_or_technology_filter"],
             ds.get("title") or "", ds_desc,
             ds.get("category") or "", ds.get("tags") or "",
+            ds.get("topic") or "", ds.get("portal") or "",
+            metadata.get("topic") or "", metadata.get("portal") or "",
         )
         _add_item(
             "connector_dataset",
             title=ds.get("title") or ds.get("name") or "Untitled dataset",
             description=ds_desc,
-            source_name=ds.get("portal") or ds.get("source") or "",
-            source_url=ds.get("url") or ds.get("download_url") or "",
+            source_name=ds.get("portal") or ds.get("source") or metadata.get("portal") or "",
+            source_url=_connector_source_url(ds),
             geography=ds.get("geography") or "",
             time_period=ds.get("time_period") or ds.get("coverage") or "",
             sector_or_topic=sector_match,
-            source_status="synced_connector" if ds.get("row_count") else "metadata_only",
-            values_available=bool(ds.get("row_count")),
+            source_status=source_status,
+            values_available=_connector_values_available(ds, source_status),
             row_count=ds.get("row_count"),
+            column_count=ds.get("column_count"),
+            retrieved_at=ds.get("retrieved_at"),
+            snapshot_id=ds.get("snapshot_id"),
+            access_type=ds.get("access_type") or metadata.get("access_type"),
+            data_status_label=ds.get("data_status_label"),
+            metadata=metadata,
         )
 
     # Connector metrics
