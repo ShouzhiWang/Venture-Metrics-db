@@ -24,8 +24,6 @@ import {
 import { AgentActivityTimeline } from "./components/AgentActivityTimeline";
 import { AnswerSummary } from "./components/AnswerSummary";
 import { ClarificationRefinementPanel } from "./components/ClarificationRefinementPanel";
-import { ResultSections } from "./components/ResultSections";
-import { CompactResultPreview, pickResultPreviews, type PreviewUnion } from "./components/ResultPreview";
 import { EvidenceWorkspacePanel } from "./components/EvidenceWorkspacePanel";
 import { type DrawerItem } from "./components/DetailDrawer";
 import { SaveToProjectButton } from "./components/SaveToProjectButton";
@@ -703,10 +701,6 @@ function DataDiscoveryPage({
                       setSelectedEvidenceItem(null);
                     }}
                     onChooseClarification={handleRefinementChip}
-                    onViewEvidence={item => {
-                      setSelectedResultTurnId(turn.id);
-                      setSelectedEvidenceItem(item);
-                    }}
                     projectId={activeProjectContext?.id}
                     onAuthRequired={onAuthRequired}
                     onSaved={handleSaved}
@@ -1101,7 +1095,6 @@ function ResearchTurn({
   selected,
   onSelectResults,
   onChooseClarification,
-  onViewEvidence,
   projectId,
   onAuthRequired,
   onSaved,
@@ -1111,7 +1104,6 @@ function ResearchTurn({
   selected: boolean;
   onSelectResults: () => void;
   onChooseClarification: (option: string) => void;
-  onViewEvidence: (item: DrawerItem) => void;
   projectId?: string;
   onAuthRequired?: () => void;
   onSaved: () => void;
@@ -1162,8 +1154,6 @@ function ResearchTurn({
   const hasStructuredPayload = response.type === "answer" || response.type === "no_results";
   const hasComparison = Object.keys(response.results.comparison || {}).length > 0;
   const emptyStructured = hasStructuredPayload && total === 0 && !hasComparison;
-  const previews = !turn.loading && total > 0 ? pickResultPreviews(response.results, 3) : [];
-  const summaryText = response.assistant_message || response.message;
 
   return (
     <article
@@ -1180,8 +1170,9 @@ function ResearchTurn({
 
       <AnswerSummary response={response} loading={Boolean(turn.loading && !(response.assistant_message || response.message))} />
 
-      <SearchPath response={response} />
-      <ExpansionNotice response={response} />
+      {!turn.loading && hasStructuredPayload && !isError && (
+        <EvidenceSummaryRow response={response} selected={selected} onClick={onSelectResults} />
+      )}
 
       {((turn.loading || (response.tool_trace && response.tool_trace.length > 0))) && (
         <AgentActivityTimeline
@@ -1239,39 +1230,6 @@ function ResearchTurn({
         />
       )}
 
-      {!turn.loading && previews.length > 0 && (
-        <div className="result-preview-stack">
-          {previews.map((pv, i) => (
-            <CompactResultPreview
-              key={`${pv.kind}-${i}-${previewStableKey(pv)}`}
-              item={pv}
-              answerSummary={summaryText}
-              query={turn.query}
-              response={response}
-              onViewEvidence={onViewEvidence}
-              onAuthRequired={onAuthRequired}
-              projectId={projectId}
-              onSaved={onSaved}
-            />
-          ))}
-        </div>
-      )}
-
-      {!turn.loading && hasStructuredPayload && !isError && total > 0 && (
-        <details className="full-results-details">
-          <summary className="full-results-summary">View all results</summary>
-          <ResultSections
-            results={response.results}
-            limitations={response.limitations}
-            onViewEvidence={onViewEvidence}
-            onAuthRequired={onAuthRequired}
-            projectId={projectId}
-            onItemSaved={onSaved}
-            showLimitationsSection={false}
-          />
-        </details>
-      )}
-
       {!turn.loading && hasStructuredPayload && !isClarification && !isError && (
         <div className="thread-actions-row">
           <SaveToProjectButton
@@ -1305,11 +1263,41 @@ function ResearchTurn({
   );
 }
 
-function previewStableKey(item: PreviewUnion): string {
-  if (item.kind === "variable") return item.data.title || item.data.raw_variable_name || "";
-  if (item.kind === "report") return item.data.title || "";
-  if (item.kind === "organization") return item.data.name || "";
-  return item.data.source_url || item.data.title || "";
+function EvidenceSummaryRow({
+  response,
+  selected,
+  onClick,
+}: {
+  response: ChatResponse;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const r = response.results;
+  const direct = r.closest_variables.length + (r.connector_metrics?.length || 0);
+  const partial = r.relevant_reports.length + r.source_links.length;
+  const synced = r.connector_datasets?.filter(item => !isMetadataOnlyConnector(item)).length || 0;
+  const sources = r.source_links.length
+    + (r.connector_datasets?.length || 0)
+    + (r.connector_candidates?.length || 0)
+    + (r.tavily_candidates?.results?.length || 0);
+  const parts = [
+    `${direct} direct`,
+    `${partial} partial`,
+    `${synced} synced dataset${synced === 1 ? "" : "s"}`,
+    `${sources} source${sources === 1 ? "" : "s"}`,
+  ];
+
+  return (
+    <button type="button" className="evidence-summary-row" onClick={onClick} aria-pressed={selected}>
+      <span>Evidence: {parts.join(" · ")}</span>
+      <strong>{selected ? "Showing in panel" : "View evidence & data"}</strong>
+    </button>
+  );
+}
+
+function isMetadataOnlyConnector(item: { data_status_label?: string; data_status?: string; row_count?: number; column_count?: number }) {
+  const text = `${item.data_status_label || ""} ${item.data_status || ""}`.toLowerCase();
+  return text.includes("metadata") || (item.row_count == null && item.column_count == null);
 }
 
 function TopNav({

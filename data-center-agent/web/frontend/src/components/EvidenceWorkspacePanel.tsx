@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { getProject } from "../api";
-import type { ChatResponse, ProjectItem } from "../types";
+import type { ChatResponse, ConnectorDatasetResult, ConnectorMetricResult, ProjectItem, SourceLink } from "../types";
+import { AgentActivityTimeline } from "./AgentActivityTimeline";
 import type { DrawerItem } from "./DetailDrawer";
+import { ResultSections } from "./ResultSections";
 import { SaveToProjectButton } from "./SaveToProjectButton";
 import { AvailabilityBadge } from "./cards/AvailabilityBadge";
 
@@ -71,14 +73,15 @@ export function EvidenceWorkspacePanel({
     void loadProjectItems();
   }
 
-  const total = response ? countStructuredResults(response.results) : 0;
+  const workspace = response ? normalizeEvidenceWorkspace(response, turn?.query) : undefined;
+  const total = workspace ? workspace.totalStructured : 0;
   const hasActiveMessage = Boolean(turn && !loading && response);
 
   return (
-    <aside className="evidence-panel" aria-label="Evidence and results">
+    <aside className="evidence-panel" aria-label="Evidence and data">
       <div className="evidence-panel-body">
         <header className="evidence-panel-head">
-          <h2>Evidence &amp; Results</h2>
+          <h2>Evidence &amp; Data</h2>
           {turn?.query && hasActiveMessage && (
             <span className="evidence-query-pill">{turn.query}</span>
           )}
@@ -86,7 +89,7 @@ export function EvidenceWorkspacePanel({
 
         {!turn && !activeProject && (
           <p className="evidence-guidance">
-            Select a result to inspect evidence, source links, and availability.
+            Select an answer to inspect evidence, data, sources, and actions.
           </p>
         )}
 
@@ -107,7 +110,7 @@ export function EvidenceWorkspacePanel({
           <p className="evidence-guidance">Waiting for a response…</p>
         )}
 
-        {hasActiveMessage && response?.type === "clarification" && (
+        {hasActiveMessage && response?.type === "clarification" && total === 0 && (
           <div className="evidence-context-block">
             <p className="evidence-muted-paragraph">{response.assistant_message || response.message}</p>
             <p className="evidence-hint-inline">Answer in the thread to load structured matches here.</p>
@@ -121,7 +124,7 @@ export function EvidenceWorkspacePanel({
           </div>
         )}
 
-        {hasActiveMessage && response && (response.type === "answer" || response.type === "no_results") && evidenceItem && (
+        {hasActiveMessage && response && response.type !== "error" && evidenceItem && (
           <SelectedEvidenceDetail
             item={evidenceItem}
             projectId={projectId}
@@ -131,9 +134,10 @@ export function EvidenceWorkspacePanel({
           />
         )}
 
-        {hasActiveMessage && response && (response.type === "answer" || response.type === "no_results") && !evidenceItem && total > 0 && (
-          <ActiveMessageResults
+        {hasActiveMessage && response && workspace && response.type !== "error" && !evidenceItem && total > 0 && (
+          <ActiveMessageWorkspace
             response={response}
+            workspace={workspace}
             turnQuery={turn?.query}
             projectId={projectId}
             onViewEvidence={onViewEvidence}
@@ -156,8 +160,9 @@ export function EvidenceWorkspacePanel({
   );
 }
 
-function ActiveMessageResults({
+function ActiveMessageWorkspace({
   response,
+  workspace,
   turnQuery,
   projectId,
   onViewEvidence,
@@ -165,128 +170,438 @@ function ActiveMessageResults({
   onSaved,
 }: {
   response: ChatResponse;
+  workspace: EvidenceWorkspace;
   turnQuery?: string;
   projectId?: string;
   onViewEvidence: (item: DrawerItem) => void;
   onAuthRequired?: () => void;
   onSaved: () => void;
 }) {
-  const r = response.results;
-  const counts = [
-    r.closest_variables.length ? `${r.closest_variables.length} variables` : null,
-    r.relevant_reports.length ? `${r.relevant_reports.length} reports` : null,
-    r.relevant_organizations.length ? `${r.relevant_organizations.length} orgs` : null,
-    r.source_links.length ? `${r.source_links.length} sources` : null,
-  ].filter(Boolean);
-
   return (
-    <div className="evidence-context-block">
-      <p className="evidence-count-sentence">{counts.join(" · ") || "Results available"}</p>
-      <p className="evidence-hint-inline">Select an item to inspect full evidence.</p>
+    <div className="evidence-workspace-stack">
+      <WorkspaceSection title="Coverage" defaultOpen>
+        <div className="coverage-grid">
+          <EvidenceStat label="Evidence level" value={workspace.coverage.level} tone={workspace.coverage.level} />
+          <EvidenceStat label="Exact data" value={workspace.coverage.exactDataAvailable ? "Yes" : "No"} />
+          <EvidenceStat label="External candidates" value={workspace.coverage.externalCandidates.toString()} />
+          <EvidenceStat label="Synced data" value={workspace.coverage.syncedData.toString()} />
+        </div>
+        <p className="evidence-muted-paragraph">{workspace.coverage.explanation}</p>
+      </WorkspaceSection>
 
-      {r.closest_variables.length > 0 && (
-        <ResultSection
-          title="Top variables"
-          items={r.closest_variables.slice(0, 3).map(v => ({
-            key: v.title || v.raw_variable_name || "Variable",
-            label: v.title || v.raw_variable_name || "Variable",
-            meta: v.data_source || v.geographic_coverage,
-            drawer: { kind: "variable" as const, data: v },
-          }))}
-          onPick={onViewEvidence}
-        />
-      )}
+      <WorkspaceSection title="Key Data" defaultOpen>
+        {workspace.computedFindings.length > 0 && (
+          <div className="codebook-table flush">
+            {workspace.computedFindings.map((item, index) => (
+              <MetricRow key={`${item.metric_name || item.title || index}`} item={item} />
+            ))}
+          </div>
+        )}
+        {workspace.tables.length > 0 && (
+          <div className="evidence-table-stack">
+            {workspace.tables.map((table, index) => (
+              <DataTablePreview key={index} table={table} />
+            ))}
+          </div>
+        )}
+        {workspace.datasets.length > 0 && (
+          <div className="dataset-list">
+            {workspace.datasets.map((dataset, index) => (
+              <DatasetSummary key={`${dataset.source_url || dataset.title || index}`} dataset={dataset} variant="compact" />
+            ))}
+          </div>
+        )}
+        {workspace.computedFindings.length === 0 && workspace.tables.length === 0 && workspace.datasets.length === 0 && (
+          <p className="evidence-guidance">No computed findings or synced table previews are attached to this answer.</p>
+        )}
+      </WorkspaceSection>
 
-      {r.relevant_reports.length > 0 && (
-        <ResultSection
-          title="Top reports"
-          items={r.relevant_reports.slice(0, 3).map(rep => ({
-            key: rep.title || "Report",
-            label: rep.title || "Report",
-            meta: [rep.publisher, rep.report_year].filter(Boolean).join(" · "),
-            drawer: { kind: "report" as const, data: rep },
-          }))}
-          onPick={onViewEvidence}
-        />
-      )}
-
-      {r.source_links.length > 0 && (
-        <ResultSection
-          title="Top sources"
-          items={r.source_links.slice(0, 3).map(src => ({
-            key: src.source_url || src.title || "Source",
-            label: src.title || src.source_url || "Source",
-            meta: src.availability,
-            drawer: { kind: "source" as const, data: src },
-          }))}
-          onPick={onViewEvidence}
-        />
-      )}
-
-      {r.relevant_organizations.length > 0 && (
-        <ResultSection
-          title="Organizations"
-          items={r.relevant_organizations.slice(0, 2).map(org => ({
-            key: org.name || org.title || "Organization",
-            label: org.name || org.title || "Organization",
-            meta: org.geography,
-            drawer: { kind: "organization" as const, data: org },
-          }))}
-          onPick={onViewEvidence}
-        />
-      )}
-
-      <div className="evidence-panel-save">
-        <SaveToProjectButton
-          label="Save result"
+      <WorkspaceSection title="Evidence" defaultOpen>
+        <EvidenceBucket title="Direct evidence" count={workspace.evidence.direct.length} />
+        <EvidenceBucket title="Partial evidence" count={workspace.evidence.partial.length} />
+        <EvidenceBucket title="Contextual evidence" count={workspace.evidence.contextual.length} />
+        <details className="nested-evidence-details">
+          <summary>Excluded evidence <span>{workspace.evidence.excluded.length}</span></summary>
+          {workspace.evidence.excluded.length === 0 && <p className="evidence-muted-paragraph">No excluded evidence was attached.</p>}
+        </details>
+        <ResultSections
+          results={response.results}
+          limitations={response.limitations}
+          onViewEvidence={onViewEvidence}
           onAuthRequired={onAuthRequired}
-          onSaved={onSaved}
           projectId={projectId}
-          payload={{
-            item_type: "search_result",
-            item_id: response.saved_result_id,
-            title: turnQuery || response.message || "Saved search",
-            metadata: {
-              query: turnQuery,
-              answer_summary: response.assistant_message || response.message,
-              selected_variables: response.results.closest_variables,
-              relevant_reports: response.results.relevant_reports,
-              organizations: response.results.relevant_organizations,
-              source_links: response.results.source_links,
-              limitations: response.limitations,
-              result_payload: response,
-            },
-          }}
+          onItemSaved={onSaved}
+          showLimitationsSection={false}
+          className="evidence-full-results"
         />
-      </div>
+      </WorkspaceSection>
+
+      <WorkspaceSection title="Sources" defaultOpen>
+        <SourceGroup title="Synced official datasets" count={workspace.sources.syncedDatasets.length}>
+          {workspace.sources.syncedDatasets.map((dataset, index) => (
+            <DatasetSummary key={`${dataset.source_url || dataset.title || index}`} dataset={dataset} />
+          ))}
+        </SourceGroup>
+        <SourceGroup title="Internal reports" count={workspace.sources.internalReports.length}>
+          <SourceMiniList items={workspace.sources.internalReports.map((item): SourceMiniItem => ({
+            title: item.title || "Report",
+            status: "Internal report",
+            meta: [item.publisher, item.report_year].filter(Boolean).join(" · "),
+            url: item.source_url,
+          }))} />
+        </SourceGroup>
+        <SourceGroup title="Source links" count={workspace.sources.sourceLinks.length}>
+          <SourceMiniList items={workspace.sources.sourceLinks.map((item): SourceMiniItem => ({
+            title: item.title || item.source_url || "Source",
+            status: item.availability || "Source link",
+            meta: item.source_type || item.connector_name,
+            url: item.source_url,
+          }))} />
+        </SourceGroup>
+        <SourceGroup title="Metadata-only candidates" count={workspace.sources.metadataCandidates.length}>
+          <SourceMiniList items={workspace.sources.metadataCandidates.map((item): SourceMiniItem => ({
+            title: item.title || item.source_url || "Source candidate",
+            status: "Source candidate, not yet synced",
+            meta: item.portal || item.provider || item.source_kind,
+            url: item.source_url,
+          }))} />
+        </SourceGroup>
+        <SourceGroup title="External candidates" count={workspace.sources.externalCandidates.length}>
+          <SourceMiniList items={workspace.sources.externalCandidates.map((item): SourceMiniItem => ({
+            title: item.title || item.source_url || "External candidate",
+            status: "External candidate",
+            meta: item.connector_name || item.source_type,
+            url: item.source_url,
+          }))} />
+        </SourceGroup>
+        <SourceGroup title="Organizations" count={workspace.sources.organizations.length}>
+          <SourceMiniList items={workspace.sources.organizations.map((item): SourceMiniItem => ({
+            title: item.name || item.title || "Organization",
+            status: "Organization",
+            meta: [item.organization_type, item.geography].filter(Boolean).join(" · "),
+            url: item.website_url || item.source_url,
+          }))} />
+        </SourceGroup>
+      </WorkspaceSection>
+
+      <WorkspaceSection title="Actions" defaultOpen>
+        <div className="action-grid">
+          {workspace.actions.map(action => (
+            <button key={action} type="button" className="card-action-btn">{action}</button>
+          ))}
+          <SaveToProjectButton
+            label="Save to project"
+            onAuthRequired={onAuthRequired}
+            onSaved={onSaved}
+            projectId={projectId}
+            payload={{
+              item_type: "search_result",
+              item_id: response.saved_result_id,
+              title: turnQuery || response.message || "Saved search",
+              metadata: {
+                query: turnQuery,
+                answer_summary: response.assistant_message || response.message,
+                selected_variables: response.results.closest_variables,
+                relevant_reports: response.results.relevant_reports,
+                organizations: response.results.relevant_organizations,
+                source_links: response.results.source_links,
+                limitations: response.limitations,
+                result_payload: response,
+              },
+            }}
+          />
+        </div>
+        {workspace.exports.length > 0 && (
+          <div className="export-list">
+            {workspace.exports.map((item, index) => <span key={index}>{String(item)}</span>)}
+          </div>
+        )}
+      </WorkspaceSection>
+
+      <WorkspaceSection title="Agent Activity">
+        <AgentActivityTimeline events={response.tool_trace} defaultCollapsed />
+      </WorkspaceSection>
     </div>
   );
 }
 
-function ResultSection({
-  title,
-  items,
-  onPick,
-}: {
-  title: string;
-  items: { key: string; label: string; meta?: string; drawer: DrawerItem }[];
-  onPick: (item: DrawerItem) => void;
-}) {
+type EvidenceWorkspace = {
+  totalStructured: number;
+  coverage: {
+    level: "strong" | "partial" | "contextual" | "unresolved";
+    explanation: string;
+    exactDataAvailable: boolean;
+    externalCandidates: number;
+    syncedData: number;
+  };
+  computedFindings: ConnectorMetricResult[];
+  tables: unknown[];
+  datasets: ConnectorDatasetResult[];
+  evidence: {
+    direct: unknown[];
+    partial: unknown[];
+    contextual: unknown[];
+    excluded: unknown[];
+  };
+  sources: {
+    syncedDatasets: ConnectorDatasetResult[];
+    internalReports: ChatResponse["results"]["relevant_reports"];
+    sourceLinks: SourceLink[];
+    metadataCandidates: ConnectorDatasetResult[];
+    externalCandidates: SourceLink[];
+    organizations: ChatResponse["results"]["relevant_organizations"];
+  };
+  actions: string[];
+  exports: unknown[];
+};
+
+function normalizeEvidenceWorkspace(response: ChatResponse, query?: string): EvidenceWorkspace {
+  const r = response.results;
+  const connectorDatasets = r.connector_datasets || [];
+  const connectorCandidates = r.connector_candidates || [];
+  const tavilyResults = r.tavily_candidates?.results || [];
+  const syncedDatasets = connectorDatasets.filter(item => !isMetadataOnlyConnector(item));
+  const metadataDatasets = connectorDatasets.filter(isMetadataOnlyConnector);
+  const metadataCandidates = [...connectorCandidates, ...metadataDatasets];
+  const direct = [...r.closest_variables, ...(r.connector_metrics || []), ...syncedDatasets];
+  const partial = [...r.relevant_reports, ...r.source_links];
+  const contextual = [...r.relevant_organizations, ...tavilyResults, ...metadataCandidates];
+  const comparison = r.comparison || {};
+  const comparisonTables = Object.entries(comparison)
+    .filter(([, value]) => Array.isArray(value) || isRecord(value))
+    .map(([name, value]) => ({ name, value }));
+  const debugExports = Array.isArray((response.debug as Record<string, unknown> | undefined)?.exports)
+    ? ((response.debug as Record<string, unknown>).exports as unknown[])
+    : [];
+  const totalStructured = direct.length + partial.length + contextual.length + comparisonTables.length;
+  const level = direct.length > 0
+    ? "strong"
+    : partial.length > 0
+      ? "partial"
+      : contextual.length > 0
+        ? "contextual"
+        : "unresolved";
+
+  return {
+    totalStructured,
+    coverage: {
+      level,
+      explanation: coverageExplanation(level, direct.length, partial.length, contextual.length, query),
+      exactDataAvailable: direct.length > 0,
+      externalCandidates: metadataCandidates.length + tavilyResults.length,
+      syncedData: syncedDatasets.length,
+    },
+    computedFindings: r.connector_metrics || [],
+    tables: comparisonTables,
+    datasets: connectorDatasets,
+    evidence: {
+      direct,
+      partial,
+      contextual,
+      excluded: response.limitations || [],
+    },
+    sources: {
+      syncedDatasets,
+      internalReports: r.relevant_reports,
+      sourceLinks: r.source_links,
+      metadataCandidates,
+      externalCandidates: [...r.source_links.filter(isFallbackWebResult), ...tavilyResults],
+      organizations: r.relevant_organizations,
+    },
+    actions: buildActions(response, syncedDatasets.length, metadataCandidates.length),
+    exports: debugExports,
+  };
+}
+
+function WorkspaceSection({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
   return (
-    <section className="evidence-result-section">
-      <h3 className="evidence-result-section-title">{title}</h3>
-      <ul className="evidence-result-list">
-        {items.map(item => (
-          <li key={item.key}>
-            <button type="button" className="evidence-result-row" onClick={() => onPick(item.drawer)}>
-              <strong>{item.label}</strong>
-              {item.meta && <span>{item.meta}</span>}
-            </button>
-          </li>
-        ))}
-      </ul>
+    <details className="workspace-section" open={defaultOpen}>
+      <summary>{title}</summary>
+      <div className="workspace-section-body">{children}</div>
+    </details>
+  );
+}
+
+function EvidenceStat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className={`evidence-stat${tone ? ` evidence-stat-${tone}` : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function EvidenceBucket({ title, count }: { title: string; count: number }) {
+  return (
+    <div className="evidence-bucket-row">
+      <span>{title}</span>
+      <strong>{count}</strong>
+    </div>
+  );
+}
+
+function SourceGroup({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+  if (count === 0) return null;
+  return (
+    <section className="source-group">
+      <h3>{title} <span>{count}</span></h3>
+      {children}
     </section>
   );
+}
+
+type SourceMiniItem = {
+  title: string;
+  status?: string | null;
+  meta?: string | number | null;
+  url?: string | null;
+};
+
+function SourceMiniList({ items }: { items: SourceMiniItem[] }) {
+  return (
+    <ul className="source-mini-list">
+      {items.map((item, index) => (
+        <li key={`${item.title}-${index}`}>
+          <div className="source-mini-main">
+            {item.status && <span className="source-status-chip">{item.status}</span>}
+            <strong>{item.title}</strong>
+            {item.meta && <span className="source-mini-meta">{String(item.meta)}</span>}
+          </div>
+          {item.url && (
+            <a className="source-card-action" href={item.url} target="_blank" rel="noreferrer">
+              Open source
+            </a>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DatasetSummary({ dataset, variant = "full" }: { dataset: ConnectorDatasetResult; variant?: "full" | "compact" }) {
+  const fields = fieldsUsed(dataset);
+  const metadataOnly = isMetadataOnlyConnector(dataset);
+  return (
+    <article className={`dataset-summary-card dataset-summary-card-${variant}`}>
+      <div className="source-card-topline">
+        <span className={`source-status-chip${metadataOnly ? " source-status-muted" : ""}`}>
+          {metadataOnly ? "Source candidate, not yet synced" : "Synced official dataset"}
+        </span>
+        {(dataset.portal || dataset.provider) && <span className="source-origin-text">{dataset.portal || dataset.provider}</span>}
+      </div>
+      <h3>{dataset.title || dataset.source_url || "Dataset"}</h3>
+      <div className="dataset-meta-grid">
+        {dataset.retrieved_at && <span>Retrieved {formatShortDate(dataset.retrieved_at)}</span>}
+        {(dataset as Record<string, unknown>).snapshot_id && <span>Snapshot {String((dataset as Record<string, unknown>).snapshot_id)}</span>}
+        {(dataset.row_count !== undefined || dataset.column_count !== undefined) && (
+          <span>{dataset.row_count ?? "?"} x {dataset.column_count ?? "?"}</span>
+        )}
+        {fields && <span>Fields used: {fields}</span>}
+      </div>
+      {dataset.source_url && (
+        <a className="source-card-action" href={dataset.source_url} target="_blank" rel="noreferrer">
+          Open source
+        </a>
+      )}
+    </article>
+  );
+}
+
+function MetricRow({ item }: { item: ConnectorMetricResult }) {
+  return (
+    <article className="codebook-row">
+      <div>
+        <strong>{item.metric_name || item.title || "Computed finding"}</strong>
+        {item.metric_description && <p>{item.metric_description}</p>}
+      </div>
+      <div className="codebook-row-meta">
+        {item.dataset_name && <span>{item.dataset_name}</span>}
+        {(item.portal || item.provider) && <span>{item.portal || item.provider}</span>}
+        {item.category && <span>{item.category}</span>}
+        {item.retrieved_at && <span>{formatShortDate(item.retrieved_at)}</span>}
+      </div>
+    </article>
+  );
+}
+
+function DataTablePreview({ table }: { table: unknown }) {
+  const name = isRecord(table) && typeof table.name === "string" ? table.name : "Table";
+  const value = isRecord(table) ? table.value : table;
+  if (Array.isArray(value)) {
+    const rows = value.slice(0, 6).filter(isRecord);
+    const columns = [...new Set(rows.flatMap(row => Object.keys(row)))].slice(0, 6);
+    return (
+      <div className="evidence-data-table">
+        <h3>{name}</h3>
+        <table>
+          <thead>
+            <tr>{columns.map(col => <th key={col}>{col}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>{columns.map(col => <td key={col}>{formatCell(row[col])}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  return (
+    <div className="evidence-data-table">
+      <h3>{name}</h3>
+      <pre>{JSON.stringify(value, null, 2)}</pre>
+    </div>
+  );
+}
+
+function buildActions(response: ChatResponse, syncedCount: number, metadataCount: number): string[] {
+  const actions = ["Export Excel", "Export CSV", "Save to project"];
+  if (metadataCount > 0) actions.push("Pull latest official data", "Ingest source");
+  if (syncedCount > 0) actions.push("Compare definitions");
+  if (response.type === "no_results") actions.push("Broaden search");
+  actions.push("Narrow search", "Create source discovery task");
+  return [...new Set(actions)];
+}
+
+function coverageExplanation(level: EvidenceWorkspace["coverage"]["level"], direct: number, partial: number, contextual: number, query?: string) {
+  const suffix = query ? ` for "${query}"` : "";
+  if (level === "strong") return `${direct} direct evidence item${direct === 1 ? "" : "s"} available${suffix}.`;
+  if (level === "partial") return `${partial} partial evidence item${partial === 1 ? "" : "s"} available${suffix}.`;
+  if (level === "contextual") return `${contextual} contextual item${contextual === 1 ? "" : "s"} available${suffix}.`;
+  return `No structured evidence is attached${suffix}.`;
+}
+
+function isMetadataOnlyConnector(item: ConnectorDatasetResult) {
+  const text = `${item.data_status_label || ""} ${item.data_status || ""}`.toLowerCase();
+  return text.includes("metadata") || (item.row_count == null && item.column_count == null);
+}
+
+function isFallbackWebResult(item: SourceLink) {
+  const text = `${item.connector_name || ""} ${item.source_url || ""} ${item.title || ""}`.toLowerCase();
+  return text.includes("tavily");
+}
+
+function fieldsUsed(dataset: ConnectorDatasetResult) {
+  const raw = (dataset as Record<string, unknown>).fields_used || (dataset as Record<string, unknown>).columns_used || (dataset as Record<string, unknown>).fields;
+  if (Array.isArray(raw)) return raw.map(String).slice(0, 8).join(", ");
+  if (typeof raw === "string") return raw;
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function formatCell(value: unknown) {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
+}
+
+function formatShortDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10);
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
 function SelectedEvidenceDetail({
@@ -441,15 +756,6 @@ function ProjectEvidenceSection({
         </ul>
       )}
     </section>
-  );
-}
-
-function countStructuredResults(results: ChatResponse["results"]) {
-  return (
-    results.closest_variables.length +
-    results.relevant_reports.length +
-    results.relevant_organizations.length +
-    results.source_links.length
   );
 }
 
