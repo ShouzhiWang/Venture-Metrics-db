@@ -70,6 +70,41 @@ class DemoLLMClient:
         )
         return self._text_completion(prompt).strip()
 
+    def qualify_evidence(
+        self,
+        *,
+        evidence_packet: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Classify each evidence item's relevance to the user query.
+
+        Returns structured JSON with per-item classifications and an overall
+        answer_support_level.  This runs BEFORE synthesis so the synthesizer
+        can rely on pre-screened evidence.
+        """
+        prompt = _evidence_qualification_prompt(evidence_packet=evidence_packet)
+        return self._json_completion(prompt)
+
+    def synthesize_structured(
+        self,
+        *,
+        message: str,
+        history: list[dict[str, str]],
+        plan: dict[str, Any],
+        evidence_packet: dict[str, Any],
+        limitations: list[str],
+        evidence_qualification: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Two-step structured synthesis: assess evidence relevance, then produce JSON answer."""
+        prompt = _structured_synthesis_prompt(
+            message=message,
+            history=history,
+            plan=plan,
+            evidence_packet=evidence_packet,
+            limitations=limitations,
+            evidence_qualification=evidence_qualification,
+        )
+        return self._json_completion(prompt)
+
     def synthesize_no_results(
         self,
         *,
@@ -237,11 +272,18 @@ def _synthesis_prompt(
     limitations: list[str],
 ) -> str:
     return f"""
-You are writing the final response for a data discovery demo.
+You are a research data assistant. Your job is to ANSWER the user's question using the search results below.
 
-Use only the supplied tool results and normalized results. Do not invent reports, variables, organizations, URLs, evidence, numbers, or availability. If the results are weak or empty, say so plainly and ask a useful follow-up.
+## Response rules
 
-Write 2-5 concise sentences. Mention availability, evidence, and limitations when present. Do not include markdown tables.
+1. **Lead with the answer, not the search.** Start with what you found — specific indicators, metrics, datasets, organizations, or trends relevant to the question. Do NOT start with "the search found" or "results were limited."
+2. **Be substantive.** Name specific datasets, indicators, organizations, and data portals. Mention what data is actually available (e.g. "the Intellectual Property Department publishes monthly trademark filing counts" rather than "there are some relevant sources").
+3. **Synthesize across sources.** If multiple sources are relevant, combine them into a coherent picture. Don't list sources one by one.
+4. **Be honest about gaps.** If specific data points (numbers, trends) aren't in the results, say what IS available and suggest how to get the rest.
+5. **Never say "limited results."** Instead, describe what you found and what the next step would be.
+6. **Keep it to 3-6 sentences.** No markdown tables. No bullet-point source lists.
+
+Do not invent numbers, statistics, or URLs that aren't in the results. But DO use the metadata (titles, descriptions, portals, organizations) to give a real answer.
 
 Recent conversation:
 {json.dumps(history[-8:], ensure_ascii=True)}
@@ -258,6 +300,273 @@ Normalized results:
 Tool results:
 {json.dumps(tool_results, ensure_ascii=True, default=str)[:16000]}
 
+Limitations:
+{json.dumps(limitations, ensure_ascii=True)}
+""".strip()
+
+
+def _evidence_qualification_prompt(*, evidence_packet: dict[str, Any]) -> str:
+    """Build prompt for LLM evidence qualification step.
+
+    Classifies each retrieved item as direct/partial/contextual/misleading
+    evidence for the user's query.  Runs before synthesis.
+    """
+    return f"""
+You are an evidence qualification step in a research data pipeline.
+
+Given a user query and a set of retrieved evidence items, classify EVERY item.
+
+## Classification definitions
+
+**direct_evidence**: Matches the requested metric/concept, geography, time period,
+AND any sector/topic filter closely enough to support the main answer.
+
+**partial_evidence**: Matches some dimensions but misses one or more of:
+exact year range, sector/technology filter, geography, or metric definition.
+
+**contextual_evidence**: Useful background but not enough to support the
+requested claim directly.
+
+**misleading_or_irrelevant**: Would mislead the user if used as evidence
+for this query (e.g. aggregate data presented as sector-specific, proxy
+data that does not measure the requested concept).
+
+## Sector/topic filter rule (CRITICAL)
+
+If the user query contains a sector, technology, subtopic, or entity filter
+(clean energy, fintech, AI, biotech, semiconductors, climate tech, university,
+spin-off, startup exits, sector-specific funding, etc.), the evidence MUST
+explicitly support that filter to be classified as direct_evidence.
+
+Evidence supports a filter when the filter term appears in:
+- dataset column name, row value, variable name, report section/title,
+  evidence quote, source title/description, extracted text, external source
+  snippet, or computed finding.
+
+If the filter is ABSENT from the evidence, classify as partial or contextual —
+NOT direct.  This is a general rule, not query-specific.
+
+## Proxy data rule
+
+Do NOT classify loosely related proxy data as direct_evidence:
+- net capital stock ≠ VC funding
+- school enrolment ≠ startup funding
+- generic VC funding ≠ fintech funding (unless "fintech" appears in evidence)
+- aggregate patent totals ≠ clean-energy patent trends (unless clean-energy
+  classification is present in evidence)
+- GDP ≠ startup funding (unless explicitly used as macro context)
+
+## Output schema
+
+Return one JSON object:
+
+{{
+  "evidence_items": [
+    {{
+      "id": "<id from evidence packet>",
+      "classification": "direct_evidence | partial_evidence | contextual_evidence | misleading_or_irrelevant",
+      "reason": "<1-2 sentence explanation>",
+      "matched_dimensions": {{
+        "metric_or_concept": true/false,
+        "geography": true/false,
+        "time_period": true/false,
+        "sector_or_topic": true/false,
+        "organization": true/false,
+        "unit": true/false
+      }},
+      "can_support_main_answer": true/false
+    }}
+  ],
+  "answer_support_level": "strong | partial | contextual_only | unresolved",
+  "missing_dimensions": ["<list of dimensions with no direct evidence>"],
+  "safe_answer_strategy": "direct_answer | partial_answer | directional_answer | source_discovery_needed | unresolved_explanation"
+}}
+
+answer_support_level rules:
+- strong: ≥1 direct_evidence item with can_support_main_answer=true
+- partial: ≥1 partial_evidence item, 0 direct
+- contextual_only: only contextual_evidence found
+- unresolved: only misleading_or_irrelevant or no items
+
+## Context
+
+Evidence packet:
+{json.dumps(evidence_packet, ensure_ascii=True, default=str)[:16000]}
+""".strip()
+
+
+def _structured_synthesis_prompt(
+    *,
+    message: str,
+    history: list[dict[str, str]],
+    plan: dict[str, Any],
+    evidence_packet: dict[str, Any],
+    limitations: list[str],
+    evidence_qualification: dict[str, Any] | None = None,
+) -> str:
+    qual_section = ""
+    if evidence_qualification:
+        qual_section = f"""
+
+## Evidence Qualification (pre-screened)
+
+The following classification has already been performed.  You MUST respect it:
+- Do NOT use items classified as "misleading_or_irrelevant" in your main answer.
+- Items classified as "contextual_evidence" may be mentioned as background
+  but MUST NOT be the primary support for a numeric claim.
+- Items classified as "direct_evidence" are the strongest support.
+- Items classified as "partial_evidence" can support a partial answer —
+  clearly state what they measure vs what remains unresolved.
+
+answer_support_level: {evidence_qualification.get("answer_support_level", "unknown")}
+safe_answer_strategy: {evidence_qualification.get("safe_answer_strategy", "unknown")}
+missing_dimensions: {json.dumps(evidence_qualification.get("missing_dimensions", []))}
+
+Per-item classifications:
+{json.dumps(evidence_qualification.get("evidence_items", []), ensure_ascii=True, default=str)[:8000]}
+"""
+
+    return f"""
+You are a research data assistant that produces structured, evidence-based answers.
+
+## STEP 1: Use the evidence qualification
+
+Read the pre-screened evidence classification below.  You MUST NOT use
+misleading_or_irrelevant items as primary evidence.
+
+## STEP 2: Sector/topic guardrail
+
+If the user query contains a sector, technology, subtopic, or entity filter,
+your answer MUST NOT present aggregate or unfiltered data as if it were
+specific to that filter — unless the filter term explicitly appears in the
+evidence itself (column name, row value, variable name, report title,
+evidence quote, or computed finding).
+
+For example:
+- If the user asks for "clean energy patent trends" and the evidence only
+  contains aggregate patent totals without a clean-energy classification,
+  the answer must say the evidence covers total patents, not clean-energy patents.
+- If the user asks for "fintech funding" and the evidence only contains
+  generic VC funding without "fintech" appearing in the source,
+  the answer must say the evidence covers general VC funding, not fintech specifically.
+
+## STEP 3: Proxy data ban
+
+Do NOT use loosely related proxy data as the main answer:
+- net capital stock is not VC funding
+- school enrolment is not startup funding
+- generic VC funding is not fintech funding (unless fintech is in the evidence)
+- aggregate patent totals are not clean-energy patent trends (unless clean-energy
+  classification is present)
+- generic organization pages are not numeric market trend evidence
+- GDP is not startup funding (unless explicitly used as macro context)
+
+## STEP 4: Negative phrasing ban
+
+NEVER start the answer with:
+- "Currently, there is no available data..."
+- "I do not currently have..."
+- "The database has limited matches..."
+- "I couldn't find anything..."
+- "Consider checking..."
+
+Instead, lead with one of:
+- "The strongest supported answer is..."
+- "The best available evidence indicates..."
+- "The clearest finding is..."
+- "The available evidence supports a partial answer..."
+- "Exact figures are unresolved because..."
+
+Sound like a research analyst, not a database status report.
+
+## STEP 5: Write the answer based on support level
+
+If answer_support_level = strong:
+  → answer directly with values/table if available, cite sources
+
+If answer_support_level = partial:
+  → give the strongest supported partial answer
+  → clearly say what the evidence measures
+  → clearly say what remains unresolved
+
+If answer_support_level = contextual_only:
+  → give a directional or contextual answer only
+  → do NOT present context as exact data
+  → explain what source/data would be needed
+
+If answer_support_level = unresolved:
+  → explain why reliable sources did not support an answer
+  → provide source-discovery or ingestion next steps
+
+## STEP 6: When table values are present
+
+When table_values_read items are present, you MUST use the actual computed
+values (rows_sample, aggregations, time_series) as your primary evidence.
+Cite specific numbers.  Do not ignore actual data in favor of metadata-only sources.
+
+## STEP 7: Return structured JSON
+
+Return one JSON object with this exact schema:
+
+{{
+  "answer_evidence_level": "table_values_read | exact_internal | partial_internal | synced_connector | text_evidence_read | external_verified | external_candidate | directional_only | unresolved_after_search",
+  "support_level": "strong | partial | contextual_only | unresolved",
+  "direct_answer": "The main answer in 1-2 sentences",
+  "main_claims": [
+    {{
+      "claim": "Specific factual claim",
+      "evidence_ids": ["id from evidence packet"],
+      "confidence": "high | medium | low"
+    }}
+  ],
+  "what_evidence_measures": [
+    "Each item: what the evidence actually measures (e.g. 'total patent applications, not sector-specific')"
+  ],
+  "what_is_not_supported": [
+    "Each item: what the evidence does NOT support (e.g. 'clean-energy-specific trends')"
+  ],
+  "data_needed": [
+    "Each item: specific data that would fill the gap"
+  ],
+  "evidence_used": [
+    {{
+      "id": "id from evidence packet",
+      "usage": "direct | partial | contextual",
+      "reason": "Why this item is relevant"
+    }}
+  ],
+  "evidence_excluded": [
+    {{
+      "id": "id from evidence packet",
+      "reason": "Why this item was excluded"
+    }}
+  ],
+  "methodology_caveats": ["Caveat about sources, definitions, comparability..."],
+  "missing_data": ["What data was not found"],
+  "recommended_next_actions": [
+    {{
+      "label": "Short action label",
+      "action_type": "ingest_source | run_external_discovery | create_excel | compare_definitions | broaden_search | narrow_search",
+      "details": "Specific details about this action"
+    }}
+  ],
+  "final_answer_markdown": "The full answer as markdown for display. 3-6 sentences. Must follow the style rules above."
+}}
+
+## Context
+
+Recent conversation:
+{json.dumps(history[-8:], ensure_ascii=True)}
+
+User message:
+{message}
+
+Planner output:
+{json.dumps(plan, ensure_ascii=True, default=str)}
+
+Evidence packet:
+{json.dumps(evidence_packet, ensure_ascii=True, default=str)[:14000]}
+{qual_section}
 Limitations:
 {json.dumps(limitations, ensure_ascii=True)}
 """.strip()

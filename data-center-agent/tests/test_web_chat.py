@@ -8,6 +8,8 @@ class FakeLLM:
         self._plan = plan
         self.synthesis_inputs = None
         self.no_results_inputs = None
+        self.structured_inputs = None
+        self.qualification_inputs = None
 
     def plan(self, **kwargs):
         if isinstance(self._plan, Exception):
@@ -17,6 +19,32 @@ class FakeLLM:
     def synthesize(self, **kwargs):
         self.synthesis_inputs = kwargs
         return "Grounded answer from tool results."
+
+    def qualify_evidence(self, **kwargs):
+        self.qualification_inputs = kwargs
+        return {
+            "evidence_items": [],
+            "answer_support_level": "strong",
+            "missing_dimensions": [],
+            "safe_answer_strategy": "direct_answer",
+        }
+
+    def synthesize_structured(self, **kwargs):
+        self.structured_inputs = kwargs
+        return {
+            "answer_evidence_level": "synced_connector",
+            "support_level": "strong",
+            "direct_answer": "Grounded answer from structured evidence.",
+            "main_claims": [],
+            "what_evidence_measures": [],
+            "what_is_not_supported": [],
+            "evidence_used": [],
+            "evidence_excluded": [],
+            "methodology_caveats": [],
+            "missing_data": [],
+            "recommended_next_actions": [],
+            "final_answer_markdown": "Grounded answer from structured evidence.",
+        }
 
     def synthesize_no_results(self, **kwargs):
         self.no_results_inputs = kwargs
@@ -65,7 +93,7 @@ def test_chat_llm_plan_routes_find_data() -> None:
     result = handle_chat({"message": "VC deal count by stage"}, tool_caller=fake_tool, llm_client=llm)
 
     assert result["type"] == "answer"
-    assert result["assistant_message"] == "Grounded answer from tool results."
+    assert result["assistant_message"] == "Grounded answer from structured evidence."
     assert calls[0][0] == "find_data"
     assert result["results"]["closest_variables"][0]["title"] == "VC deal count"
 
@@ -319,9 +347,8 @@ def test_synthesis_receives_tool_results_only() -> None:
 
     handle_chat({"message": "startup funding"}, tool_caller=fake_tool, llm_client=llm)
 
-    assert llm.synthesis_inputs is not None
-    assert llm.synthesis_inputs["tool_results"][0]["data"]["closest_variables"][0]["title"] == "Startup funding"
-    assert "https://example.org" in str(llm.synthesis_inputs["normalized_results"])
+    assert llm.structured_inputs is not None
+    assert llm.structured_inputs["evidence_packet"]["retrieved_items"][0]["title"] == "Startup funding"
 
 
 def test_deterministic_planner_preserved_for_tests() -> None:
@@ -427,3 +454,208 @@ def test_openai_extra_body_omits_provider_specific_thinking() -> None:
     client.thinking = "disabled"
 
     assert client._provider_extra_body() == {}
+
+
+# ---------------------------------------------------------------------------
+# Prompt-level tests for evidence packet and structured synthesis
+# ---------------------------------------------------------------------------
+
+def _make_connector_dataset(title, portal="World Bank", description="", geography="", **extra):
+    ds = {"title": title, "portal": portal, "description": description, "geography": geography, **extra}
+    return ds
+
+
+def _make_variable(title, description="", geography="", source=""):
+    return {"title": title, "description": description, "geography": geography, "source": source}
+
+
+def _make_organization(name, description="", country=""):
+    return {"name": name, "description": description, "country": country}
+
+
+def test_evidence_packet_intent_extraction():
+    """Evidence packet correctly extracts interpreted_intent from the plan."""
+    from web.backend.routes.chat import _build_evidence_packet
+    plan = {
+        "detected": {
+            "domain_topic": "startup funding",
+            "metric_type": "funding_amount",
+            "geography": "Singapore",
+            "time_range": "2020-2024",
+        },
+        "intent": "find_data",
+    }
+    results = {"connector_datasets": [], "connector_metrics": [], "closest_variables": [], "relevant_reports": [], "relevant_organizations": [], "tavily_candidates": None, "connector_candidates": [], "source_links": []}
+    packet = _build_evidence_packet("Singapore venture capital funding 2020-2024", plan, results, [])
+    intent = packet["interpreted_intent"]
+    assert intent["topic"] == "startup funding"
+    assert intent["metric_or_concept"] == "funding_amount"
+    assert intent["geography"] == "Singapore"
+    assert intent["time_period"] == "2020-2024"
+
+
+def test_evidence_packet_sector_extraction():
+    """Evidence packet extracts sector/technology filter from query."""
+    from web.backend.routes.chat import _build_evidence_packet
+    plan = {"detected": {"geography": "Hong Kong", "domain_topic": "innovation"}, "intent": "find_data"}
+    results = {"connector_datasets": [], "connector_metrics": [], "closest_variables": [], "relevant_reports": [], "relevant_organizations": [], "tavily_candidates": None, "connector_candidates": [], "source_links": []}
+    packet = _build_evidence_packet("Hong Kong patent trends in clean energy", plan, results, [])
+    assert packet["interpreted_intent"]["sector_or_technology_filter"] == "clean energy"
+
+
+def test_evidence_packet_item_types():
+    """Evidence packet classifies items by type correctly."""
+    from web.backend.routes.chat import _build_evidence_packet
+    plan = {"detected": {}, "intent": "find_data"}
+    results = {
+        "connector_datasets": [_make_connector_dataset("WB Indicators")],
+        "connector_metrics": [{"title": "GDP growth", "value": "3.5%", "unit": "%"}],
+        "closest_variables": [_make_variable("VC deal count")],
+        "relevant_reports": [{"title": "Startup Ecosystem Report"}],
+        "relevant_organizations": [_make_organization("Enterprise Singapore")],
+        "tavily_candidates": {"results": [{"title": "External article", "url": "https://example.com"}]},
+        "connector_candidates": [{"title": "Candidate source"}],
+        "source_links": [],
+    }
+    packet = _build_evidence_packet("test query", plan, results, [])
+    items = packet["retrieved_items"]
+    types = [item["type"] for item in items]
+    assert "connector_dataset" in types
+    assert "connector_metric" in types
+    assert "report_variable" in types  # both variables and reports
+    assert "organization" in types
+    assert "external_candidate" in types
+    assert "source_candidate" in types
+
+
+def test_evidence_packet_source_status_counts():
+    """Evidence packet correctly counts source status."""
+    from web.backend.routes.chat import _build_evidence_packet
+    plan = {"detected": {}, "intent": "find_data"}
+    results = {
+        "connector_datasets": [_make_connector_dataset("A"), _make_connector_dataset("B")],
+        "connector_metrics": [{"title": "M1"}],
+        "closest_variables": [_make_variable("V1")],
+        "relevant_reports": [],
+        "relevant_organizations": [],
+        "tavily_candidates": {"results": [{"title": "T1"}]},
+        "connector_candidates": [],
+        "source_links": [],
+    }
+    packet = _build_evidence_packet("test", plan, results, [])
+    status = packet["source_status_counts"]
+    assert status["internal_structured"] == 1  # 1 variable + 0 reports
+    assert status["synced_connector"] == 3    # 2 datasets + 1 metric
+    assert status["external_candidate"] == 1
+
+
+def test_structured_synthesis_prompt_includes_evidence_packet():
+    """The structured synthesis prompt contains the evidence packet and key instructions."""
+    from app.agents.demo_llm import _structured_synthesis_prompt
+    evidence_packet = {
+        "user_query": "Singapore VC funding",
+        "interpreted_intent": {"topic": "startup funding", "geography": "Singapore"},
+        "retrieved_items": [{"id": "connector_dataset_1", "type": "connector_dataset", "title": "WB Data"}],
+        "source_status_counts": {"internal_structured": 0, "synced_connector": 1},
+    }
+    prompt = _structured_synthesis_prompt(
+        message="Singapore VC funding",
+        history=[],
+        plan={"intent": "find_data"},
+        evidence_packet=evidence_packet,
+        limitations=[],
+    )
+    # Check key instructions are present
+    assert "support_level" in prompt
+    assert "final_answer_markdown" in prompt
+    assert "evidence_used" in prompt
+    assert "evidence_excluded" in prompt
+    assert "Proxy data ban" in prompt
+    assert "Negative phrasing ban" in prompt
+    assert "Sector/topic guardrail" in prompt
+    assert "what_evidence_measures" in prompt
+    assert "what_is_not_supported" in prompt
+    # Check evidence packet is included
+    assert "Singapore VC funding" in prompt
+    assert "connector_dataset_1" in prompt
+
+
+def test_structured_synthesis_prompt_with_qualification():
+    """The synthesis prompt includes evidence qualification when provided."""
+    from app.agents.demo_llm import _structured_synthesis_prompt
+    evidence_packet = {
+        "user_query": "clean energy patents",
+        "interpreted_intent": {"sector_or_technology_filter": "clean energy"},
+        "retrieved_items": [],
+        "source_status_counts": {},
+    }
+    qualification = {
+        "answer_support_level": "partial",
+        "safe_answer_strategy": "partial_answer",
+        "missing_dimensions": ["sector_or_topic"],
+        "evidence_items": [
+            {"id": "connector_dataset_1", "classification": "partial_evidence", "reason": "No clean-energy filter"}
+        ],
+    }
+    prompt = _structured_synthesis_prompt(
+        message="Hong Kong patent trends in clean energy",
+        history=[],
+        plan={"intent": "find_data"},
+        evidence_packet=evidence_packet,
+        limitations=[],
+        evidence_qualification=qualification,
+    )
+    assert "Evidence Qualification (pre-screened)" in prompt
+    assert "partial" in prompt
+    assert "partial_evidence" in prompt
+
+
+def test_structured_synthesis_output_contract():
+    """FakeLLM.synthesize_structured returns the expected JSON contract shape."""
+    llm = FakeLLM({"intent": "find_data", "tool_calls": [{"name": "find_data", "args": {"query": "test"}}]})
+    result = llm.synthesize_structured(
+        message="test",
+        history=[],
+        plan={},
+        evidence_packet={"retrieved_items": []},
+        limitations=[],
+    )
+    required_keys = [
+        "answer_evidence_level", "support_level", "direct_answer",
+        "main_claims", "what_evidence_measures", "what_is_not_supported",
+        "evidence_used", "evidence_excluded", "methodology_caveats",
+        "missing_data", "recommended_next_actions", "final_answer_markdown",
+    ]
+    for key in required_keys:
+        assert key in result, f"Missing key: {key}"
+
+
+def test_structured_synthesis_preserves_source_metadata():
+    """Evidence packet preserves source URLs and source_status for LLM assessment."""
+    from web.backend.routes.chat import _build_evidence_packet
+    plan = {"detected": {}, "intent": "find_data"}
+    results = {
+        "connector_datasets": [
+            _make_connector_dataset(
+                "World Development Indicators",
+                portal="World Bank",
+                description="GDP, R&D expenditure, and more",
+                geography="Global",
+                url="https://data.worldbank.org",
+                row_count=5000,
+            ),
+        ],
+        "connector_metrics": [],
+        "closest_variables": [],
+        "relevant_reports": [],
+        "relevant_organizations": [],
+        "tavily_candidates": None,
+        "connector_candidates": [],
+        "source_links": [],
+    }
+    packet = _build_evidence_packet("R&D expenditure", plan, results, [])
+    item = packet["retrieved_items"][0]
+    assert item["source_url"] == "https://data.worldbank.org"
+    assert item["source_status"] == "synced_connector"  # has row_count
+    assert item["values_available"] is True
+    assert item["geography"] == "Global"

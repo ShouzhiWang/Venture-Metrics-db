@@ -157,12 +157,40 @@ class PreSearchPlanner:
         recent_thread_context: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         context = dict(project_context or {})
+        # Convert recent_thread_context to history format for plan_query
+        history: list[dict[str, Any]] = []
         if recent_thread_context:
-            context["recent_thread_context"] = recent_thread_context[-6:]
-        return plan_query(user_message, context)
+            for item in recent_thread_context[-6:]:
+                if isinstance(item, dict) and item.get("role") and item.get("content"):
+                    history.append(item)
+        return plan_query(user_message, context, history=history or None)
 
 
-def plan_query(query: str, context: dict | None = None) -> dict[str, Any]:
+def _extract_history_context(history: list[dict[str, Any]] | None) -> dict[str, str]:
+    """Extract geography, domain_topic, time_range from prior user messages in conversation history.
+
+    Only fills gaps — current-message detections always take priority.
+    """
+    if not history:
+        return {}
+    prior_user_msgs = [h["content"] for h in history if h.get("role") == "user" and h.get("content")]
+    if not prior_user_msgs:
+        return {}
+    combined = " ".join(prior_user_msgs[-5:]).lower()  # last 5 user messages max
+    result: dict[str, str] = {}
+    geo = _detect_geography(combined, {})
+    if geo:
+        result["geography"] = geo
+    dom = _detect_domain(combined)
+    if dom:
+        result["domain_topic"] = dom
+    tr = _detect_time_range(combined)
+    if tr:
+        result["time_range"] = tr
+    return result
+
+
+def plan_query(query: str, context: dict | None = None, history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     text = (query or "").strip()
     lowered = text.lower()
     context = context or {}
@@ -178,6 +206,11 @@ def plan_query(query: str, context: dict | None = None) -> dict[str, Any]:
         "comparison_target": _detect_comparison_target(lowered),
         "aggregation_intent": _detect_aggregation_intent(lowered),
     }
+    # Fill gaps from conversation history (prior user messages)
+    history_ctx = _extract_history_context(history)
+    for key in ("geography", "domain_topic", "time_range"):
+        if not detected.get(key) and history_ctx.get(key):
+            detected[key] = history_ctx[key]
     intent = _detect_intent(lowered, detected)
     missing = _missing_dimensions(lowered, detected, intent)
     specificity = _specificity(lowered, detected, missing, intent)

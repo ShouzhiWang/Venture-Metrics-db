@@ -36,16 +36,14 @@ declare global {
 }
 
 const EXAMPLES = [
-  "Find reports related to innovation policy and R&D investment",
-  "Search internal reports for green finance indicators",
-  "Singapore GDP and employment data",
-  "World Bank R&D expenditure China Singapore comparison",
+  "Singapore venture capital funding 2020-2024",
   "Hong Kong patent trends in clean energy",
-  "Recent university research on AI patents",
-  "Find papers about green finance and carbon markets",
-  "What variables are available for measuring regional innovation?",
-  "Find datasets or indicators related to FDI, trade, and R&D",
-  "Build a research brief on clean energy innovation in Asia",
+  "GDP growth comparison Asia",
+  "Hong Kong R&D expenditure as percentage of GDP",
+  "Singapore startup funding data",
+  "trademark registrations Hong Kong",
+  "Southeast Asia fintech ecosystem organizations",
+  "World Bank R&D expenditure China Singapore comparison",
 ];
 
 const CAPABILITIES = [

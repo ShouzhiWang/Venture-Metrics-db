@@ -17,6 +17,8 @@ SAFE_WEB_TOOLS = {
     "get_organization_detail",
     "list_available_filters",
     "submit_feedback",
+    "read_source",
+    "analyze_table",
 }
 
 

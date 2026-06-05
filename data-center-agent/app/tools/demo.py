@@ -33,6 +33,8 @@ READ_TOOL_NAMES = {
     "compare_concepts_auto",
     "list_available_filters",
     "job_status",
+    "read_source",
+    "analyze_table",
 }
 WRITE_TOOL_NAMES = {"submit_feedback"}
 ALLOWED_TOOL_NAMES = READ_TOOL_NAMES | WRITE_TOOL_NAMES
@@ -157,6 +159,26 @@ def _call_read_tool(name: str, args: dict[str, Any], connection) -> Any:
         )
     if name == "list_available_filters":
         return _list_available_filters(connection)
+    if name == "read_source":
+        from app.tools.source_reader import read_source as _read_source
+        return _read_source(
+            url=args.get("url"),
+            connector_dataset_id=args.get("connector_dataset_id"),
+            connector_snapshot_id=args.get("connector_snapshot_id"),
+            connector_resource_id=args.get("connector_resource_id"),
+            external_source_candidate_id=args.get("external_source_candidate_id"),
+            max_rows=optional_int(args, "max_rows", 500, minimum=10, maximum=2000),
+        )
+    if name == "analyze_table":
+        from app.tools.table_analyzer import analyze_table_for_query
+        table_packet = args.get("table_packet")
+        if not isinstance(table_packet, dict):
+            raise ValueError("table_packet is required (pass the table_packet from read_source).")
+        return analyze_table_for_query(
+            require_string(args, "query"),
+            table_packet,
+            llm_client=None,  # Heuristic mode — LLM client is passed at higher level if available
+        )
     if name == "job_status":
         row = JobRepository(connection).get(require_string(args, "job_id"))
         if not row:

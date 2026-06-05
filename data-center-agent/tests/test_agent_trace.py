@@ -14,6 +14,30 @@ class FakeLLM:
     def synthesize(self, **kwargs):
         return "Grounded answer from tool results."
 
+    def qualify_evidence(self, **kwargs):
+        return {
+            "evidence_items": [],
+            "answer_support_level": "strong",
+            "missing_dimensions": [],
+            "safe_answer_strategy": "direct_answer",
+        }
+
+    def synthesize_structured(self, **kwargs):
+        return {
+            "answer_evidence_level": "synced_connector",
+            "support_level": "strong",
+            "direct_answer": "Grounded answer from structured evidence.",
+            "main_claims": [],
+            "what_evidence_measures": [],
+            "what_is_not_supported": [],
+            "evidence_used": [],
+            "evidence_excluded": [],
+            "methodology_caveats": [],
+            "missing_data": [],
+            "recommended_next_actions": [],
+            "final_answer_markdown": "Grounded answer from structured evidence.",
+        }
+
     def synthesize_no_results(self, **kwargs):
         return {"assistant_message": "No matches yet.", "follow_up_queries": []}
 

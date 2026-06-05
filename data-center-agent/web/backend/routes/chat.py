@@ -140,7 +140,7 @@ def handle_chat(
     plan_message = _planning_message_for_focus(message, context)
     trace = trace or AgentTraceCollector()
     trace.planning_started()
-    deterministic_plan = plan_query(message, context)
+    deterministic_plan = plan_query(message, context, history=history)
     # Skip clarification if user is responding to a previous clarification question
     is_followup = _is_clarification_followup(history)
     if is_followup and deterministic_plan["action"] == "ask_clarification":
@@ -165,17 +165,46 @@ def handle_chat(
 
         # Generate LLM synthesis if available
         assistant_message = ""
+        synthesis_meta: dict[str, Any] = {}
         if response_type != "no_results":
             try:
                 llm = llm_client or DemoLLMClient()
-                assistant_message = llm.synthesize(
-                    message=message,
-                    history=history,
-                    plan=deterministic_plan,
-                    tool_results=[item["result"] for item in executed],
-                    normalized_results=results,
-                    limitations=limitations,
-                )
+                evidence_packet = _build_evidence_packet(message, deterministic_plan, results, executed)
+                try:
+                    structured = _run_structured_synthesis(
+                        llm,
+                        message=message,
+                        history=history,
+                        plan=deterministic_plan,
+                        evidence_packet=evidence_packet,
+                        limitations=limitations,
+                    )
+                    assistant_message = (
+                        structured.get("final_answer_markdown") or structured.get("direct_answer") or ""
+                    ).strip()
+                    synthesis_meta = {
+                        "answer_evidence_level": structured.get("answer_evidence_level"),
+                        "support_level": structured.get("support_level"),
+                        "main_claims": structured.get("main_claims"),
+                        "what_evidence_measures": structured.get("what_evidence_measures"),
+                        "what_is_not_supported": structured.get("what_is_not_supported"),
+                        "evidence_used": structured.get("evidence_used"),
+                        "evidence_excluded": structured.get("evidence_excluded"),
+                        "methodology_caveats": structured.get("methodology_caveats"),
+                        "missing_data": structured.get("missing_data"),
+                        "recommended_next_actions": structured.get("recommended_next_actions"),
+                        "evidence_qualification": structured.get("_evidence_qualification"),
+                    }
+                except (DemoLLMResponseError, DemoLLMProviderError, KeyError, Exception):
+                    # Fall back to legacy synthesis
+                    assistant_message = llm.synthesize(
+                        message=message,
+                        history=history,
+                        plan=deterministic_plan,
+                        tool_results=[item["result"] for item in executed],
+                        normalized_results=results,
+                        limitations=limitations,
+                    )
             except Exception:
                 pass
 
@@ -313,6 +342,12 @@ def handle_chat(
         return attach_tool_trace(_error_response(message, plan, failed["result"], tool_calls=executed), trace)
 
     results, limitations, response_type = _normalize_tool_results(executed)
+
+    # Try to read actual data from the most relevant connector dataset URLs
+    source_read_results = _enrich_with_source_reads(message, results, max_sources=2)
+    if source_read_results:
+        results["source_read_packets"] = source_read_results
+
     if _should_expand_with_find_data(message, plan, results, executed):
         trace.fallback(
             "Expanded beyond local comparison",
@@ -335,6 +370,7 @@ def handle_chat(
         trace.warning("Search limitation", item)
 
     follow_up_queries: list[dict[str, str]] = []
+    synthesis_meta: dict[str, Any] = {}
     trace.answer_generation_started()
     try:
         if response_type == "no_results":
@@ -351,14 +387,46 @@ def handle_chat(
             ).strip() or "I could not find strong matches yet. Try one of the suggested follow-up searches."
             follow_up_queries = _sanitize_follow_up_queries(synth.get("follow_up_queries"), message)
         else:
-            assistant_message = llm.synthesize(
-                message=message,
-                history=history,
-                plan=plan,
-                tool_results=[item["result"] for item in executed],
-                normalized_results=results,
-                limitations=limitations,
-            )
+            evidence_packet = _build_evidence_packet(message, plan, results, executed)
+            try:
+                structured = _run_structured_synthesis(
+                    llm,
+                    message=message,
+                    history=history,
+                    plan=plan,
+                    evidence_packet=evidence_packet,
+                    limitations=limitations,
+                )
+                assistant_message = (
+                    structured.get("final_answer_markdown") or structured.get("direct_answer") or ""
+                ).strip()
+                # Attach structured fields to response
+                synthesis_meta = {
+                    "answer_evidence_level": structured.get("answer_evidence_level"),
+                    "support_level": structured.get("support_level"),
+                    "main_claims": structured.get("main_claims"),
+                    "what_evidence_measures": structured.get("what_evidence_measures"),
+                    "what_is_not_supported": structured.get("what_is_not_supported"),
+                    "evidence_used": structured.get("evidence_used"),
+                    "evidence_excluded": structured.get("evidence_excluded"),
+                    "methodology_caveats": structured.get("methodology_caveats"),
+                    "missing_data": structured.get("missing_data"),
+                    "recommended_next_actions": structured.get("recommended_next_actions"),
+                    "evidence_qualification": structured.get("_evidence_qualification"),
+                }
+                if not assistant_message:
+                    raise DemoLLMResponseError("Empty final_answer_markdown")
+            except (DemoLLMResponseError, DemoLLMProviderError, KeyError):
+                # Fall back to legacy synthesis
+                assistant_message = llm.synthesize(
+                    message=message,
+                    history=history,
+                    plan=plan,
+                    tool_results=[item["result"] for item in executed],
+                    normalized_results=results,
+                    limitations=limitations,
+                )
+                synthesis_meta = {}
     except (DemoLLMResponseError, DemoLLMProviderError) as exc:
         trace.error_event("Answer generation failed", str(exc))
         return attach_tool_trace(_llm_error_response("llm_provider_error", str(exc)), trace)
@@ -379,6 +447,7 @@ def handle_chat(
             "tool_calls": [{"name": item["name"], "args": item["args"], "status": item["status"]} for item in executed],
             "results": results,
             "limitations": limitations,
+            "synthesis_meta": synthesis_meta,
             "debug": {"plan": plan},
         },
         trace,
@@ -388,7 +457,8 @@ def handle_chat(
 def handle_chat_deterministic(payload: dict[str, Any], tool_caller=call_demo_tool) -> dict[str, Any]:
     message = (payload.get("message") or "").strip()
     context = payload.get("context") or {}
-    plan = plan_query(message, context)
+    history = _sanitize_history(payload.get("history") or [])
+    plan = plan_query(message, context, history=history)
     if plan["should_ask_clarifying_question"]:
         return {
             "type": "clarification",
@@ -747,6 +817,370 @@ def _find_data_expansion_args(message: str, plan: dict[str, Any]) -> dict[str, A
         "time_range": filters.get("time_range"),
     }
     return {key: value for key, value in args.items() if value is not None}
+
+
+def _enrich_with_source_reads(
+    query: str,
+    results: dict[str, Any],
+    max_sources: int = 2,
+) -> list[dict[str, Any]]:
+    """Try to read actual data from connector dataset download URLs.
+
+    Returns a list of table/text packets from successfully read sources.
+    Only reads sources that have a direct download URL (CSV/XLSX/JSON).
+    """
+    from app.tools.source_reader import read_source
+    from app.tools.table_analyzer import analyze_table_for_query
+
+    packets: list[dict[str, Any]] = []
+    datasets = results.get("connector_datasets") or []
+    metrics = results.get("connector_metrics") or []
+
+    # Collect candidates with URLs — prefer live API results and synced datasets
+    candidates: list[tuple[str, str, dict]] = []  # (url, title, metadata)
+    for ds in datasets:
+        url = ds.get("download_url") or ds.get("source_url") or ""
+        title = ds.get("title") or ds.get("name") or "Dataset"
+        if url and _is_data_url(url):
+            priority = 0 if ds.get("data_status") == "live_api_result" else 1
+            candidates.append((url, title, {"priority": priority, "ds": ds}))
+
+    # Sort by priority (live API first)
+    candidates.sort(key=lambda x: x[2].get("priority", 99))
+
+    for url, title, meta in candidates[:max_sources]:
+        try:
+            packet = read_source(url=url, max_rows=200)
+            if packet.get("packet_type") in ("table", "text"):
+                # Try table analysis if it's a table
+                if packet.get("packet_type") == "table":
+                    analysis = analyze_table_for_query(query, packet)
+                    packet["analysis"] = analysis
+                packets.append(packet)
+        except Exception as exc:
+            logger.debug("Source read failed for %s: %s", url, exc)
+
+    return packets
+
+
+def _is_data_url(url: str) -> bool:
+    """Check if a URL likely points to downloadable data (not an HTML page)."""
+    url_lower = url.lower().split("?")[0].split("#")[0]
+    data_extensions = (".csv", ".tsv", ".xlsx", ".xls", ".json", ".jsonl", ".parquet", ".geojson")
+    if any(url_lower.endswith(ext) for ext in data_extensions):
+        return True
+    # CKAN resource download URLs
+    if "/resource/" in url_lower and "/download/" in url_lower:
+        return True
+    # API endpoints that return JSON
+    if "api." in url_lower and "/data" in url_lower:
+        return True
+    return False
+
+
+def _build_evidence_packet(
+    message: str,
+    plan: dict[str, Any],
+    results: dict[str, Any],
+    executed: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a structured evidence packet for the LLM synthesis step.
+
+    Each retrieved item gets a stable id, type classification, and enough metadata
+    for the LLM to judge relevance to the user's query.
+    """
+    detected = plan.get("detected") or {}
+    interpreted_intent = {
+        "topic": detected.get("domain_topic") or "",
+        "metric_or_concept": detected.get("metric_type") or "",
+        "geography": detected.get("geography") or "",
+        "time_period": detected.get("time_range") or "",
+        "sector_or_technology_filter": "",
+        "organization_filter": "",
+        "output_type": plan.get("intent") or "find_data",
+        "requires_numeric_values": False,
+        "requires_time_series": False,
+    }
+    # Extract sector/tech filter from the query — general detection, not hardcoded
+    _SECTOR_TERMS = (
+        "clean energy", "fintech", "healthtech", "biotech", "ai", "blockchain",
+        "edtech", "climate tech", "semiconductor", "deeptech", "proptech",
+        "insurtech", "regtech", "spacetech", "agritech", "medtech",
+        "robotics", "cybersecurity", "greentech", "cleantech", "sustainability",
+        "university", "spin-off", "startup exits", "patent",
+    )
+    lowered = message.lower()
+    for term in _SECTOR_TERMS:
+        if term in lowered:
+            interpreted_intent["sector_or_technology_filter"] = term
+            break
+
+    # Detect numeric/time-series requirements from the query
+    _NUMERIC_SIGNALS = ("how much", "how many", "funding", "investment", "amount",
+                        "value", "total", "growth", "rate", "percentage", "%",
+                        "trend", "by year", "over time", "annual", "quarterly")
+    _TIME_SIGNALS = ("trend", "by year", "over time", "since", "annual",
+                     "quarterly", "time series", "from.*to", "growth")
+    interpreted_intent["requires_numeric_values"] = any(s in lowered for s in _NUMERIC_SIGNALS)
+    interpreted_intent["requires_time_series"] = any(s in lowered for s in _TIME_SIGNALS)
+
+    # Detect organization filter
+    _ORG_SIGNALS = ("startup", "vc", "venture capital", "accelerator", "incubator",
+                    "company", "firm", "bank", "fund")
+    if any(s in lowered for s in _ORG_SIGNALS):
+        interpreted_intent["organization_filter"] = "startup/VC ecosystem"
+
+    items: list[dict[str, Any]] = []
+    counter = 0
+
+    def _add_item(item_type: str, title: str, description: str = "", **extra: Any) -> None:
+        nonlocal counter
+        counter += 1
+        item: dict[str, Any] = {
+            "id": f"{item_type}_{counter}",
+            "type": item_type,
+            "title": title[:200],
+            "description": description[:500],
+        }
+        for k, v in extra.items():
+            if v is not None and v != "":
+                item[k] = v
+        items.append(item)
+
+    # Connector datasets
+    for ds in results.get("connector_datasets") or []:
+        ds_desc = ds.get("description") or ""
+        # Detect if sector/topic filter appears in the dataset metadata
+        sector_match = _detect_sector_in_text(
+            interpreted_intent["sector_or_technology_filter"],
+            ds.get("title") or "", ds_desc,
+            ds.get("category") or "", ds.get("tags") or "",
+        )
+        _add_item(
+            "connector_dataset",
+            title=ds.get("title") or ds.get("name") or "Untitled dataset",
+            description=ds_desc,
+            source_name=ds.get("portal") or ds.get("source") or "",
+            source_url=ds.get("url") or ds.get("download_url") or "",
+            geography=ds.get("geography") or "",
+            time_period=ds.get("time_period") or ds.get("coverage") or "",
+            sector_or_topic=sector_match,
+            source_status="synced_connector" if ds.get("row_count") else "metadata_only",
+            values_available=bool(ds.get("row_count")),
+            row_count=ds.get("row_count"),
+        )
+
+    # Connector metrics
+    for m in results.get("connector_metrics") or []:
+        m_desc = m.get("description") or ""
+        sector_match = _detect_sector_in_text(
+            interpreted_intent["sector_or_technology_filter"],
+            m.get("title") or m.get("name") or "", m_desc,
+        )
+        _add_item(
+            "connector_metric",
+            title=m.get("title") or m.get("name") or "Untitled metric",
+            description=m_desc,
+            value=m.get("value") or "",
+            unit=m.get("unit") or "",
+            time_period=m.get("time_period") or m.get("date") or "",
+            geography=m.get("geography") or "",
+            sector_or_topic=sector_match,
+            source_name=m.get("source") or m.get("portal") or "",
+            source_url=m.get("url") or "",
+            source_status="synced_connector",
+            values_available=bool(m.get("value")),
+        )
+
+    # Closest variables (internal DB)
+    for v in results.get("closest_variables") or []:
+        _add_item(
+            "report_variable",
+            title=v.get("name") or v.get("title") or "Untitled variable",
+            description=v.get("description") or v.get("definition") or "",
+            source_name=v.get("report_title") or v.get("source") or "",
+            source_url=v.get("report_url") or v.get("url") or "",
+            geography=v.get("geography") or "",
+            time_period=v.get("time_period") or v.get("year") or "",
+            unit=v.get("unit") or "",
+            source_status="internal_structured",
+            values_available=False,
+        )
+
+    # Relevant reports
+    for r in results.get("relevant_reports") or []:
+        _add_item(
+            "report_variable",
+            title=r.get("title") or "Untitled report",
+            description=r.get("description") or r.get("summary") or "",
+            source_name=r.get("source") or r.get("organization") or "",
+            source_url=r.get("url") or r.get("source_url") or "",
+            geography=r.get("geography") or "",
+            time_period=r.get("year") or r.get("time_period") or "",
+            source_status="internal_structured",
+            values_available=False,
+        )
+
+    # Organizations
+    for o in results.get("relevant_organizations") or []:
+        _add_item(
+            "organization",
+            title=o.get("name") or o.get("title") or "Untitled org",
+            description=o.get("description") or o.get("about") or "",
+            source_name=o.get("name") or "",
+            source_url=o.get("url") or o.get("website") or "",
+            geography=o.get("geography") or o.get("country") or "",
+            source_status="internal_structured",
+            values_available=False,
+        )
+
+    # Tavily / external candidates
+    tavily = results.get("tavily_candidates") or {}
+    for t in (tavily.get("results") or [])[:5]:
+        _add_item(
+            "external_candidate",
+            title=t.get("title") or "External source",
+            description=t.get("snippet") or t.get("content") or "",
+            source_name=t.get("source") or "",
+            source_url=t.get("url") or "",
+            source_status="external_candidate",
+            values_available=False,
+        )
+
+    # Connector candidates (not yet ingested)
+    for c in results.get("connector_candidates") or []:
+        _add_item(
+            "source_candidate",
+            title=c.get("title") or c.get("name") or "Candidate source",
+            description=c.get("description") or "",
+            source_name=c.get("source") or c.get("portal") or "",
+            source_url=c.get("url") or "",
+            source_status="metadata_only",
+            values_available=False,
+        )
+
+    # Source counts
+    internal_count = len(results.get("closest_variables") or []) + len(results.get("relevant_reports") or [])
+    connector_count = len(results.get("connector_datasets") or []) + len(results.get("connector_metrics") or [])
+    metadata_count = len(results.get("connector_candidates") or []) + len(results.get("source_links") or [])
+    external_count = len((results.get("tavily_candidates") or {}).get("results") or [])
+
+    # Source read packets (actual data values from connector URLs)
+    source_read_items = []
+    for pkt in (results.get("source_read_packets") or []):
+        pkt_type = pkt.get("packet_type", "unknown")
+        pkt_title = pkt.get("title", "")
+        pkt_url = pkt.get("source_url", "")
+        sector_match = _detect_sector_in_text(
+            interpreted_intent["sector_or_technology_filter"],
+            pkt_title, pkt_url,
+            json.dumps(pkt.get("columns") or []),
+            json.dumps(pkt.get("rows_sample") or [])[:2000],
+        )
+        if pkt_type == "table":
+            analysis = pkt.get("analysis") or {}
+            source_read_items.append({
+                "id": f"source_read_table_{counter + 1}",
+                "type": "table_values_read",
+                "title": pkt_title,
+                "source_url": pkt_url,
+                "retrieved_at": pkt.get("retrieved_at", ""),
+                "row_count": pkt.get("row_count", 0),
+                "column_count": pkt.get("column_count", 0),
+                "columns": [c.get("name") for c in (pkt.get("columns") or [])],
+                "rows_sample": pkt.get("rows_sample", [])[:10],
+                "computed_findings": analysis.get("computed_results") or {},
+                "sector_or_topic": sector_match,
+                "source_status": "synced_connector",
+                "values_available": True,
+                "analysis": analysis,
+            })
+            counter += 1
+        elif pkt_type == "text":
+            source_read_items.append({
+                "id": f"source_read_text_{counter + 1}",
+                "type": "text_evidence_read",
+                "title": pkt_title,
+                "source_url": pkt_url,
+                "retrieved_at": pkt.get("retrieved_at", ""),
+                "chunks": (pkt.get("chunks") or [])[:3],
+                "sector_or_topic": sector_match,
+                "source_status": "synced_connector",
+                "values_available": False,
+            })
+            counter += 1
+        elif pkt_type == "metadata_only":
+            source_read_items.append({
+                "id": f"source_read_failed_{counter + 1}",
+                "type": "metadata_only",
+                "title": pkt_title,
+                "source_url": pkt_url,
+                "reason": pkt.get("reason", ""),
+                "source_status": "metadata_only",
+                "values_available": False,
+            })
+            counter += 1
+
+    return {
+        "user_query": message,
+        "interpreted_intent": interpreted_intent,
+        "retrieved_items": items + source_read_items,
+        "source_status_counts": {
+            "internal_structured": internal_count,
+            "synced_connector": connector_count,
+            "metadata_only": metadata_count,
+            "external_candidate": external_count,
+            "source_read": len(source_read_items),
+        },
+    }
+
+
+def _detect_sector_in_text(sector_filter: str, *texts: str) -> str:
+    """Return the sector filter term if it appears in any of the given texts.
+
+    Used to annotate evidence items with sector/topic relevance.
+    Returns empty string if no match or no filter.
+    """
+    if not sector_filter:
+        return ""
+    combined = " ".join(str(t) for t in texts).lower()
+    return sector_filter if sector_filter.lower() in combined else ""
+
+
+def _run_structured_synthesis(
+    llm: Any,
+    *,
+    message: str,
+    history: list[dict[str, str]],
+    plan: dict[str, Any],
+    evidence_packet: dict[str, Any],
+    limitations: list[str],
+) -> dict[str, Any]:
+    """Run evidence qualification + structured synthesis.
+
+    Returns the full structured output dict.  Raises on hard failure so the
+    caller can fall back to legacy synthesis.
+    """
+    # Step 1: Qualify evidence (graceful degradation if it fails)
+    evidence_qualification: dict[str, Any] | None = None
+    try:
+        evidence_qualification = llm.qualify_evidence(evidence_packet=evidence_packet)
+    except Exception:
+        evidence_qualification = None
+
+    # Step 2: Structured synthesis with qualification
+    structured = llm.synthesize_structured(
+        message=message,
+        history=history,
+        plan=plan,
+        evidence_packet=evidence_packet,
+        limitations=limitations,
+        evidence_qualification=evidence_qualification,
+    )
+    # Attach qualification for diagnostics
+    if evidence_qualification:
+        structured["_evidence_qualification"] = evidence_qualification
+    return structured
 
 
 def _normalize_tool_results(executed: list[dict[str, Any]]) -> tuple[dict[str, Any], list[str], str]:
